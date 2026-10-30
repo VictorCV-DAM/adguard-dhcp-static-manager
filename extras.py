@@ -464,25 +464,38 @@ def enrich_state(state):
 # =====================================================================
 #  AdGuard Home API (DNS stats & client blocking)
 # =====================================================================
-def ag_opener():
+_AG_SESSION = {'ts': 0, 'op': None, 'url': '', 'key': ''}
+_TOPO_TELEMETRY_CACHE = {'ts': 0, 'payload': None}
+
+
+def ag_opener(force_new=False):
     cfg = D['load_config']()
     url = (cfg.get('adguard_url') or '').rstrip('/')
     user = (cfg.get('adguard_user') or '').strip()
     pwd = (cfg.get('adguard_pass') or '').strip()
     if not url or not user or not pwd:
         raise RuntimeError('AdGuard Home credentials not configured (⚙️ Settings).')
+    key = f'{url}|{user}|{pwd}'
+    if not force_new and _AG_SESSION['op'] is not None and _AG_SESSION['key'] == key and (time.time() - _AG_SESSION['ts'] < 600):
+        return _AG_SESSION['op'], url
     cj = http.cookiejar.CookieJar()
     op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     req = urllib.request.Request(f'{url}/control/login', data=json.dumps({'name': user, 'password': pwd}).encode(),
                                  headers={'Content-Type': 'application/json'}, method='POST')
     op.open(req, timeout=5).read()
+    _AG_SESSION.update({'ts': time.time(), 'op': op, 'url': url, 'key': key})
     return op, url
 
 
 def ag_get(path):
-    op, url = ag_opener()
-    with op.open(f'{url}{path}', timeout=8) as r:
-        return json.loads(r.read().decode('utf-8') or '{}')
+    try:
+        op, url = ag_opener()
+        with op.open(f'{url}{path}', timeout=6) as r:
+            return json.loads(r.read().decode('utf-8') or '{}')
+    except Exception:
+        op, url = ag_opener(force_new=True)
+        with op.open(f'{url}{path}', timeout=6) as r:
+            return json.loads(r.read().decode('utf-8') or '{}')
 
 
 def ag_post(path, body):
@@ -575,6 +588,68 @@ def ip_last(ip):
 @bp.route('/api/monitor/status')
 def api_monitor_status():
     return jsonify({'status': 'success', **_MONITOR_STATE, 'last_run_iso': iso(_MONITOR_STATE['last_run'])})
+
+
+@bp.route('/api/topology/telemetry')
+def api_topology_telemetry():
+    now_f = time.time()
+    if _TOPO_TELEMETRY_CACHE['payload'] is not None and (now_f - _TOPO_TELEMETRY_CACHE['ts'] < 5.0):
+        return jsonify(_TOPO_TELEMETRY_CACHE['payload'])
+
+    clients = {}
+    for ip, p in list(_PING.items()):
+        if p and p.get('alive'):
+            clients[ip] = {
+                'queries': 0,
+                'blocked': 0,
+                'last_domain': '',
+                'last_blocked_domain': '',
+                'latency_ms': p.get('ms')
+            }
+
+    source = 'ping_only'
+    total_q = 0
+    total_b = 0
+    try:
+        data = ag_get('/control/querylog?limit=160&response_status=all')
+        entries = data.get('data') or []
+        source = 'adguard_live'
+        for e in entries:
+            cip = (e.get('client') or '').strip()
+            if not cip:
+                continue
+            c = clients.setdefault(cip, {
+                'queries': 0,
+                'blocked': 0,
+                'last_domain': '',
+                'last_blocked_domain': '',
+                'latency_ms': (_PING.get(cip) or {}).get('ms')
+            })
+            c['queries'] += 1
+            total_q += 1
+            dom = ((e.get('question') or {}).get('name') or '').rstrip('.')
+            if dom and not c['last_domain']:
+                c['last_domain'] = dom
+            reason = e.get('reason') or ''
+            if reason.startswith('Filtered') or reason in ('FilteredBlackList', 'FilteredBlockedService', 'FilteredParental', 'FilteredSafeBrowsing'):
+                c['blocked'] += 1
+                total_b += 1
+                if dom and not c['last_blocked_domain']:
+                    c['last_blocked_domain'] = dom
+    except Exception:
+        pass
+
+    payload = {
+        'status': 'success',
+        'source': source,
+        'total_queries': total_q,
+        'total_blocked': total_b,
+        'clients': clients,
+        'ts': now_ts()
+    }
+    _TOPO_TELEMETRY_CACHE['ts'] = now_f
+    _TOPO_TELEMETRY_CACHE['payload'] = payload
+    return jsonify(payload)
 
 
 # ---------- Services ----------

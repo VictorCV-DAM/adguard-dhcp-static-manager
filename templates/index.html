@@ -1212,6 +1212,14 @@
                     <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Toggle between Floating Zigzag Constellation (Plexus), Electric Synapse Pulses, or Full Hybrid">
                         🕸️ Style: <span id="topo-style-txt">Floating Zigzag</span>
                     </button>
+                    <button id="topo-btn-telemetry" class="topo-ctrl-btn" onclick="toggleTopoTelemetryMode()" title="Toggle between simulated ambient pulses or real AdGuard Home DNS traffic + Ping latency pulses">
+                        📡 Logic: <span id="topo-telemetry-txt">Simulated</span>
+                    </button>
+                    <div class="topo-freq-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Customize pulse frequency and speed (- / +)">
+                        <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(-1)" style="border:none; border-radius:0; padding:0 9px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Decrease pulse frequency (-)">−</button>
+                        <span id="topo-freq-txt" onclick="resetTopoImpulseFreq()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Pulse frequency (click to reset to 1.0x)">⚡ 1.0x</span>
+                        <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(1)" style="border:none; border-radius:0; padding:0 9px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Increase pulse frequency (+)">+</button>
+                    </div>
                     <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" title="Fire an immediate synaptic discharge from the Main Router across the entire mesh" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);">
                         ⚡ Pulse
                     </button>
@@ -2995,12 +3003,22 @@ function confirmAssignFromMap() {
     fillForm(dev.hostname || '', dev.mac, ipMapTargetIp);
 }
 
-// --- NETWORK TOPOLOGY (ULTRA-SPACIOUS + FLOATING ZIGZAG CONSTELLATION PLEXUS & SYNAPSES) ---
+// --- NETWORK TOPOLOGY (COMPACT + FLOATING ZIGZAG CONSTELLATION PLEXUS & LIVE TELEMETRY) ---
+const TOPO_FREQ_STEPS = [0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0];
+const _savedTopoFreq = parseFloat(localStorage.getItem('ag_topo_freq') || '1.0');
+const _savedTopoTel = localStorage.getItem('ag_topo_telemetry') === '1';
+
 let topoState = {
     initialized: false,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
     visualStyle: 'plexus', // 'plexus' (Floating Zigzag Constellation) | 'synapse' (Electric Pulses) | 'hybrid' (Full Hybrid)
+    telemetryMode: _savedTopoTel, // false = Simulated | true = Live AdGuard DNS Traffic + Ping Latency
+    impulseFreq: TOPO_FREQ_STEPS.includes(_savedTopoFreq) ? _savedTopoFreq : 1.0,
+    telemetryData: {},
+    telemetrySummary: { source: 'sim', total_queries: 0, total_blocked: 0 },
+    telemetryLastFetch: 0,
+    telemetryFetching: false,
     effectsOn: true,
     showCards: false,
     searchQuery: '',
@@ -3014,7 +3032,7 @@ let topoState = {
     nodes: [],      // { id, type: 'core'|'hub'|'client', label, sub, x, y, baseX, baseY, r, color, online, static, blocked, dev, hubId, angle, phase, driftR, flash }
     links: [],      // { from, to, type: 'trunk'|'spoke', online, color, medium, seed, joints: [{t, perp, phaseX, phaseY, drift, x, y}] }
     particles: [],  // { linkIdx, t, speed, color, size }
-    synapses: [],   // { linkIdx, t, len, speed, amp, colorCore, colorGlow, width, cascade }
+    synapses: [],   // { linkIdx, t, len, speed, amp, colorCore, colorGlow, width, cascade, reverse, cascadeUp, isBlocked, targetClientId }
     shockwaves: [], // { x, y, r, maxR, color, alpha }
     hoverNode: null,
     selectedNode: null,
@@ -3027,6 +3045,212 @@ let topoState = {
     lastSpontaneous: 0,
     customPositions: {}
 };
+
+function syncTopoControlsUI() {
+    const telBtn = document.getElementById('topo-btn-telemetry');
+    const telTxt = document.getElementById('topo-telemetry-txt');
+    if (telBtn && telTxt) {
+        telBtn.classList.toggle('active', topoState.telemetryMode);
+        if (topoState.telemetryMode) {
+            telBtn.style.borderColor = '#10b981';
+            telBtn.style.color = '#d1fae5';
+            telBtn.style.background = 'rgba(16, 185, 129, 0.22)';
+            telTxt.textContent = 'Live Traffic';
+        } else {
+            telBtn.style.borderColor = '';
+            telBtn.style.color = '';
+            telBtn.style.background = '';
+            telTxt.textContent = 'Simulated';
+        }
+    }
+    const freqTxt = document.getElementById('topo-freq-txt');
+    if (freqTxt) {
+        freqTxt.textContent = topoState.impulseFreq === 0 ? '⚡ Paused' : `⚡ ${topoState.impulseFreq}x`;
+        freqTxt.style.color = topoState.impulseFreq === 0 ? '#94a3b8' : (topoState.impulseFreq > 1.0 ? '#fcd34d' : '#e0f2fe');
+    }
+}
+
+function toggleTopoTelemetryMode() {
+    topoState.telemetryMode = !topoState.telemetryMode;
+    localStorage.setItem('ag_topo_telemetry', topoState.telemetryMode ? '1' : '0');
+    syncTopoControlsUI();
+    if (topoState.telemetryMode) {
+        pollTopoTelemetry(true);
+    }
+    triggerNeuralCascade();
+}
+
+function adjustTopoImpulseFreq(delta) {
+    let idx = TOPO_FREQ_STEPS.indexOf(topoState.impulseFreq);
+    if (idx === -1) idx = 4; // 1.0x
+    idx = Math.max(0, Math.min(TOPO_FREQ_STEPS.length - 1, idx + delta));
+    topoState.impulseFreq = TOPO_FREQ_STEPS[idx];
+    localStorage.setItem('ag_topo_freq', String(topoState.impulseFreq));
+    syncTopoControlsUI();
+}
+
+function resetTopoImpulseFreq() {
+    topoState.impulseFreq = 1.0;
+    localStorage.setItem('ag_topo_freq', '1.0');
+    syncTopoControlsUI();
+}
+
+async function pollTopoTelemetry(force = false) {
+    if (!topoState.telemetryMode || topoState.telemetryFetching) return;
+    const now = performance.now();
+    if (!force && now - topoState.telemetryLastFetch < 5200) return;
+    topoState.telemetryFetching = true;
+    topoState.telemetryLastFetch = now;
+    try {
+        const res = await fetch('/api/topology/telemetry');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.status === 'success') {
+                topoState.telemetryData = data.clients || {};
+                topoState.telemetrySummary = {
+                    source: data.source || 'ping_only',
+                    total_queries: data.total_queries || 0,
+                    total_blocked: data.total_blocked || 0
+                };
+            }
+        }
+    } catch (_) {
+    } finally {
+        topoState.telemetryFetching = false;
+    }
+}
+
+function getLinkLatencyFactor(lk) {
+    if (!lk || lk.type === 'trunk') return 1.18;
+    const d = (lk.to && lk.to.dev) || {};
+    const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
+    const tel = topoState.telemetryData[ip];
+    const ms = (tel && tel.latency_ms != null) ? tel.latency_ms : d.latency_ms;
+    if (ms == null) return lk.medium === 'cable' ? 1.25 : 0.95;
+    if (ms <= 2.0) return 1.45;
+    if (ms <= 12.0) return 1.15;
+    if (ms <= 40.0) return 0.90;
+    return 0.58;
+}
+
+function spawnAutoTopoImpulse() {
+    const trunkIdxs = [];
+    const spokeIdxs = [];
+    topoState.links.forEach((lk, idx) => {
+        if (!lk.online) return;
+        if (lk.type === 'trunk') trunkIdxs.push(idx);
+        else spokeIdxs.push(idx);
+    });
+    if (trunkIdxs.length === 0 && spokeIdxs.length === 0) return;
+
+    if (topoState.telemetryMode && spokeIdxs.length > 0) {
+        const weights = spokeIdxs.map(idx => {
+            const lk = topoState.links[idx];
+            const d = (lk.to && lk.to.dev) || {};
+            const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
+            const tel = topoState.telemetryData[ip];
+            if (tel && tel.queries > 0) {
+                return 2.5 + Math.min(28, tel.queries * 1.8) + (tel.blocked > 0 ? 4.0 : 0);
+            }
+            const hasLiveDns = topoState.telemetrySummary.source === 'adguard_live' && topoState.telemetrySummary.total_queries > 0;
+            return hasLiveDns ? 0.22 : (lk.medium === 'cable' ? 1.5 : 1.0);
+        });
+        const totalW = weights.reduce((a, b) => a + b, 0) || 1;
+        let r = Math.random() * totalW;
+        let chosenSpokeIdx = spokeIdxs[0];
+        for (let i = 0; i < spokeIdxs.length; i++) {
+            r -= weights[i];
+            if (r <= 0) {
+                chosenSpokeIdx = spokeIdxs[i];
+                break;
+            }
+        }
+        const lk = topoState.links[chosenSpokeIdx];
+        const d = (lk.to && lk.to.dev) || {};
+        const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
+        const tel = topoState.telemetryData[ip] || { queries: 0, blocked: 0 };
+        const latFactor = getLinkLatencyFactor(lk);
+        const isBlockedPulse = (d.blocked) || (tel.blocked > 0 && Math.random() < Math.min(0.85, (tel.blocked / Math.max(1, tel.queries)) + 0.28));
+
+        if (isBlockedPulse) {
+            lk.to.flash = 0.85;
+            topoState.synapses.push({
+                linkIdx: chosenSpokeIdx,
+                t: 0,
+                len: 0.40,
+                speed: 0.020 * latFactor,
+                amp: 7.5,
+                colorCore: '#fecdd3',
+                colorGlow: '#ef4444',
+                width: 1.9,
+                reverse: true,
+                cascadeUp: true,
+                isBlocked: true
+            });
+        } else if (Math.random() < 0.55) {
+            lk.to.flash = 0.65;
+            topoState.synapses.push({
+                linkIdx: chosenSpokeIdx,
+                t: 0,
+                len: 0.38,
+                speed: 0.021 * latFactor,
+                amp: 6.5,
+                colorCore: '#e0f2fe',
+                colorGlow: lk.to.static ? '#10b981' : '#38bdf8',
+                width: 1.65,
+                reverse: true,
+                cascadeUp: true,
+                isBlocked: false
+            });
+        } else {
+            const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
+            if (trunkIdx !== -1) {
+                topoState.synapses.push({
+                    linkIdx: trunkIdx,
+                    t: 0,
+                    len: 0.36,
+                    speed: 0.022,
+                    amp: 9.0,
+                    colorCore: '#ffffff',
+                    colorGlow: '#00f5d4',
+                    width: 2.1,
+                    cascade: true,
+                    targetClientId: lk.to.id
+                });
+            }
+        }
+        return;
+    }
+
+    if (trunkIdxs.length > 0 && Math.random() < 0.48) {
+        const pick = trunkIdxs[Math.floor(Math.random() * trunkIdxs.length)];
+        topoState.synapses.push({
+            linkIdx: pick,
+            t: 0,
+            len: 0.34,
+            speed: 0.018 + Math.random() * 0.008,
+            amp: 9.5,
+            colorCore: '#ffffff',
+            colorGlow: '#00f5d4',
+            width: 2.1,
+            cascade: true
+        });
+    } else if (spokeIdxs.length > 0) {
+        const pick = spokeIdxs[Math.floor(Math.random() * spokeIdxs.length)];
+        const lk = topoState.links[pick];
+        topoState.synapses.push({
+            linkIdx: pick,
+            t: 0,
+            len: 0.38,
+            speed: 0.022 + Math.random() * 0.012,
+            amp: 6.5,
+            colorCore: '#e0f2fe',
+            colorGlow: lk.to.static ? '#10b981' : '#38bdf8',
+            width: 1.5,
+            cascade: false
+        });
+    }
+}
 
 function cycleTopoVisualStyle() {
     const order = ['plexus', 'synapse', 'hybrid'];
@@ -3643,6 +3867,47 @@ function drawZigzagBolt(ctx, x1, y1, x2, y2, t0, t1, amp, segments, timeSeed, co
     ctx.restore();
 }
 
+function drawArticulatedPulse(ctx, lk, t0, t1, reverse, colorCore, colorGlow, width) {
+    const steps = 10;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+        const u = t0 + (t1 - t0) * (i / steps);
+        const linkT = reverse ? (1.0 - u) : u;
+        pts.push(pointOnArticulatedLink(lk, linkT));
+    }
+    if (pts.length < 2) return;
+
+    ctx.save();
+    ctx.beginPath();
+    pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = colorGlow;
+    ctx.lineWidth = width * 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = colorGlow;
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = 0.72;
+    ctx.stroke();
+
+    ctx.beginPath();
+    pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = colorCore;
+    ctx.lineWidth = width * 1.05;
+    ctx.globalAlpha = 0.96;
+    ctx.stroke();
+
+    const head = pts[pts.length - 1];
+    if (head) {
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, width * 1.75, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = colorGlow;
+        ctx.shadowBlur = 14;
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
 function getClientDisplayText(n) {
     if (n.type !== 'client') return n.label;
     const d = n.dev || {};
@@ -3669,6 +3934,10 @@ function initTopoCanvas() {
 
     if (!topoState.initialized) {
         topoState.initialized = true;
+        syncTopoControlsUI();
+        if (topoState.telemetryMode) {
+            pollTopoTelemetry(true);
+        }
         window.addEventListener('resize', () => {
             if (currentMainTab === 'topology') {
                 resizeCanvas();
@@ -3804,9 +4073,13 @@ function updateTopoTooltip(node, sx, sy) {
     }
 
     if (node.type === 'core') {
+        const telInfo = topoState.telemetryMode
+            ? `<div style="margin-top:5px; padding:4px 7px; border-radius:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); font-size:0.73rem; color:#d1fae5;">📡 <strong>Live Telemetry Active:</strong> ${topoState.telemetrySummary.total_queries} recent DNS queries · <span style="color:#fca5a5;">${topoState.telemetrySummary.total_blocked} blocked</span></div>`
+            : '';
         tip.innerHTML = `
             <div style="font-weight:800; color:#00e5ff; font-size:0.9rem;">🌐 ${escapeHtml(node.label)}</div>
             <div style="color:#94a3b8; font-size:0.76rem; margin-top:2px;">Central Network Core · Fiber Gateway (192.168.1.1) + AdGuard DNS/DHCP Server (192.168.1.249)</div>
+            ${telInfo}
             <div style="margin-top:6px; font-size:0.75rem; color:#7dd3fc;">⚡ <strong>Click</strong> to fire a neural zigzag cascade across the entire network and fit the viewport.</div>
         `;
     } else if (node.type === 'hub') {
@@ -3819,6 +4092,14 @@ function updateTopoTooltip(node, sx, sy) {
         const d = node.dev;
         const ipShow = (d.live_ips && d.live_ips[0]) || d.ip || '—';
         const svcs = (d.web_links || []).map(w => w.label).join(', ');
+        const tel = topoState.telemetryData[ipShow];
+        const telHtml = (topoState.telemetryMode && tel && (tel.queries > 0 || tel.blocked > 0))
+            ? `<div style="margin-top:4px; padding:3px 6px; border-radius:5px; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.28); font-size:0.72rem;">
+                <div>📡 <strong>Recent DNS:</strong> <span style="color:#7dd3fc;">${tel.queries} queries</span> · <span style="color:${tel.blocked > 0 ? '#f87171' : '#94a3b8'};">${tel.blocked} blocked</span></div>
+                ${tel.last_domain ? `<div style="color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:255px;">🌐 Latest: <code>${escapeHtml(tel.last_domain)}</code></div>` : ''}
+                ${tel.last_blocked_domain ? `<div style="color:#fca5a5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:255px;">🚫 Blocked: <code>${escapeHtml(tel.last_blocked_domain)}</code></div>` : ''}
+               </div>`
+            : '';
         tip.innerHTML = `
             <div style="display:flex; align-items:center; gap:6px; font-weight:800; color:#f8fafc; font-size:0.86rem;">
                 <span>${d.dev_icon || '💻'}</span>
@@ -3832,6 +4113,7 @@ function updateTopoTooltip(node, sx, sy) {
                 ${d.latency_ms != null ? `<div><strong>Latency:</strong> <span style="color:#86efac;">${d.latency_ms.toFixed(1)} ms</span> ${d.os_guess ? `· ${escapeHtml(d.os_guess)}` : ''}</div>` : ''}
                 ${d.room ? `<div><strong>Room:</strong> 📍 ${escapeHtml(d.room)}</div>` : ''}
                 ${svcs ? `<div style="margin-top:3px; color:#fcd34d;"><strong>Services:</strong> ${escapeHtml(svcs)}</div>` : ''}
+                ${telHtml}
             </div>
             <div style="margin-top:6px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.71rem; color:#38bdf8;">🖱️ Click to open full Device Sheet</div>
         `;
@@ -3904,44 +4186,18 @@ function drawTopoFrame(now) {
                 });
             });
 
-            if (topoState.effectsOn && useSynapse) {
-                if (tNow - topoState.lastSpontaneous > 280 && topoState.links.length > 0 && topoState.synapses.length < 28) {
+            if (topoState.telemetryMode) {
+                pollTopoTelemetry(false);
+            }
+
+            const freq = topoState.impulseFreq;
+            const autoImpulsesActive = topoState.effectsOn && freq > 0 && (useSynapse || topoState.telemetryMode || freq !== 1.0);
+            if (autoImpulsesActive && topoState.links.length > 0) {
+                const spawnInterval = Math.max(42, 300 / freq);
+                const maxSynapses = Math.min(95, Math.round(28 * Math.max(1, freq)));
+                if (tNow - topoState.lastSpontaneous > spawnInterval && topoState.synapses.length < maxSynapses) {
                     topoState.lastSpontaneous = tNow;
-                    const trunkIdxs = [];
-                    const spokeIdxs = [];
-                    topoState.links.forEach((lk, idx) => {
-                        if (!lk.online) return;
-                        if (lk.type === 'trunk') trunkIdxs.push(idx);
-                        else spokeIdxs.push(idx);
-                    });
-                    if (trunkIdxs.length > 0 && Math.random() < 0.48) {
-                        const pick = trunkIdxs[Math.floor(Math.random() * trunkIdxs.length)];
-                        topoState.synapses.push({
-                            linkIdx: pick,
-                            t: 0,
-                            len: 0.34,
-                            speed: 0.018 + Math.random() * 0.008,
-                            amp: 9.5,
-                            colorCore: '#ffffff',
-                            colorGlow: '#00f5d4',
-                            width: 2.1,
-                            cascade: true
-                        });
-                    } else if (spokeIdxs.length > 0) {
-                        const pick = spokeIdxs[Math.floor(Math.random() * spokeIdxs.length)];
-                        const lk = topoState.links[pick];
-                        topoState.synapses.push({
-                            linkIdx: pick,
-                            t: 0,
-                            len: 0.38,
-                            speed: 0.022 + Math.random() * 0.012,
-                            amp: 6.5,
-                            colorCore: '#e0f2fe',
-                            colorGlow: lk.to.static ? '#10b981' : '#38bdf8',
-                            width: 1.5,
-                            cascade: false
-                        });
-                    }
+                    spawnAutoTopoImpulse();
                 }
             }
 
@@ -4108,12 +4364,14 @@ function drawTopoFrame(now) {
 
             // 3. Particles + Synaptic Cascades + Shockwaves
             if (topoState.effectsOn) {
+                const freqSpeedMult = topoState.impulseFreq === 0 ? 0 : (0.45 + 0.55 * Math.pow(topoState.impulseFreq, 0.72));
                 ctx.globalAlpha = 0.92;
                 topoState.particles.forEach(p => {
-                    p.t += p.speed * (usePlexus && !useSynapse ? 0.55 : 1.0);
-                    if (p.t > 1) p.t -= 1;
                     const lk = topoState.links[p.linkIdx];
                     if (!lk) return;
+                    const latMult = topoState.telemetryMode ? getLinkLatencyFactor(lk) : 1.0;
+                    p.t += p.speed * (usePlexus && !useSynapse ? 0.62 : 1.0) * freqSpeedMult * latMult;
+                    if (p.t > 1) p.t -= 1;
                     if (hov && !isLinkHighlighted(lk)) return;
                     if (hasSearch && !nodeMatchesSearch(lk.to)) return;
 
@@ -4135,9 +4393,10 @@ function drawTopoFrame(now) {
                     ctx.shadowBlur = 0;
                 });
 
+                const synFreqMult = topoState.impulseFreq === 0 ? 0.85 : (0.65 + 0.35 * Math.pow(topoState.impulseFreq, 0.55));
                 for (let i = topoState.synapses.length - 1; i >= 0; i--) {
                     const syn = topoState.synapses[i];
-                    syn.t += syn.speed;
+                    syn.t += syn.speed * synFreqMult;
                     const lk = topoState.links[syn.linkIdx];
                     if (!lk) {
                         topoState.synapses.splice(i, 1);
@@ -4146,35 +4405,54 @@ function drawTopoFrame(now) {
                     const t0 = Math.max(0, syn.t - syn.len);
                     const t1 = Math.min(1, syn.t);
                     if (t1 > t0 && (!hov || isLinkHighlighted(lk))) {
-                        drawZigzagBolt(
-                            ctx, lk.from.x, lk.from.y, lk.to.x, lk.to.y,
-                            t0, t1,
-                            syn.amp,
-                            lk.type === 'trunk' ? 12 : 9,
-                            tNow + syn.linkIdx * 37,
-                            syn.colorCore,
-                            syn.colorGlow,
-                            syn.width
-                        );
+                        if (usePlexus && !useSynapse) {
+                            drawArticulatedPulse(
+                                ctx, lk, t0, t1, !!syn.reverse,
+                                syn.colorCore, syn.colorGlow, syn.width
+                            );
+                        } else {
+                            const sx1 = syn.reverse ? lk.to.x : lk.from.x;
+                            const sy1 = syn.reverse ? lk.to.y : lk.from.y;
+                            const sx2 = syn.reverse ? lk.from.x : lk.to.x;
+                            const sy2 = syn.reverse ? lk.from.y : lk.to.y;
+                            drawZigzagBolt(
+                                ctx, sx1, sy1, sx2, sy2,
+                                t0, t1,
+                                syn.amp,
+                                lk.type === 'trunk' ? 12 : 9,
+                                tNow + syn.linkIdx * 37,
+                                syn.colorCore,
+                                syn.colorGlow,
+                                syn.width
+                            );
+                        }
                     }
                     if (syn.t >= 1.0) {
-                        lk.to.flash = 1.0;
-                        if (syn.cascade && lk.to.type === 'hub') {
-                            spawnNodeShockwave(lk.to.x, lk.to.y, lk.to.color, 95);
+                        const destNode = syn.reverse ? lk.from : lk.to;
+                        destNode.flash = 1.0;
+
+                        if (syn.cascade && !syn.reverse && lk.to.type === 'hub') {
+                            spawnNodeShockwave(lk.to.x, lk.to.y, lk.to.color, 85);
                             const childLinks = [];
                             topoState.links.forEach((clk, cIdx) => {
-                                if (clk.from.id === lk.to.id && clk.online) childLinks.push(cIdx);
+                                if (clk.from.id === lk.to.id && clk.online) {
+                                    if (!syn.targetClientId || clk.to.id === syn.targetClientId) {
+                                        childLinks.push(cIdx);
+                                    }
+                                }
                             });
-                            const branchCount = Math.min(childLinks.length, 2 + Math.floor(Math.random() * 4));
+                            const maxTotal = Math.min(110, Math.round(48 * Math.max(1, topoState.impulseFreq)));
+                            const branchCount = syn.targetClientId ? childLinks.length : Math.min(childLinks.length, 2 + Math.floor(Math.random() * 4));
                             for (let b = 0; b < branchCount; b++) {
-                                const pickIdx = childLinks[Math.floor(Math.random() * childLinks.length)];
+                                const pickIdx = syn.targetClientId ? childLinks[b] : childLinks[Math.floor(Math.random() * childLinks.length)];
                                 const clk = topoState.links[pickIdx];
-                                if (topoState.synapses.length < 48) {
+                                if (clk && topoState.synapses.length < maxTotal) {
+                                    const latF = topoState.telemetryMode ? getLinkLatencyFactor(clk) : 1.0;
                                     topoState.synapses.push({
                                         linkIdx: pickIdx,
                                         t: 0,
                                         len: 0.42,
-                                        speed: 0.024 + Math.random() * 0.012,
+                                        speed: (0.024 + Math.random() * 0.010) * latF,
                                         amp: 6.5,
                                         colorCore: '#ffffff',
                                         colorGlow: clk.to.static ? '#10b981' : '#38bdf8',
@@ -4184,6 +4462,28 @@ function drawTopoFrame(now) {
                                 }
                             }
                         }
+
+                        if (syn.cascadeUp && syn.reverse && lk.from.type === 'hub') {
+                            const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
+                            if (trunkIdx !== -1 && topoState.synapses.length < 95) {
+                                topoState.synapses.push({
+                                    linkIdx: trunkIdx,
+                                    t: 0,
+                                    len: 0.36,
+                                    speed: 0.024,
+                                    amp: 8.5,
+                                    colorCore: syn.isBlocked ? '#fecdd3' : '#ffffff',
+                                    colorGlow: syn.isBlocked ? '#ef4444' : '#00f5d4',
+                                    width: syn.isBlocked ? 2.2 : 1.95,
+                                    reverse: true,
+                                    cascadeUp: false,
+                                    isBlocked: !!syn.isBlocked
+                                });
+                            }
+                        } else if (syn.reverse && lk.from.type === 'core' && syn.isBlocked) {
+                            spawnNodeShockwave(lk.from.x, lk.from.y, '#ef4444', 95);
+                        }
+
                         topoState.synapses.splice(i, 1);
                     }
                 }
