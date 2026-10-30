@@ -3053,6 +3053,12 @@ const TOPO_FREQ_STEPS = [0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0];
 const _savedTopoFreq = parseFloat(localStorage.getItem('ag_topo_freq') || '1.0');
 const _savedTopoTel = localStorage.getItem('ag_topo_telemetry') === '1';
 
+let _savedCustomPositions = {};
+try {
+    const rawPos = localStorage.getItem('ag_topo_custom_positions');
+    if (rawPos) _savedCustomPositions = JSON.parse(rawPos);
+} catch (e) {}
+
 let topoState = {
     initialized: false,
     showOffline: true,
@@ -3088,8 +3094,14 @@ let topoState = {
     movedDuringDrag: false,
     animFrame: null,
     lastSpontaneous: 0,
-    customPositions: {}
+    customPositions: _savedCustomPositions
 };
+
+function saveCustomPositionsToStorage() {
+    try {
+        localStorage.setItem('ag_topo_custom_positions', JSON.stringify(topoState.customPositions));
+    } catch (e) {}
+}
 
 function syncTopoControlsUI() {
     const telBtn = document.getElementById('topo-btn-telemetry');
@@ -3443,6 +3455,9 @@ function nodeMatchesSearch(n) {
 
 function resetTopoLayout() {
     topoState.customPositions = {};
+    try {
+        localStorage.removeItem('ag_topo_custom_positions');
+    } catch (e) {}
     buildTopoGraph(true);
     triggerNeuralCascade();
 }
@@ -3681,90 +3696,216 @@ function relaxTopoPositions(nodes) {
 
 function buildTopoGraph(fitView = false) {
     const isOnline = d => (d.conn_medium !== 'offline') && (Boolean(d.live_ips && d.live_ips.length > 0) || (d.router_type && d.router_type !== 'offline'));
+
+    // Infrastructure hardware nodes (routers / APs / mesh)
+    const isInfraDev = d => {
+        const ip = d.ip || '';
+        const h = (d.hostname || '').toLowerCase();
+        const c = (d.dev_class || '').toLowerCase();
+        return ip === '192.168.1.1' || ip === '192.168.1.249' ||
+               ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' ||
+               ip === '192.168.1.10' || ip === '192.168.1.9' ||
+               h.includes('mercusys-halo') || h.includes('wr841n') || h.includes('em4590') ||
+               d.router_type === 'infra';
+    };
+
+    // Group only real CLIENT devices (excluding infrastructure equipment)
     const groups = {};
-    allDevices.forEach(d => {
+    const clientDevices = allDevices.filter(d => !isInfraDev(d));
+
+    clientDevices.forEach(d => {
         if (!topoState.showOffline && !isOnline(d)) return;
-        const key = d.router_node || (d.conn_medium === 'cable' ? 'Wired LAN / Switch' : 'Wi-Fi / Access Point');
+        let key = d.router_node || (d.conn_medium === 'cable' ? 'Gateway / LAN' : 'Gateway / Wi-Fi');
+        key = key.replace(/\s*·\s*(?:2\.4G|5G|LAN|Wi-Fi.*)$/i, '').trim();
+        if (key === 'Wi-Fi AP / Repeater' || key === 'AP / Router') {
+            key = 'Gateway / Wi-Fi';
+        }
         if (!groups[key]) groups[key] = [];
         groups[key].push(d);
     });
 
+    // Infrastructure Nodes definition with true Mesh topology
+    const definedHubs = [
+        {
+            id: 'hub:halo1',
+            label: 'Halo 1 (Master)',
+            ip: '192.168.1.11',
+            parent: '__core__',
+            isMesh: true,
+            isCable: false,
+            color: '#00e5ff',
+            dev: allDevices.find(d => d.ip === '192.168.1.11' || (d.hostname && d.hostname.includes('halo-1')))
+        },
+        {
+            id: 'hub:halo2',
+            label: 'Halo 2 (Satellite)',
+            ip: '192.168.1.12',
+            parent: 'hub:halo1',
+            isMesh: true,
+            isCable: false,
+            color: '#00e5ff',
+            dev: allDevices.find(d => d.ip === '192.168.1.12' || (d.hostname && d.hostname.includes('halo-2')))
+        },
+        {
+            id: 'hub:halo3',
+            label: 'Halo 3 (Satellite)',
+            ip: '192.168.1.13',
+            parent: 'hub:halo1',
+            isMesh: true,
+            isCable: false,
+            color: '#00e5ff',
+            dev: allDevices.find(d => d.ip === '192.168.1.13' || (d.hostname && d.hostname.includes('halo-3')))
+        },
+        {
+            id: 'hub:wr841n',
+            label: 'TP-Link WR841N',
+            ip: '192.168.1.10',
+            parent: '__core__',
+            isMesh: false,
+            isCable: true,
+            color: '#10b981',
+            dev: allDevices.find(d => d.ip === '192.168.1.10' || (d.hostname && d.hostname.toLowerCase().includes('wr841n')))
+        },
+        {
+            id: 'hub:lan',
+            label: 'Gateway / LAN',
+            ip: '192.168.1.1',
+            parent: '__core__',
+            isMesh: false,
+            isCable: true,
+            color: '#10b981',
+            dev: allDevices.find(d => d.ip === '192.168.1.1' || d.ip === '192.168.1.249')
+        }
+    ];
+
+    Object.keys(groups).forEach(gKey => {
+        if (!definedHubs.some(h => h.label === gKey || h.id === 'hub:' + gKey)) {
+            const isCable = gKey.toLowerCase().includes('cable') || gKey.toLowerCase().includes('lan');
+            definedHubs.push({
+                id: 'hub:' + gKey,
+                label: gKey,
+                ip: '',
+                parent: '__core__',
+                isMesh: false,
+                isCable: isCable,
+                color: isCable ? '#10b981' : '#00e5ff',
+                dev: null
+            });
+        }
+    });
+
     const nodes = [];
     const links = [];
-
     const totalOnline = allDevices.filter(isOnline).length;
 
+    // 1. Central Core Node
     const corePos = topoState.customPositions['__core__'] || { x: 0, y: 0 };
     const coreNode = {
         id: '__core__',
         type: 'core',
         label: 'MAIN ROUTER / ADGUARD CORE',
-        sub: `192.168.1.1 · 192.168.1.249 · ${totalOnline} online`,
+        sub: `192.168.1.1 · ${totalOnline} online`,
         x: corePos.x,
         y: corePos.y,
         baseX: corePos.x,
         baseY: corePos.y,
-        r: 36,
+        r: 28,
         color: '#00e5ff',
         online: true,
         phase: 0,
-        driftR: 4,
+        driftR: 3.5,
         flash: 0.7
     };
     nodes.push(coreNode);
 
-    const entries = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
-    const hubCount = entries.length;
+    // 2. Position Hubs
+    const directHubs = definedHubs.filter(h => h.parent === '__core__');
+    const childHubs = definedHubs.filter(h => h.parent !== '__core__');
 
-    // Proportional angular share per Hub with balanced orbit around the Core
-    const weights = entries.map(([_, devs]) => 1.15 + Math.sqrt(devs.length) * 0.65);
-    const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+    const hubOrbitRadius = Math.max(380, Math.min(540, 320 + directHubs.length * 35));
+    directHubs.forEach((h, idx) => {
+        const baseAngle = (-Math.PI / 2) + (idx / directHubs.length) * Math.PI * 2;
+        const savedPos = topoState.customPositions[h.id];
+        const hx = savedPos ? savedPos.x : Math.cos(baseAngle) * hubOrbitRadius;
+        const hy = savedPos ? savedPos.y : Math.sin(baseAngle) * hubOrbitRadius;
 
-    const baseOrbitRadius = hubCount <= 1 ? 300 : Math.min(640, Math.max(460, 340 + hubCount * 28));
-
-    let accumWeight = 0;
-
-    entries.forEach(([hubName, devs], idx) => {
-        const hubId = 'hub:' + hubName;
-        const wShare = weights[idx] / totalWeight;
-        const centerWeight = accumWeight + weights[idx] / 2;
-        accumWeight += weights[idx];
-
-        const baseAngle = hubCount === 1 ? 0 : (-Math.PI / 2 + (centerWeight / totalWeight) * Math.PI * 2);
-        const clientCount = devs.length;
-
-        // Radial stagger so neighboring Hubs and their client fans have plenty of breathing room
-        const staggerOffset = (hubCount >= 5 && (idx % 2 === 1)) ? 130 : 0;
-        const hubDist = baseOrbitRadius + staggerOffset + Math.min(110, Math.max(0, clientCount - 5) * 9);
-
-        const savedHub = topoState.customPositions[hubId];
-        const hx = savedHub ? savedHub.x : Math.cos(baseAngle) * hubDist;
-        const hy = savedHub ? savedHub.y : Math.sin(baseAngle) * hubDist;
-
+        const devs = groups[h.label] || [];
         const onlineDevs = devs.filter(isOnline).length;
-        const isCableHub = hubName.toLowerCase().includes('wired') || hubName.toLowerCase().includes('cable') || hubName.toLowerCase().includes('lan') || hubName.toLowerCase().includes('main');
 
         const hubNode = {
-            id: hubId,
+            id: h.id,
             type: 'hub',
-            label: hubName,
-            sub: `${onlineDevs} active of ${devs.length}`,
+            label: h.label,
+            sub: `${onlineDevs}/${devs.length} online`,
             x: hx,
             y: hy,
             baseX: hx,
             baseY: hy,
-            r: 16,
-            color: isCableHub ? '#10b981' : '#00e5ff',
-            online: onlineDevs > 0,
+            r: 11.5,
+            color: h.color,
+            online: onlineDevs > 0 || (h.dev && isOnline(h.dev)),
             onlineCount: onlineDevs,
             totalCount: devs.length,
-            isCable: isCableHub,
-            angleFromCore: baseAngle,
+            isCable: h.isCable,
+            isMesh: h.isMesh,
+            parentId: '__core__',
+            dev: h.dev,
             phase: idx * 1.7,
-            driftR: 6,
+            driftR: 5.5,
             flash: 0
         };
         nodes.push(hubNode);
+    });
+
+    const halo1Node = nodes.find(n => n.id === 'hub:halo1') || coreNode;
+    const h1Angle = Math.atan2(halo1Node.baseY - coreNode.baseY, halo1Node.baseX - coreNode.baseX);
+
+    childHubs.forEach((h, idx) => {
+        const parentNode = nodes.find(n => n.id === h.parent) || halo1Node;
+        const subAngle = h1Angle + (idx === 0 ? -0.58 : 0.58);
+        const subDist = 260;
+        const savedPos = topoState.customPositions[h.id];
+        const hx = savedPos ? savedPos.x : (parentNode.baseX + Math.cos(subAngle) * subDist);
+        const hy = savedPos ? savedPos.y : (parentNode.baseY + Math.sin(subAngle) * subDist);
+
+        const devs = groups[h.label] || [];
+        const onlineDevs = devs.filter(isOnline).length;
+
+        const hubNode = {
+            id: h.id,
+            type: 'hub',
+            label: h.label,
+            sub: `${onlineDevs}/${devs.length} online`,
+            x: hx,
+            y: hy,
+            baseX: hx,
+            baseY: hy,
+            r: 11.5,
+            color: h.color,
+            online: onlineDevs > 0 || (h.dev && isOnline(h.dev)),
+            onlineCount: onlineDevs,
+            totalCount: devs.length,
+            isCable: h.isCable,
+            isMesh: h.isMesh,
+            parentId: h.parent,
+            dev: h.dev,
+            phase: (directHubs.length + idx) * 1.7,
+            driftR: 5.5,
+            flash: 0
+        };
+        nodes.push(hubNode);
+    });
+
+    // 3. Client Nodes: 0 branches if 0 clients!
+    definedHubs.forEach((h, idx) => {
+        const hubNode = nodes.find(n => n.id === h.id);
+        if (!hubNode) return;
+        const devs = groups[h.label] || [];
+        const clientCount = devs.length;
+        if (clientCount === 0) return; // Zero branches if no clients!
+
+        const parentNode = nodes.find(n => n.id === hubNode.parentId) || coreNode;
+        const outwardAngle = Math.atan2(hubNode.baseY - parentNode.baseY, hubNode.baseX - parentNode.baseX);
 
         const sortedDevs = [...devs].sort((a, b) => {
             const oa = isOnline(a) ? 1 : 0;
@@ -3773,25 +3914,22 @@ function buildTopoGraph(fitView = false) {
             return (a.hostname || '').localeCompare(b.hostname || '');
         });
 
-        // Clients distributed in open, well-spaced rings around their Hub
-        const outwardAngle = Math.atan2(hy - coreNode.baseY, hx - coreNode.baseX);
-        const ringCount = clientCount > 14 ? 3 : (clientCount > 5 ? 2 : 1);
-        const ringRadii = [165, 240, 315];
-        const fanSpan = Math.min(Math.PI * 1.78, Math.max(1.15, Math.min(wShare * Math.PI * 2 * 1.85, clientCount * 0.44)));
+        const ringCount = clientCount > 16 ? 3 : (clientCount > 6 ? 2 : 1);
+        const ringRadii = [155, 230, 305];
+        const fanSpan = Math.min(Math.PI * 1.6, Math.max(0.85, clientCount * 0.28));
         const startRad = outwardAngle - fanSpan / 2;
 
         sortedDevs.forEach((d, cIdx) => {
             const cid = 'dev:' + (d.mac || d.ip || cIdx);
             const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
             const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + t * fanSpan);
-            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 18);
-
+            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 16);
             const idealRelX = Math.cos(ang) * rad;
             const idealRelY = Math.sin(ang) * rad;
 
             const savedClient = topoState.customPositions[cid];
-            const cx = savedClient ? savedClient.x : hx + idealRelX;
-            const cy = savedClient ? savedClient.y : hy + idealRelY;
+            const cx = savedClient ? savedClient.x : (hubNode.baseX + idealRelX);
+            const cy = savedClient ? savedClient.y : (hubNode.baseY + idealRelY);
 
             const on = isOnline(d);
             let dotColor = '#52525b';
@@ -3809,35 +3947,36 @@ function buildTopoGraph(fitView = false) {
                 y: cy,
                 baseX: cx,
                 baseY: cy,
-                relX: cx - hx,
-                relY: cy - hy,
                 idealRelX,
                 idealRelY,
+                relX: cx - hubNode.baseX,
+                relY: cy - hubNode.baseY,
                 angle: ang,
-                r: on ? 6.8 : 5.2,
+                r: on ? 6.2 : 4.8,
                 color: dotColor,
                 online: on,
                 static: !!d.static,
                 blocked: !!d.blocked,
                 dev: d,
-                hubId: hubId,
+                hubId: hubNode.id,
                 phase: (cIdx * 1.13) + idx * 2.1,
-                driftR: on ? 8 : 4,
+                driftR: on ? 7.5 : 3.5,
                 flash: 0
             };
             nodes.push(cNode);
         });
     });
 
-    // Apply collision-only natural separation
     relaxTopoPositions(nodes);
 
+    // 4. Trunk links
     const hubsList = nodes.filter(n => n.type === 'hub');
     hubsList.forEach((hubNode, idx) => {
+        const parentNode = nodes.find(n => n.id === hubNode.parentId) || coreNode;
         const seed = (idx + 1) * 13.37;
-        const len = Math.hypot(hubNode.baseX - coreNode.baseX, hubNode.baseY - coreNode.baseY);
+        const len = Math.hypot(hubNode.baseX - parentNode.baseX, hubNode.baseY - parentNode.baseY);
         links.push({
-            from: coreNode,
+            from: parentNode,
             to: hubNode,
             type: 'trunk',
             online: hubNode.online,
@@ -3848,6 +3987,7 @@ function buildTopoGraph(fitView = false) {
         });
     });
 
+    // 5. Client Spoke links
     const clientsList = nodes.filter(n => n.type === 'client');
     clientsList.forEach((cNode, cIdx) => {
         const hubNode = nodes.find(h => h.id === cNode.hubId);
@@ -4223,6 +4363,7 @@ function initTopoCanvas() {
                         }
                     });
                 }
+                saveCustomPositionsToStorage();
                 return;
             }
 

@@ -350,11 +350,16 @@ class MercusysHaloSession:
             if role == "master":
                 node_info_by_ip[dip] = {
                     "label": f"{node_label} · Master Node",
+                    "node_short": node_label,
+                    "role": "master",
                     "tooltip": f"Mesh Master Node ({dip}) · MAC {dmac}"
                 }
             else:
                 node_info_by_ip[dip] = {
                     "label": f"{node_label} · Mesh → {master_label}",
+                    "node_short": node_label,
+                    "role": "slave",
+                    "parent_node": master_label,
                     "tooltip": f"Mesh Satellite Node ({dip}) connected to {master_label} · MAC {dmac}"
                 }
 
@@ -397,7 +402,7 @@ class MercusysHaloSession:
                     if cname.upper() == "UNKNOWN":
                         cname = ""
 
-                    display_label = f"{node_label} · {band_str}" if band_str else node_label
+                    display_label = node_label
                     tooltip = f"Connected to {node_label} ({dip}) via {band_full}"
                     if cname:
                         tooltip += f" | Mesh Name: {cname}"
@@ -405,6 +410,7 @@ class MercusysHaloSession:
                     client_map[cmac] = {
                         "node_label": display_label,
                         "node_short": node_label,
+                        "node_full": f"{node_label} · {band_str}" if band_str else node_label,
                         "node_ip": dip,
                         "band": band_str,
                         "halo_name": cname,
@@ -1559,8 +1565,12 @@ def build_state(force_refresh=False):
                 }
         elif rtype == 'mercusys_halo':
             cmap, ninfo = get_mercusys_halo_data(r, ip_to_mac_hint=ip_to_mac_hint, wait_if_empty=False)
-            halo_client_map.update(cmap)
-            halo_node_info.update(ninfo)
+            if cmap or ninfo:
+                halo_client_map.update(cmap)
+                halo_node_info.update(ninfo)
+            elif _HALO_CACHE.get("client_map") or _HALO_CACHE.get("node_info_by_ip"):
+                halo_client_map.update(_HALO_CACHE.get("client_map", {}))
+                halo_node_info.update(_HALO_CACHE.get("node_info_by_ip", {}))
 
     ghost_count = 0
     expired_count = 0
@@ -1609,14 +1619,32 @@ def build_state(force_refresh=False):
         conn_medium = "offline"
         conn_medium_label = "Offline"
 
+        is_infra_node = (
+            ip in halo_node_info or ip in infra_ips or
+            any(k in hostname.lower() for k in ['mercusys-halo', 'wr841n', 'em4590']) or
+            dev_class in ["Router / Access Point", "Repeater / Access Point"]
+        )
+
         if ip in halo_node_info:
-            router_node = halo_node_info[ip]["label"]
+            raw_lbl = halo_node_info[ip].get("node_short") or halo_node_info[ip]["label"]
+            router_node = re.sub(r'\s*·.*$', '', raw_lbl).strip()
             router_tooltip = halo_node_info[ip]["tooltip"]
             router_type = 'infra'
             conn_medium = 'cable'
             conn_medium_label = 'Wired Ethernet'
-        elif ip in infra_ips or 'mercusys-halo' in hostname.lower() or 'tplink' in hostname.lower() or 'repeater' in hostname.lower() or 'repetidor' in hostname.lower() or 'em4590' in hostname.lower() or dev_class in ["Router / Access Point", "Repeater / Access Point"]:
-            router_node = 'AP / Wi-Fi Repeater' if ('repeater' in hostname.lower() or 'repetidor' in dev_class.lower() or 'em4590' in hostname.lower()) else 'Router / AP Node'
+        elif ip in ('192.168.1.1', '192.168.1.249') or 'gateway' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
+            router_node = 'Gateway / LAN'
+            router_tooltip = f'Core Gateway device ({ip})'
+            router_type = 'infra'
+            conn_medium = 'cable'
+            conn_medium_label = 'Wired Ethernet'
+        elif is_infra_node:
+            if 'wr841n' in hostname.lower() or ip == '192.168.1.10':
+                router_node = 'TP-Link WR841N'
+            elif 'em4590' in hostname.lower() or ip == '192.168.1.9':
+                router_node = 'Wi-Fi Repeater EM4590'
+            else:
+                router_node = hostname or 'AP / Router'
             router_tooltip = f'Network infrastructure device ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
@@ -1628,15 +1656,15 @@ def build_state(force_refresh=False):
             conn_medium = 'wifi'
             conn_medium_label = 'Wi-Fi 2.4 GHz'
         elif halo_info:
-            router_node = halo_info["node_label"]
+            router_node = halo_info.get("node_short") or halo_info["node_label"]
             router_tooltip = halo_info["tooltip"]
             router_type = 'halo'
             conn_medium = halo_info.get("medium", "wifi")
             conn_medium_label = halo_info.get("medium_label", "Wi-Fi")
         elif live_ips:
             if is_wireless:
-                router_node = 'Wi-Fi AP / Repeater'
-                router_tooltip = 'Active wireless network device (Wi-Fi / Repeater)'
+                router_node = 'Gateway / Wi-Fi'
+                router_tooltip = 'Wireless device connected to primary gateway (192.168.1.1)'
                 router_type = 'wifi'
                 conn_medium = 'wifi'
                 conn_medium_label = 'Wi-Fi'
@@ -1707,15 +1735,33 @@ def build_state(force_refresh=False):
             dev_class, dev_vendor, dev_icon, dev_cat = predict_device_info(hostname, m, halo_info)
             is_wireless = is_wireless_only_device(dev_class, dev_cat, hostname, m)
 
+            is_infra_node = (
+                aip in halo_node_info or aip in infra_ips or
+                any(k in hostname.lower() for k in ['mercusys-halo', 'wr841n', 'em4590']) or
+                dev_class in ["Router / Access Point", "Repeater / Access Point"]
+            )
+
             router_tooltip = ""
             if aip in halo_node_info:
-                router_node = halo_node_info[aip]["label"]
+                raw_lbl = halo_node_info[aip].get("node_short") or halo_node_info[aip]["label"]
+                router_node = re.sub(r'\s*·.*$', '', raw_lbl).strip()
                 router_tooltip = halo_node_info[aip]["tooltip"]
                 router_type = 'infra'
                 conn_medium = 'cable'
                 conn_medium_label = 'Wired Ethernet'
-            elif aip in infra_ips or 'mercusys-halo' in hostname.lower() or 'tplink' in hostname.lower() or 'repeater' in hostname.lower() or 'repetidor' in hostname.lower() or 'em4590' in hostname.lower() or dev_class in ["Router / Access Point", "Repeater / Access Point"]:
-                router_node = 'AP / Wi-Fi Repeater' if ('repeater' in hostname.lower() or 'repetidor' in dev_class.lower() or 'em4590' in hostname.lower()) else 'Router / AP Node'
+            elif aip in ('192.168.1.1', '192.168.1.249') or 'gateway' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
+                router_node = 'Gateway / LAN'
+                router_tooltip = f'Core Gateway device ({aip})'
+                router_type = 'infra'
+                conn_medium = 'cable'
+                conn_medium_label = 'Wired Ethernet'
+            elif is_infra_node:
+                if 'wr841n' in hostname.lower() or aip == '192.168.1.10':
+                    router_node = 'TP-Link WR841N'
+                elif 'em4590' in hostname.lower() or aip == '192.168.1.9':
+                    router_node = 'Wi-Fi Repeater EM4590'
+                else:
+                    router_node = hostname or 'AP / Router'
                 router_tooltip = f'Network infrastructure device ({aip})'
                 router_type = 'infra'
                 conn_medium = 'cable'
@@ -1727,15 +1773,15 @@ def build_state(force_refresh=False):
                 conn_medium = 'wifi'
                 conn_medium_label = 'Wi-Fi 2.4 GHz'
             elif halo_info:
-                router_node = halo_info["node_label"]
+                router_node = halo_info.get("node_short") or halo_info["node_label"]
                 router_tooltip = halo_info["tooltip"]
                 router_type = 'halo'
                 conn_medium = halo_info.get("medium", "wifi")
                 conn_medium_label = halo_info.get("medium_label", "Wi-Fi")
             else:
                 if is_wireless:
-                    router_node = 'Wi-Fi AP / Repeater'
-                    router_tooltip = 'Active wireless network device (Wi-Fi / Repeater)'
+                    router_node = 'Gateway / Wi-Fi'
+                    router_tooltip = 'Wireless device connected to primary gateway (192.168.1.1)'
                     router_type = 'wifi'
                     conn_medium = 'wifi'
                     conn_medium_label = 'Wi-Fi'
