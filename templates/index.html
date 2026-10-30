@@ -467,7 +467,7 @@
 
     <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
-            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Filter by hostname, class, medium, router, IP, or MAC..." oninput="renderTable()">
+            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Search by name, IP, port (e.g. 8086, :80, 8123), service, MAC..." oninput="renderTable()">
             <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()">✕ Reset Filters</button>
         </div>
         <div class="filter-pills" id="multi-filters" style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
@@ -1136,9 +1136,36 @@ function renderTable() {
         // Filter 4: Web Services (Active)
         if (tableFilters.services === 'has_services' && (!d.web_links || d.web_links.length === 0)) return false;
 
-        // Filter 5: Text search query
+        // Filter 5: Text and open ports search query
         if (!q) return true;
-        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')}`.toLowerCase();
+
+        const openPorts = (d.open_ports || (d.web_links || []).map(w => w.port).filter(Boolean));
+
+        // 1. If search begins with ':' (e.g. ":80", ":8086", ":8123")
+        if (q.startsWith(':')) {
+            const pQuery = q.slice(1).trim();
+            if (pQuery) {
+                return openPorts.some(p => p.toString().startsWith(pQuery) || p.toString() === pQuery);
+            }
+        }
+
+        // 2. Explicit port prefix match: "port:8086", "puerto:8086", "port 8086", "p:8086"
+        const portPrefixMatch = q.match(/^(?:port:|puerto:|p:|\bpuerto\s+|\bport\s+)(\d+)$/);
+        if (portPrefixMatch) {
+            const targetPort = parseInt(portPrefixMatch[1], 10);
+            return openPorts.includes(targetPort);
+        }
+
+        // 3. Exact port number query (e.g. "8086", "8123", "32400")
+        if (/^\d{2,5}$/.test(q)) {
+            const numQ = parseInt(q, 10);
+            if (openPorts.includes(numQ)) return true;
+        }
+
+        // 4. General text search query (including ports, web service labels, URLs, IP, MAC, hostname, etc.)
+        const portsText = openPorts.map(p => `${p} :${p} port:${p} puerto:${p}`).join(' ');
+        const servicesText = (d.web_links || []).map(w => `${w.label} ${w.url}`).join(' ');
+        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText}`.toLowerCase();
         return text.includes(q);
     });
 

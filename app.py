@@ -606,7 +606,7 @@ SSL_UNVERIFIED_CTX.verify_mode = ssl.CERT_NONE
 _SERVICE_SCAN_CACHE = {}  # {ip: (timestamp, [verified_service_dicts])}
 
 CANDIDATE_WEB_PORTS = [
-    80, 81, 443, 1984, 2342, 3000, 3001, 32400, 4040, 4200, 4357, 4533, 5000, 5001, 5050, 5055,
+    80, 81, 443, 1984, 2283, 2342, 3000, 3001, 32400, 4040, 4200, 4357, 4533, 5000, 5001, 5050, 5055,
     5173, 5678, 6052, 6789, 7000, 7001, 7878, 8000, 8006, 8080, 8081, 8082, 8085, 8086,
     8087, 8088, 8090, 8096, 8099, 8123, 8325, 8384, 8443, 8581, 8686, 8880, 8888, 8889,
     8989, 9000, 9090, 9091, 9443, 9584, 10000, 19999
@@ -692,10 +692,13 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
     links = []
     seen_urls = set()
 
-    def add_link(label, url):
+    def add_link(label, url, port=None):
         if url not in seen_urls:
             seen_urls.add(url)
-            links.append({'label': label, 'url': url})
+            item = {'label': label, 'url': url}
+            if port is not None:
+                item['port'] = int(port)
+            links.append(item)
 
     for item in verified_services:
         port = item['port']
@@ -766,7 +769,7 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
         else:
             label = f"Web ({proto.upper()})" if port in (80, 443) else f"Web Service (:{port})"
 
-        add_link(label, url)
+        add_link(label, url, port=port)
 
     return links
 
@@ -1449,7 +1452,8 @@ def api_state():
             'dev_vendor': dev_vendor,
             'dev_icon': dev_icon,
             'dev_cat': dev_cat,
-            'web_links': []
+            'web_links': [],
+            'open_ports': []
         })
 
     seen_ips = {d['ip'] for d in devices if d.get('ip')}
@@ -1542,7 +1546,8 @@ def api_state():
                 'dev_vendor': dev_vendor,
                 'dev_icon': dev_icon,
                 'dev_cat': dev_cat,
-                'web_links': []
+                'web_links': [],
+                'open_ports': []
             })
             seen_ips.add(aip)
 
@@ -1567,7 +1572,8 @@ def api_state():
             'dev_vendor': 'Raspberry Pi Foundation',
             'dev_icon': '🍓',
             'dev_cat': 'server',
-            'web_links': []
+            'web_links': [],
+            'open_ports': []
         })
         seen_ips.add('192.168.1.249')
 
@@ -1610,6 +1616,7 @@ def api_state():
             halo_node_info,
             is_active=is_active
         )
+        d['open_ports'] = sorted(list(set(l['port'] for l in d['web_links'] if 'port' in l)))
 
     devices.sort(key=lambda d: (not d['static'], ip_sort_key(d['ip'])))
 
