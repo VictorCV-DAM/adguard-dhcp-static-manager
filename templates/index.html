@@ -3150,8 +3150,8 @@ function fitTopoToScreen(smooth = true) {
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     topoState.nodes.forEach(n => {
-        const padX = n.type === 'client' ? 190 : 120;
-        const padY = n.type === 'client' ? 95 : 100;
+        const padX = n.type === 'client' ? 110 : 80;
+        const padY = n.type === 'client' ? 45 : 70;
         if (n.baseX - padX < minX) minX = n.baseX - padX;
         if (n.baseX + padX > maxX) maxX = n.baseX + padX;
         if (n.baseY - padY < minY) minY = n.baseY - padY;
@@ -3159,16 +3159,16 @@ function fitTopoToScreen(smooth = true) {
     });
     const bw = Math.max(400, maxX - minX);
     const bh = Math.max(400, maxY - minY);
-    const scaleX = (cw - 80) / bw;
-    const scaleY = (ch - 110) / bh;
-    const sc = Math.max(0.14, Math.min(1.1, Math.min(scaleX, scaleY)));
+    const scaleX = (cw - 60) / bw;
+    const scaleY = (ch - 90) / bh;
+    const sc = Math.max(0.22, Math.min(1.25, Math.min(scaleX, scaleY)));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     centerOnPoint(cx, cy, sc, smooth);
 }
 
-function spawnNodeShockwave(x, y, color = '#00e5ff', maxR = 160) {
-    topoState.shockwaves.push({ x, y, r: 14, maxR, color, alpha: 0.95 });
+function spawnNodeShockwave(x, y, color = '#00e5ff', maxR = 135) {
+    topoState.shockwaves.push({ x, y, r: 12, maxR, color, alpha: 0.95 });
 }
 
 function triggerNeuralCascade(originNode = null) {
@@ -3177,7 +3177,7 @@ function triggerNeuralCascade(originNode = null) {
     if (!source) return;
 
     source.flash = 1.0;
-    spawnNodeShockwave(source.x, source.y, source.type === 'core' ? '#00e5ff' : source.color, source.type === 'core' ? 280 : 170);
+    spawnNodeShockwave(source.x, source.y, source.type === 'core' ? '#00e5ff' : source.color, source.type === 'core' ? 210 : 125);
 
     topoState.links.forEach((lk, idx) => {
         if (source.type === 'core' && lk.type === 'trunk') {
@@ -3209,9 +3209,9 @@ function triggerNeuralCascade(originNode = null) {
 }
 
 function createLinkZigzagJoints(isTrunk, seed, linkLen) {
-    const count = isTrunk ? 4 : 3;
+    const count = isTrunk ? 3 : 2;
     const joints = [];
-    const baseAmp = isTrunk ? Math.min(58, Math.max(28, linkLen * 0.055)) : Math.min(38, Math.max(16, linkLen * 0.075));
+    const baseAmp = isTrunk ? Math.min(34, Math.max(15, linkLen * 0.085)) : Math.min(20, Math.max(8, linkLen * 0.10));
     for (let i = 1; i <= count; i++) {
         const t = i / (count + 1);
         const sign = (i % 2 === 1) ? 1 : -1;
@@ -3222,7 +3222,7 @@ function createLinkZigzagJoints(isTrunk, seed, linkLen) {
             perp,
             phaseX: seed * 2.3 + i * 1.73,
             phaseY: seed * 1.9 + i * 2.41,
-            drift: isTrunk ? 18 : 13,
+            drift: isTrunk ? 11 : 7,
             x: 0,
             y: 0
         });
@@ -3237,7 +3237,76 @@ function relaxTopoPositions(nodes) {
     const hubMap = {};
     hubs.forEach(h => { hubMap[h.id] = h; });
 
-    for (let iter = 0; iter < 35; iter++) {
+    // Approximate width of each label so nodes only separate when their labels would actually overlap
+    const getLabelWidth = (n) => {
+        const len = Math.min(25, (n.label || '').length);
+        return Math.max(58, len * 6.4 + 26);
+    };
+
+    for (let iter = 0; iter < 50; iter++) {
+        // 1. Gently attract each client toward its Hub (natural compact grouping)
+        for (let i = 0; i < clients.length; i++) {
+            const c = clients[i];
+            if (topoState.customPositions[c.id]) continue;
+            const h = hubMap[c.hubId];
+            if (!h) continue;
+            const targetX = h.baseX + c.idealRelX;
+            const targetY = h.baseY + c.idealRelY;
+            c.baseX += (targetX - c.baseX) * 0.16;
+            c.baseY += (targetY - c.baseY) * 0.16;
+        }
+
+        // 2. Collision-only separation: only act when two nodes or their same-line text labels collide
+        for (let i = 0; i < clients.length; i++) {
+            const a = clients[i];
+            for (let j = i + 1; j < clients.length; j++) {
+                const b = clients[j];
+                const dx = b.baseX - a.baseX;
+                const dy = b.baseY - a.baseY;
+                const absDx = Math.abs(dx);
+                const absDy = Math.abs(dy);
+
+                // Direct circle-to-circle overlap
+                if (absDx < 26 && absDy < 26) {
+                    const d = Math.hypot(dx, dy) || 0.5;
+                    if (d < 26) {
+                        const push = (26 - d) * 0.45;
+                        const ux = dx / d, uy = dy / d;
+                        if (!topoState.customPositions[a.id]) { a.baseX -= ux * push; a.baseY -= uy * push; }
+                        if (!topoState.customPositions[b.id]) { b.baseX += ux * push; b.baseY += uy * push; }
+                    }
+                }
+
+                // Horizontal text label overlap: only when both share the same vertical text line (|dy| < 22px)
+                const sepX = (getLabelWidth(a) + getLabelWidth(b)) * 0.52;
+                const sepY = 22;
+                if (absDy < sepY && absDx < sepX) {
+                    const overlapY = sepY - absDy;
+                    const overlapX = sepX - absDx;
+                    const dirY = dy === 0 ? (i % 2 === 0 ? 1 : -1) : (dy > 0 ? 1 : -1);
+                    const dirX = dx === 0 ? (j % 2 === 0 ? 1 : -1) : (dx > 0 ? 1 : -1);
+                    // Nudge vertically first so labels stack cleanly without blowing the cluster apart
+                    const py = overlapY * 0.44 * dirY;
+                    const px = Math.min(overlapX * 0.12, 7) * dirX;
+                    if (!topoState.customPositions[a.id]) { a.baseX -= px; a.baseY -= py; }
+                    if (!topoState.customPositions[b.id]) { b.baseX += px; b.baseY += py; }
+
+                    // If clients belong to two different Hubs and collide, gently nudge their Hubs apart
+                    if (a.hubId !== b.hubId) {
+                        const ha = hubMap[a.hubId], hb = hubMap[b.hubId];
+                        if (ha && hb) {
+                            const hdx = hb.baseX - ha.baseX;
+                            const hdy = hb.baseY - ha.baseY;
+                            const hd = Math.hypot(hdx, hdy) || 1;
+                            if (!topoState.customPositions[ha.id]) { ha.baseX -= (hdx / hd) * 1.4; ha.baseY -= (hdy / hd) * 1.4; }
+                            if (!topoState.customPositions[hb.id]) { hb.baseX += (hdx / hd) * 1.4; hb.baseY += (hdy / hd) * 1.4; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Minimum clearance between Hubs only if their titles/badges would overlap
         for (let i = 0; i < hubs.length; i++) {
             for (let j = i + 1; j < hubs.length; j++) {
                 const a = hubs[i], b = hubs[j];
@@ -3245,7 +3314,7 @@ function relaxTopoPositions(nodes) {
                 const dx = b.baseX - a.baseX;
                 const dy = b.baseY - a.baseY;
                 const dist = Math.hypot(dx, dy) || 1;
-                const minDist = 660;
+                const minDist = 195;
                 if (dist < minDist) {
                     const push = (minDist - dist) * 0.35;
                     const ux = dx / dist, uy = dy / dist;
@@ -3254,41 +3323,8 @@ function relaxTopoPositions(nodes) {
                 }
             }
         }
-    }
 
-    clients.forEach(c => {
-        if (topoState.customPositions[c.id]) return;
-        const h = hubMap[c.hubId];
-        if (h) {
-            c.baseX = h.baseX + c.relX;
-            c.baseY = h.baseY + c.relY;
-        }
-    });
-
-    const minSepX = 215;
-    const minSepY = 78;
-    for (let iter = 0; iter < 55; iter++) {
-        for (let i = 0; i < clients.length; i++) {
-            const a = clients[i];
-            for (let j = i + 1; j < clients.length; j++) {
-                const b = clients[j];
-                const dx = b.baseX - a.baseX;
-                const dy = b.baseY - a.baseY;
-                if (Math.abs(dx) >= minSepX || Math.abs(dy) >= minSepY) continue;
-
-                const nx = dx / minSepX;
-                const ny = dy / minSepY;
-                const normDist = Math.hypot(nx, ny) || 0.01;
-                if (normDist < 1.0) {
-                    const overlap = (1.0 - normDist);
-                    const gx = (dx === 0 ? (i % 2 === 0 ? 1 : -1) : dx / Math.abs(dx)) * overlap * minSepX * 0.28;
-                    const gy = (dy === 0 ? (j % 2 === 0 ? 1 : -1) : dy / Math.abs(dy)) * overlap * minSepY * 0.34;
-                    if (!topoState.customPositions[a.id]) { a.baseX -= gx; a.baseY -= gy; }
-                    if (!topoState.customPositions[b.id]) { b.baseX += gx; b.baseY += gy; }
-                }
-            }
-        }
-
+        // 4. Keep clients off the Core badge and Hub icons
         for (let i = 0; i < clients.length; i++) {
             const c = clients[i];
             if (topoState.customPositions[c.id]) continue;
@@ -3297,8 +3333,8 @@ function relaxTopoPositions(nodes) {
                 const dx = c.baseX - core.baseX;
                 const dy = c.baseY - core.baseY;
                 const d = Math.hypot(dx, dy) || 1;
-                if (d < 420) {
-                    const push = (420 - d) * 0.45;
+                if (d < 135) {
+                    const push = (135 - d) * 0.5;
                     c.baseX += (dx / d) * push;
                     c.baseY += (dy / d) * push;
                 }
@@ -3306,12 +3342,12 @@ function relaxTopoPositions(nodes) {
 
             for (let hIdx = 0; hIdx < hubs.length; hIdx++) {
                 const h = hubs[hIdx];
-                const minHubDist = (h.id === c.hubId) ? 235 : 275;
+                const minHubDist = (h.id === c.hubId) ? 74 : 92;
                 const dx = c.baseX - h.baseX;
                 const dy = c.baseY - h.baseY;
                 const d = Math.hypot(dx, dy) || 1;
                 if (d < minHubDist) {
-                    const push = (minHubDist - d) * 0.45;
+                    const push = (minHubDist - d) * 0.5;
                     c.baseX += (dx / d) * push;
                     c.baseY += (dy / d) * push;
                 }
@@ -3354,11 +3390,11 @@ function buildTopoGraph(fitView = false) {
         y: corePos.y,
         baseX: corePos.x,
         baseY: corePos.y,
-        r: 42,
+        r: 36,
         color: '#00e5ff',
         online: true,
         phase: 0,
-        driftR: 5,
+        driftR: 4,
         flash: 0.7
     };
     nodes.push(coreNode);
@@ -3366,13 +3402,11 @@ function buildTopoGraph(fitView = false) {
     const entries = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
     const hubCount = entries.length;
 
-    const weights = entries.map(([_, devs]) => 1.35 + Math.sqrt(devs.length) * 0.9);
+    // Proportional angular share per Hub, keeping a compact orbit around the Core
+    const weights = entries.map(([_, devs]) => 1.15 + Math.sqrt(devs.length) * 0.55);
     const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
 
-    const desiredCircumference = entries.reduce((acc, [_, devs]) => {
-        return acc + Math.max(680, 420 + Math.sqrt(devs.length) * 190);
-    }, 0);
-    const baseOrbitRadius = hubCount <= 1 ? 650 : Math.max(1050, desiredCircumference / (2 * Math.PI));
+    const baseOrbitRadius = hubCount <= 1 ? 220 : Math.min(430, Math.max(295, 225 + hubCount * 17));
 
     let accumWeight = 0;
 
@@ -3385,8 +3419,9 @@ function buildTopoGraph(fitView = false) {
         const baseAngle = hubCount === 1 ? 0 : (-Math.PI / 2 + (centerWeight / totalWeight) * Math.PI * 2);
         const clientCount = devs.length;
 
-        const staggerOffset = (hubCount >= 5 && (idx % 2 === 1)) ? 430 : 0;
-        const hubDist = baseOrbitRadius + staggerOffset;
+        // Subtle radial stagger so neighboring Hubs breathe without flying far away
+        const staggerOffset = (hubCount >= 6 && (idx % 2 === 1)) ? 65 : 0;
+        const hubDist = baseOrbitRadius + staggerOffset + Math.min(55, Math.max(0, clientCount - 6) * 4.5);
 
         const savedHub = topoState.customPositions[hubId];
         const hx = savedHub ? savedHub.x : Math.cos(baseAngle) * hubDist;
@@ -3404,7 +3439,7 @@ function buildTopoGraph(fitView = false) {
             y: hy,
             baseX: hx,
             baseY: hy,
-            r: 18,
+            r: 16,
             color: isCableHub ? '#10b981' : '#00e5ff',
             online: onlineDevs > 0,
             onlineCount: onlineDevs,
@@ -3412,7 +3447,7 @@ function buildTopoGraph(fitView = false) {
             isCable: isCableHub,
             angleFromCore: baseAngle,
             phase: idx * 1.7,
-            driftR: 9,
+            driftR: 6,
             flash: 0
         };
         nodes.push(hubNode);
@@ -3424,21 +3459,25 @@ function buildTopoGraph(fitView = false) {
             return (a.hostname || '').localeCompare(b.hostname || '');
         });
 
+        // Clients tightly grouped around their Hub; collision solver expands them only where needed
         const outwardAngle = Math.atan2(hy - coreNode.baseY, hx - coreNode.baseX);
-        const ringCount = clientCount > 24 ? 3 : (clientCount > 9 ? 2 : 1);
-        const ringRadii = [320, 495, 670];
-        const fanSpan = Math.min(Math.PI * 1.48, Math.max(0.85, Math.min(wShare * Math.PI * 2 * 1.35, clientCount * 0.22)));
+        const ringCount = clientCount > 18 ? 3 : (clientCount > 7 ? 2 : 1);
+        const ringRadii = [96, 142, 186];
+        const fanSpan = Math.min(Math.PI * 1.55, Math.max(0.75, Math.min(wShare * Math.PI * 2 * 1.45, clientCount * 0.28)));
         const startRad = outwardAngle - fanSpan / 2;
 
         sortedDevs.forEach((d, cIdx) => {
             const cid = 'dev:' + (d.mac || d.ip || cIdx);
             const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
             const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + t * fanSpan);
-            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 28);
+            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 10);
+
+            const idealRelX = Math.cos(ang) * rad;
+            const idealRelY = Math.sin(ang) * rad;
 
             const savedClient = topoState.customPositions[cid];
-            const cx = savedClient ? savedClient.x : hx + Math.cos(ang) * rad;
-            const cy = savedClient ? savedClient.y : hy + Math.sin(ang) * rad;
+            const cx = savedClient ? savedClient.x : hx + idealRelX;
+            const cy = savedClient ? savedClient.y : hy + idealRelY;
 
             const on = isOnline(d);
             let dotColor = '#52525b';
@@ -3458,8 +3497,10 @@ function buildTopoGraph(fitView = false) {
                 baseY: cy,
                 relX: cx - hx,
                 relY: cy - hy,
+                idealRelX,
+                idealRelY,
                 angle: ang,
-                r: on ? 7.2 : 5.5,
+                r: on ? 6.8 : 5.2,
                 color: dotColor,
                 online: on,
                 static: !!d.static,
@@ -3467,13 +3508,14 @@ function buildTopoGraph(fitView = false) {
                 dev: d,
                 hubId: hubId,
                 phase: (cIdx * 1.13) + idx * 2.1,
-                driftR: on ? 13 : 6,
+                driftR: on ? 8 : 4,
                 flash: 0
             };
             nodes.push(cNode);
         });
     });
 
+    // Apply collision-only natural separation
     relaxTopoPositions(nodes);
 
     const hubsList = nodes.filter(n => n.type === 'hub');
@@ -3937,7 +3979,7 @@ function drawTopoFrame(now) {
             if (coreNode) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(coreNode.x, coreNode.y, 145, 0, Math.PI * 2);
+                ctx.arc(coreNode.x, coreNode.y, 102, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(0, 229, 255, 0.09)';
                 ctx.lineWidth = 1.2;
                 ctx.stroke();
@@ -3959,7 +4001,7 @@ function drawTopoFrame(now) {
                     });
                 });
 
-                const maxDist = 265;
+                const maxDist = 140;
                 const maxDistSq = maxDist * maxDist;
                 ctx.save();
                 ctx.lineWidth = 0.9;
@@ -3974,7 +4016,7 @@ function drawTopoFrame(now) {
                         const dy = b.y - a.y;
                         if (Math.abs(dy) > maxDist) continue;
                         const dSq = dx * dx + dy * dy;
-                        if (dSq < maxDistSq && dSq > 900) {
+                        if (dSq < maxDistSq && dSq > 350) {
                             linksCount++;
                             const ratio = 1 - Math.sqrt(dSq) / maxDist;
                             const dim = (hov || hasSearch) ? 0.18 : 1.0;
