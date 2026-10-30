@@ -1313,7 +1313,36 @@
             </div>
 
             <!-- Quick actions -->
-            <div id="ds-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;"></div>
+            <div id="ds-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"></div>
+
+            <!-- Direct DHCP Identity & Static IP Control inside the Sheet -->
+            <div style="background:linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.78)); padding:12px 14px; border-radius:10px; border:1px solid rgba(56, 189, 248, 0.32); margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                    <strong style="font-size:0.88rem; color:#38bdf8;">🌐 DHCP Identity & Static IP (Direct Edit)</strong>
+                    <span id="ds-dhcp-badge" style="font-size:0.75rem;"></span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; align-items:end;">
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-size:0.76rem; color:var(--muted);">Device Name (Hostname)</label>
+                        <input type="text" id="ds-edit-hostname" placeholder="e.g. living-room-tv" style="width:100%; padding:7px 10px; background:#0b1120; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-weight:600;">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-size:0.76rem; color:var(--muted); display:flex; justify-content:space-between; align-items:center;">
+                            <span>Static IP Address</span>
+                            <a href="javascript:void(0)" onclick="suggestFreeIpForSheet()" style="color:#38bdf8; text-decoration:none; font-size:0.72rem; font-weight:600;">✨ Suggest free IP</a>
+                        </label>
+                        <input type="text" id="ds-edit-ip" placeholder="192.168.1.X" style="width:100%; padding:7px 10px; background:#0b1120; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:monospace; font-weight:700;">
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">
+                    <label style="font-size:0.8rem; color:#e2e8f0; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
+                        <input type="checkbox" id="ds-force-reconnect" style="width:auto; accent-color:#f59e0b;">
+                        <span>⚡ <strong>Force new IP now</strong> (reconnect client on Wi-Fi AP so it picks up the new IP immediately)</span>
+                    </label>
+                    <button id="ds-btn-apply-dhcp" class="btn btn-primary" style="padding:7px 14px; font-size:0.8rem; font-weight:700;" onclick="applyDhcpFromSheet()">💾 Save Name & Static IP</button>
+                </div>
+                <div id="ds-dhcp-status" style="display:none; margin-top:8px; padding:7px 10px; border-radius:6px; font-size:0.8rem;"></div>
+            </div>
 
             <!-- Technical metrics -->
             <div id="ds-metrics" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; margin-bottom:14px;"></div>
@@ -1528,13 +1557,15 @@ let downServices = [];
 let routersConfig = [];
 let sortState = { colId: 'ip', asc: true };
 let dragSrcColId = null;
-let currentMainTab = 'devices';
+let currentMainTab = localStorage.getItem('ag_active_main_tab') || 'devices';
 let serviceCategoryFilter = 'all';
 
 function switchMainTab(tab) {
+    const validTabs = ['devices', 'services', 'ipmap', 'topology', 'timeline', 'diagnostics'];
+    if (!validTabs.includes(tab)) tab = 'devices';
     currentMainTab = tab;
-    const tabs = ['devices', 'services', 'ipmap', 'topology', 'timeline', 'diagnostics'];
-    tabs.forEach(t => {
+    try { localStorage.setItem('ag_active_main_tab', tab); } catch (e) {}
+    validTabs.forEach(t => {
         const btn = document.getElementById('tab-btn-' + t);
         const view = document.getElementById('view-' + t);
         if (btn) btn.classList.toggle('active', t === tab);
@@ -1940,6 +1971,7 @@ async function loadState(isManual = false) {
         updateTabsCounts();
         if (currentMainTab === 'ipmap') loadIpMap();
         else if (currentMainTab === 'topology') renderTopology();
+        else if (currentMainTab === 'timeline') loadTimeline(24);
         else if (currentMainTab === 'diagnostics') loadDiagnostics();
 
         lastRefreshTime = new Date();
@@ -3461,26 +3493,14 @@ function relaxTopoPositions(nodes) {
     const hubMap = {};
     hubs.forEach(h => { hubMap[h.id] = h; });
 
-    // Approximate width of each label so nodes only separate when their labels would actually overlap
+    // Approximate width of each label so nodes maintain generous breathing room
     const getLabelWidth = (n) => {
-        const len = Math.min(25, (n.label || '').length);
-        return Math.max(58, len * 6.4 + 26);
+        const len = Math.min(26, (n.label || '').length);
+        return Math.max(76, len * 6.8 + 38);
     };
 
-    for (let iter = 0; iter < 50; iter++) {
-        // 1. Gently attract each client toward its Hub (natural compact grouping)
-        for (let i = 0; i < clients.length; i++) {
-            const c = clients[i];
-            if (topoState.customPositions[c.id]) continue;
-            const h = hubMap[c.hubId];
-            if (!h) continue;
-            const targetX = h.baseX + c.idealRelX;
-            const targetY = h.baseY + c.idealRelY;
-            c.baseX += (targetX - c.baseX) * 0.16;
-            c.baseY += (targetY - c.baseY) * 0.16;
-        }
-
-        // 2. Collision-only separation: only act when two nodes or their same-line text labels collide
+    for (let iter = 0; iter < 55; iter++) {
+        // 1. Spacious separation between clients so they never bunch up
         for (let i = 0; i < clients.length; i++) {
             const a = clients[i];
             for (let j = i + 1; j < clients.length; j++) {
@@ -3490,47 +3510,46 @@ function relaxTopoPositions(nodes) {
                 const absDx = Math.abs(dx);
                 const absDy = Math.abs(dy);
 
-                // Direct circle-to-circle overlap
-                if (absDx < 26 && absDy < 26) {
+                // Generous radial minimum distance between any two client dots
+                const minDotDist = 66;
+                if (absDx < minDotDist && absDy < minDotDist) {
                     const d = Math.hypot(dx, dy) || 0.5;
-                    if (d < 26) {
-                        const push = (26 - d) * 0.45;
+                    if (d < minDotDist) {
+                        const push = (minDotDist - d) * 0.42;
                         const ux = dx / d, uy = dy / d;
                         if (!topoState.customPositions[a.id]) { a.baseX -= ux * push; a.baseY -= uy * push; }
                         if (!topoState.customPositions[b.id]) { b.baseX += ux * push; b.baseY += uy * push; }
                     }
                 }
 
-                // Horizontal text label overlap: only when both share the same vertical text line (|dy| < 22px)
-                const sepX = (getLabelWidth(a) + getLabelWidth(b)) * 0.52;
-                const sepY = 22;
+                // Horizontal & vertical text label clearance
+                const sepX = (getLabelWidth(a) + getLabelWidth(b)) * 0.58 + 30;
+                const sepY = 36;
                 if (absDy < sepY && absDx < sepX) {
                     const overlapY = sepY - absDy;
                     const overlapX = sepX - absDx;
                     const dirY = dy === 0 ? (i % 2 === 0 ? 1 : -1) : (dy > 0 ? 1 : -1);
                     const dirX = dx === 0 ? (j % 2 === 0 ? 1 : -1) : (dx > 0 ? 1 : -1);
-                    // Nudge vertically first so labels stack cleanly without blowing the cluster apart
-                    const py = overlapY * 0.44 * dirY;
-                    const px = Math.min(overlapX * 0.12, 7) * dirX;
+                    const py = overlapY * 0.45 * dirY;
+                    const px = Math.min(overlapX * 0.25, 16) * dirX;
                     if (!topoState.customPositions[a.id]) { a.baseX -= px; a.baseY -= py; }
                     if (!topoState.customPositions[b.id]) { b.baseX += px; b.baseY += py; }
 
-                    // If clients belong to two different Hubs and collide, gently nudge their Hubs apart
                     if (a.hubId !== b.hubId) {
                         const ha = hubMap[a.hubId], hb = hubMap[b.hubId];
                         if (ha && hb) {
                             const hdx = hb.baseX - ha.baseX;
                             const hdy = hb.baseY - ha.baseY;
                             const hd = Math.hypot(hdx, hdy) || 1;
-                            if (!topoState.customPositions[ha.id]) { ha.baseX -= (hdx / hd) * 1.4; ha.baseY -= (hdy / hd) * 1.4; }
-                            if (!topoState.customPositions[hb.id]) { hb.baseX += (hdx / hd) * 1.4; hb.baseY += (hdy / hd) * 1.4; }
+                            if (!topoState.customPositions[ha.id]) { ha.baseX -= (hdx / hd) * 2.2; ha.baseY -= (hdy / hd) * 2.2; }
+                            if (!topoState.customPositions[hb.id]) { hb.baseX += (hdx / hd) * 2.2; hb.baseY += (hdy / hd) * 2.2; }
                         }
                     }
                 }
             }
         }
 
-        // 3. Minimum clearance between Hubs only if their titles/badges would overlap
+        // 2. Ample clearance between Hubs so their client constellations don't crowd each other
         for (let i = 0; i < hubs.length; i++) {
             for (let j = i + 1; j < hubs.length; j++) {
                 const a = hubs[i], b = hubs[j];
@@ -3538,7 +3557,7 @@ function relaxTopoPositions(nodes) {
                 const dx = b.baseX - a.baseX;
                 const dy = b.baseY - a.baseY;
                 const dist = Math.hypot(dx, dy) || 1;
-                const minDist = 195;
+                const minDist = 370;
                 if (dist < minDist) {
                     const push = (minDist - dist) * 0.35;
                     const ux = dx / dist, uy = dy / dist;
@@ -3548,7 +3567,7 @@ function relaxTopoPositions(nodes) {
             }
         }
 
-        // 4. Keep clients off the Core badge and Hub icons
+        // 3. Keep clients at a clean distance from the Core and Hub centers
         for (let i = 0; i < clients.length; i++) {
             const c = clients[i];
             if (topoState.customPositions[c.id]) continue;
@@ -3557,8 +3576,8 @@ function relaxTopoPositions(nodes) {
                 const dx = c.baseX - core.baseX;
                 const dy = c.baseY - core.baseY;
                 const d = Math.hypot(dx, dy) || 1;
-                if (d < 135) {
-                    const push = (135 - d) * 0.5;
+                if (d < 175) {
+                    const push = (175 - d) * 0.5;
                     c.baseX += (dx / d) * push;
                     c.baseY += (dy / d) * push;
                 }
@@ -3566,7 +3585,7 @@ function relaxTopoPositions(nodes) {
 
             for (let hIdx = 0; hIdx < hubs.length; hIdx++) {
                 const h = hubs[hIdx];
-                const minHubDist = (h.id === c.hubId) ? 74 : 92;
+                const minHubDist = (h.id === c.hubId) ? 132 : 145;
                 const dx = c.baseX - h.baseX;
                 const dy = c.baseY - h.baseY;
                 const d = Math.hypot(dx, dy) || 1;
@@ -3626,11 +3645,11 @@ function buildTopoGraph(fitView = false) {
     const entries = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
     const hubCount = entries.length;
 
-    // Proportional angular share per Hub, keeping a compact orbit around the Core
-    const weights = entries.map(([_, devs]) => 1.15 + Math.sqrt(devs.length) * 0.55);
+    // Proportional angular share per Hub with balanced orbit around the Core
+    const weights = entries.map(([_, devs]) => 1.15 + Math.sqrt(devs.length) * 0.65);
     const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
 
-    const baseOrbitRadius = hubCount <= 1 ? 220 : Math.min(430, Math.max(295, 225 + hubCount * 17));
+    const baseOrbitRadius = hubCount <= 1 ? 300 : Math.min(640, Math.max(460, 340 + hubCount * 28));
 
     let accumWeight = 0;
 
@@ -3643,9 +3662,9 @@ function buildTopoGraph(fitView = false) {
         const baseAngle = hubCount === 1 ? 0 : (-Math.PI / 2 + (centerWeight / totalWeight) * Math.PI * 2);
         const clientCount = devs.length;
 
-        // Subtle radial stagger so neighboring Hubs breathe without flying far away
-        const staggerOffset = (hubCount >= 6 && (idx % 2 === 1)) ? 65 : 0;
-        const hubDist = baseOrbitRadius + staggerOffset + Math.min(55, Math.max(0, clientCount - 6) * 4.5);
+        // Radial stagger so neighboring Hubs and their client fans have plenty of breathing room
+        const staggerOffset = (hubCount >= 5 && (idx % 2 === 1)) ? 130 : 0;
+        const hubDist = baseOrbitRadius + staggerOffset + Math.min(110, Math.max(0, clientCount - 5) * 9);
 
         const savedHub = topoState.customPositions[hubId];
         const hx = savedHub ? savedHub.x : Math.cos(baseAngle) * hubDist;
@@ -3683,18 +3702,18 @@ function buildTopoGraph(fitView = false) {
             return (a.hostname || '').localeCompare(b.hostname || '');
         });
 
-        // Clients tightly grouped around their Hub; collision solver expands them only where needed
+        // Clients distributed in open, well-spaced rings around their Hub
         const outwardAngle = Math.atan2(hy - coreNode.baseY, hx - coreNode.baseX);
-        const ringCount = clientCount > 18 ? 3 : (clientCount > 7 ? 2 : 1);
-        const ringRadii = [96, 142, 186];
-        const fanSpan = Math.min(Math.PI * 1.55, Math.max(0.75, Math.min(wShare * Math.PI * 2 * 1.45, clientCount * 0.28)));
+        const ringCount = clientCount > 14 ? 3 : (clientCount > 5 ? 2 : 1);
+        const ringRadii = [165, 240, 315];
+        const fanSpan = Math.min(Math.PI * 1.78, Math.max(1.15, Math.min(wShare * Math.PI * 2 * 1.85, clientCount * 0.44)));
         const startRad = outwardAngle - fanSpan / 2;
 
         sortedDevs.forEach((d, cIdx) => {
             const cid = 'dev:' + (d.mac || d.ip || cIdx);
             const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
             const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + t * fanSpan);
-            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 10);
+            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 18);
 
             const idealRelX = Math.cos(ang) * rad;
             const idealRelY = Math.sin(ang) * rad;
@@ -4257,7 +4276,7 @@ function drawTopoFrame(now) {
                     });
                 });
 
-                const maxDist = 140;
+                const maxDist = 205;
                 const maxDistSq = maxDist * maxDist;
                 ctx.save();
                 ctx.lineWidth = 0.9;
@@ -4585,31 +4604,20 @@ function drawTopoFrame(now) {
                     ctx.fillText('🌐', n.x, n.y + 1);
                     ctx.restore();
 
-                    const badgeW = 296;
-                    const badgeH = 44;
-                    const bx = n.x - badgeW / 2;
-                    const by = n.y + rad + 26;
+                    // Sleek, non-invasive Core label (no heavy rectangular box)
+                    const by = n.y + rad + 20;
                     ctx.save();
-                    ctx.fillStyle = 'rgba(11, 19, 36, 0.94)';
-                    ctx.strokeStyle = isDirectHover ? '#00f5d4' : '#00e5ff';
-                    ctx.lineWidth = 1.6;
-                    ctx.shadowColor = 'rgba(0, 229, 255, 0.38)';
-                    ctx.shadowBlur = 14;
-                    ctx.beginPath();
-                    if (ctx.roundRect) ctx.roundRect(bx, by, badgeW, badgeH, 10);
-                    else ctx.rect(bx, by, badgeW, badgeH);
-                    ctx.fill();
-                    ctx.stroke();
-                    ctx.restore();
-
-                    ctx.font = '800 12.5px system-ui, -apple-system, sans-serif';
-                    ctx.fillStyle = '#f8fafc';
+                    ctx.shadowColor = 'rgba(2, 6, 23, 0.95)';
+                    ctx.shadowBlur = 7;
+                    ctx.font = '700 10.5px system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = isDirectHover ? '#ffffff' : 'rgba(226, 232, 240, 0.92)';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(n.label, n.x, by + 15);
-                    ctx.font = '600 10.5px monospace';
-                    ctx.fillStyle = '#67e8f9';
-                    ctx.fillText(n.sub, n.x, by + 31);
+                    ctx.fillText(n.label, n.x, by);
+                    ctx.font = '500 9px monospace';
+                    ctx.fillStyle = 'rgba(103, 232, 249, 0.78)';
+                    ctx.fillText(n.sub, n.x, by + 13);
+                    ctx.restore();
                 } else if (n.type === 'hub') {
                     const rad = isDirectHover ? n.r + 3 : n.r;
 
@@ -4637,29 +4645,24 @@ function drawTopoFrame(now) {
                     ctx.stroke();
                     ctx.restore();
 
-                    ctx.font = '800 13px system-ui, -apple-system, sans-serif';
-                    const lblW = Math.max(ctx.measureText(n.label).width, 110) + 18;
-                    const hbx = n.x + rad + 12;
-                    const hby = n.y - 19;
+                    // Sleek, subtle Hub label (compact text without bulky rectangular box)
+                    const hubTxt = isDirectHover ? `${n.label} (${n.sub})` : (n.label.length > 26 ? n.label.slice(0, 24) + '…' : n.label);
                     ctx.save();
-                    ctx.fillStyle = 'rgba(11, 18, 32, 0.85)';
-                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    if (ctx.roundRect) ctx.roundRect(hbx, hby, lblW, 36, 7);
-                    else ctx.rect(hbx, hby, lblW, 36);
-                    ctx.fill();
-                    ctx.stroke();
+                    ctx.shadowColor = 'rgba(2, 6, 23, 0.95)';
+                    ctx.shadowBlur = 6;
+                    ctx.font = isDirectHover
+                        ? '700 11px system-ui, -apple-system, sans-serif'
+                        : '600 10px system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = isDirectHover ? '#ffffff' : 'rgba(226, 232, 240, 0.88)';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(hubTxt, n.x, n.y + rad + 8);
+                    if (!isDirectHover) {
+                        ctx.font = '500 8.5px system-ui, -apple-system, sans-serif';
+                        ctx.fillStyle = 'rgba(125, 211, 252, 0.72)';
+                        ctx.fillText(`${n.onlineCount}/${n.totalCount}`, n.x, n.y + rad + 20);
+                    }
                     ctx.restore();
-
-                    ctx.font = '800 12.5px system-ui, -apple-system, sans-serif';
-                    ctx.fillStyle = '#f8fafc';
-                    ctx.textAlign = 'left';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(n.label, hbx + 9, n.y - 7);
-                    ctx.font = '600 10.2px system-ui, -apple-system, sans-serif';
-                    ctx.fillStyle = '#7dd3fc';
-                    ctx.fillText(n.sub, hbx + 9, n.y + 8);
                 } else {
                     const rNode = (isDirectHover || matched) ? n.r + 2.8 : n.r;
                     ctx.save();
@@ -4704,9 +4707,9 @@ function drawTopoFrame(now) {
 
 function renderTopology() {
     initTopoCanvas();
-    const firstRender = topoState.nodes.length === 0;
+    const firstRender = topoState.nodes.length <= 1;
     buildTopoGraph(firstRender);
-    if (firstRender) {
+    if (firstRender && allDevices.length > 0) {
         setTimeout(() => triggerNeuralCascade(), 180);
     }
     if (!topoState.animFrame) {
@@ -4872,6 +4875,20 @@ async function openDeviceSheet(mac, ipHint = '') {
 
     document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Unnamed Device)'}`;
     document.getElementById('ds-subtitle').innerHTML = `MAC: <code>${mac}</code> · IP: <code>${currentSheetIp || '—'}</code> · Vendor: <strong>${escapeHtml(dev.dev_vendor || 'Unknown')}</strong>`;
+    const hostInp = document.getElementById('ds-edit-hostname');
+    const ipInp = document.getElementById('ds-edit-ip');
+    const dhcpBadge = document.getElementById('ds-dhcp-badge');
+    const dhcpStatus = document.getElementById('ds-dhcp-status');
+    const forceChk = document.getElementById('ds-force-reconnect');
+    if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Unnamed)') ? dev.hostname : '';
+    if (ipInp) ipInp.value = dev.ip || currentSheetIp || '';
+    if (forceChk) forceChk.checked = false;
+    if (dhcpBadge) {
+        dhcpBadge.innerHTML = dev.static
+            ? '<span class="badge badge-static">📌 Static Lease</span>'
+            : '<span class="badge badge-dynamic">⚡ Dynamic IP</span>';
+    }
+    if (dhcpStatus) dhcpStatus.style.display = 'none';
     document.getElementById('ds-dns').innerHTML = 'Querying AdGuard Home log...';
     document.getElementById('ds-events').innerHTML = 'Loading history...';
     document.getElementById('ds-portscan').innerHTML = 'Select a mode above to scan for open TCP ports on this device.';
@@ -4962,6 +4979,85 @@ async function saveDeviceMeta() {
     const data = await res.json();
     showMessage(data.message);
     loadState();
+}
+
+function suggestFreeIpForSheet() {
+    const used = new Set();
+    allDevices.forEach(d => {
+        if (d.ip) used.add(d.ip.trim());
+        (d.live_ips || []).forEach(lip => used.add(lip.trim()));
+    });
+    const candidates = [];
+    for (let i = 20; i <= 99; i++) candidates.push(`192.168.1.${i}`);
+    for (let i = 201; i <= 248; i++) candidates.push(`192.168.1.${i}`);
+    for (let i = 100; i <= 200; i++) candidates.push(`192.168.1.${i}`);
+    const freeIp = candidates.find(ip => !used.has(ip));
+    if (freeIp) {
+        const ipInp = document.getElementById('ds-edit-ip');
+        if (ipInp) ipInp.value = freeIp;
+    }
+}
+
+async function applyDhcpFromSheet() {
+    const hostname = (document.getElementById('ds-edit-hostname')?.value || '').trim();
+    const ip = (document.getElementById('ds-edit-ip')?.value || '').trim();
+    const force_reconnect = !!document.getElementById('ds-force-reconnect')?.checked;
+    const statusBox = document.getElementById('ds-dhcp-status');
+    const btn = document.getElementById('ds-btn-apply-dhcp');
+
+    if (!currentSheetMac || !hostname || !ip) {
+        if (statusBox) {
+            statusBox.style.display = 'block';
+            statusBox.style.background = 'rgba(239, 68, 68, 0.16)';
+            statusBox.style.border = '1px solid rgba(239, 68, 68, 0.45)';
+            statusBox.style.color = '#fca5a5';
+            statusBox.textContent = '❌ Device hostname and IP address are required.';
+        }
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.style.background = 'rgba(56, 189, 248, 0.14)';
+        statusBox.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+        statusBox.style.color = '#7dd3fc';
+        statusBox.textContent = force_reconnect
+            ? `⏳ Saving ${hostname} (${ip}) in AdGuard Home & forcing Wi-Fi reconnect...`
+            : `⏳ Saving "${hostname}" & static IP ${ip} in AdGuard Home...`;
+    }
+
+    try {
+        const res = await fetch('/api/assign-static', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mac: currentSheetMac, ip, hostname, force_reconnect })
+        });
+        const data = await res.json();
+        const ok = data.status === 'success';
+        if (statusBox) {
+            statusBox.style.background = ok ? 'rgba(34, 197, 94, 0.16)' : 'rgba(239, 68, 68, 0.16)';
+            statusBox.style.border = ok ? '1px solid rgba(34, 197, 94, 0.45)' : '1px solid rgba(239, 68, 68, 0.45)';
+            statusBox.style.color = ok ? '#86efac' : '#fca5a5';
+            statusBox.textContent = (ok ? '✅ ' : '❌ ') + (data.message || '');
+        }
+        if (ok) {
+            currentSheetIp = ip;
+            document.getElementById('ds-title').textContent = `🧾 ${hostname}`;
+            const badge = document.getElementById('ds-dhcp-badge');
+            if (badge) badge.innerHTML = '<span class="badge badge-static">📌 Static Lease</span>';
+            await loadState(false);
+        }
+    } catch (e) {
+        if (statusBox) {
+            statusBox.style.background = 'rgba(239, 68, 68, 0.16)';
+            statusBox.style.border = '1px solid rgba(239, 68, 68, 0.45)';
+            statusBox.style.color = '#fca5a5';
+            statusBox.textContent = '❌ Network error while applying DHCP configuration.';
+        }
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 async function toggleBlockDevice(mac, block) {
@@ -5164,6 +5260,10 @@ async function applyBackupNow() {
     loadState();
 }
 
+// Restore the last active tab immediately and load state
+if (currentMainTab && currentMainTab !== 'devices') {
+    switchMainTab(currentMainTab);
+}
 loadConfig();
 loadState();
 
