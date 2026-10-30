@@ -597,36 +597,71 @@ def is_wireless_only_device(dev_class, dev_cat, hostname, mac):
     return False
 
 
-_SERVICE_SCAN_CACHE = {}  # {ip: (timestamp, set(open_ports))}
+import ssl
 
-COMMON_PORT_SPECS = [80, 81, 443, 3000, 5000, 5001, 8000, 8006, 8080, 8081, 8123, 8443, 8888, 9000, 9443]
+SSL_UNVERIFIED_CTX = ssl.create_default_context()
+SSL_UNVERIFIED_CTX.check_hostname = False
+SSL_UNVERIFIED_CTX.verify_mode = ssl.CERT_NONE
 
-def scan_device_web_ports(ip, timeout=0.18):
-    """Quickly scans common web ports on a host."""
+_SERVICE_SCAN_CACHE = {}  # {ip: (timestamp, [verified_service_dicts])}
+
+CANDIDATE_WEB_PORTS = [
+    80, 81, 443, 1984, 2342, 3000, 3001, 32400, 4040, 4200, 4357, 4533, 5000, 5001, 5050, 5055,
+    5173, 5678, 6052, 6789, 7000, 7001, 7878, 8000, 8006, 8080, 8081, 8082, 8085, 8086,
+    8087, 8088, 8090, 8096, 8099, 8123, 8325, 8384, 8443, 8581, 8686, 8880, 8888, 8889,
+    8989, 9000, 9090, 9091, 9443, 9584, 10000, 19999
+]
+
+def probe_http_service(ip, port):
+    """Verifies whether a port on a host is a real, accessible HTTP/HTTPS web service."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.08)
+        r = s.connect_ex((ip, port))
+        s.close()
+        if r != 0:
+            return None
+    except Exception:
+        return None
+
+    # Probe real HTTP or HTTPS
+    protos = ['https', 'http'] if port in (443, 8006, 8443, 9443) else ['http', 'https']
+    for proto in protos:
+        url = f"{proto}://{ip}:{port}/" if port not in (80, 443) else f"{proto}://{ip}/"
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=0.45, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
+                code = resp.getcode()
+                content = resp.read(2048).decode('utf-8', errors='ignore')
+                title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                title = title_m.group(1).strip() if title_m else ""
+                server = resp.headers.get('Server', '')
+                return {'port': port, 'proto': proto, 'url': url, 'code': code, 'title': title, 'server': server}
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403, 301, 302, 307, 308) or (e.code == 404 and e.headers.get('Server')):
+                content = e.read(1024).decode('utf-8', errors='ignore') if e.fp else ""
+                title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                title = title_m.group(1).strip() if title_m else ""
+                return {'port': port, 'proto': proto, 'url': url, 'code': e.code, 'title': title, 'server': e.headers.get('Server', '')}
+        except Exception:
+            continue
+    return None
+
+
+def scan_device_verified_services(ip):
+    """Scans candidate ports concurrently and returns only verified web services."""
     ip = (ip or '').strip()
     if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip:
-        return set()
-    open_ports = set()
-    def _test(port):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(timeout)
-            res = s.connect_ex((ip, port))
-            s.close()
-            return port if res == 0 else None
-        except Exception:
-            return None
-    with ThreadPoolExecutor(max_workers=min(15, len(COMMON_PORT_SPECS))) as ex:
-        for p in ex.map(_test, COMMON_PORT_SPECS):
-            if p:
-                open_ports.add(p)
-    return open_ports
+        return []
+    with ThreadPoolExecutor(max_workers=min(25, len(CANDIDATE_WEB_PORTS))) as pool:
+        results = [r for r in pool.map(lambda p: probe_http_service(ip, p), CANDIDATE_WEB_PORTS) if r]
+    return results
 
 
 def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True):
-    """Returns management web URLs for any network device or server with web services."""
+    """Returns strictly real and verified web management links."""
     ip = (ip or '').strip()
-    if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip:
+    if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip or not is_active:
         return []
 
     h_lower = (hostname or '').lower()
@@ -647,13 +682,11 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
 
     now = time.time()
     cached = _SERVICE_SCAN_CACHE.get(ip)
-    if cached and (now - cached[0]) < 120:
-        open_ports = cached[1]
-    elif is_active:
-        open_ports = scan_device_web_ports(ip)
-        _SERVICE_SCAN_CACHE[ip] = (now, open_ports)
+    if cached and (now - cached[0]) < 180:
+        verified_services = cached[1]
     else:
-        open_ports = set()
+        verified_services = scan_device_verified_services(ip)
+        _SERVICE_SCAN_CACHE[ip] = (now, verified_services)
 
     links = []
     seen_urls = set()
@@ -663,79 +696,62 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             seen_urls.add(url)
             links.append({'label': label, 'url': url})
 
-    # 1. Known identities with custom friendly labels
-    if ip in ('192.168.1.1', '192.168.0.1'):
-        add_link('Gateway Router (HTTP)', f'http://{ip}')
-        add_link('Gateway Router (HTTPS)', f'https://{ip}')
-    elif ip == '192.168.1.9' or 'em4590' in h_lower:
-        add_link('Wi-Fi Repeater EM4590', f'http://{ip}')
-        add_link('Repeater EM4590 (HTTPS)', f'https://{ip}')
-    elif ip in ('192.168.1.10', '192.168.0.2') or 'wr841n' in h_lower:
-        add_link('TP-Link WR841N Web', f'http://{ip}')
-    elif ip in halo_node_info or 'mercusys-halo' in h_lower:
-        lbl = halo_node_info.get(ip, {}).get('label', f'Halo Node ({ip})')
-        add_link(f'{lbl} Web', f'http://{ip}')
-        add_link('Halo Web (HTTPS)', f'https://{ip}')
-    elif is_router_cfg:
-        add_link(f'{router_name} (HTTP)', f'http://{ip}')
-        add_link(f'{router_name} (HTTPS)', f'https://{ip}')
+    for item in verified_services:
+        port = item['port']
+        proto = item['proto']
+        url = item['url']
+        title = item.get('title', '').strip()
+        t_low = title.lower()
 
-    if ip == '192.168.1.249':
-        add_link('AdGuard Home (:8080)', f'http://{ip}:8080')
-        add_link('DHCP Panel (:5001)', f'http://{ip}:5001')
-        add_link('Wi-Fi Panel (:5000)', f'http://{ip}:5000')
-
-    # 2. Dynamically discovered web services
-    for port in sorted(open_ports):
-        proto = "https" if port in (443, 8006, 8443, 9443) else "http"
-        port_suffix = f":{port}" if port not in (80, 443) else ""
-        url = f"{proto}://{ip}{port_suffix}"
-
-        if port == 80:
-            label = "Router / Web UI (HTTP)" if is_router else "Web HTTP (:80)"
-        elif port == 81:
+        # Specific known services
+        if port == 32400 or 'plex' in t_low:
+            url = f"http://{ip}:32400/web"
+            label = "Plex Media Server (:32400)"
+        elif 'quota monitor' in t_low or (port == 5050 and 'quota' in t_low):
+            label = "Antigravity Quota Monitor (:5050)"
+        elif 'nginx proxy manager' in t_low or port == 81:
             label = "Nginx Proxy Manager (:81)"
-        elif port == 443:
-            if is_router:
-                label = "Router Secure Web (HTTPS)"
-            elif 81 in open_ports or 'ha-vm' in h_lower or 'vm' in c_lower or 'server' in c_lower:
-                label = "Web Proxy HTTPS (:443)"
-            else:
-                label = "Secure Web HTTPS (:443)"
-        elif port == 3000:
-            label = "Web App / Grafana (:3000)"
-        elif port == 5000:
-            label = "Wi-Fi Panel (:5000)" if ip == '192.168.1.249' else "Web App (:5000)"
-        elif port == 5001:
-            label = "DHCP Panel (:5001)" if ip == '192.168.1.249' else "Admin Panel (:5001)"
-        elif port == 8000:
-            label = "Web Service (:8000)"
-        elif port == 8006:
-            label = "Proxmox VE (:8006)"
-        elif port == 8080:
-            label = "AdGuard Home (:8080)" if ip == '192.168.1.249' else "Web Admin (:8080)"
-        elif port == 8081:
-            label = "Web Service (:8081)"
-        elif port == 8123:
+        elif 'home assistant observer' in t_low or port == 4357:
+            label = "HA Observer (:4357)"
+        elif 'home assistant' in t_low or port == 8123:
             label = "Home Assistant (:8123)"
-        elif port == 8443:
-            label = "Web Admin HTTPS (:8443)"
-        elif port == 8888:
-            label = "Jupyter / Web (:8888)"
-        elif port == 9000:
-            label = "Portainer (:9000)"
-        elif port == 9443:
-            label = "Portainer HTTPS (:9443)"
+        elif 'broadlink' in t_low or port == 8099:
+            label = "Broadlink Manager v2 (:8099)"
+        elif 'ewelink' in t_low or port == 8325:
+            label = "eWeLink Smart Home (:8325)"
+        elif 'go2rtc' in t_low or port == 1984:
+            label = "go2rtc WebRTC (:1984)"
+        elif ip == '192.168.1.249' and port == 8080:
+            label = "AdGuard Home (:8080)"
+        elif ip == '192.168.1.249' and port == 5001:
+            label = "DHCP Panel (:5001)"
+        elif ip == '192.168.1.249' and port == 5000:
+            label = "Wi-Fi Panel (:5000)"
+        elif ip in ('192.168.1.1', '192.168.0.1'):
+            label = f"Gateway Router ({proto.upper()})"
+        elif ip == '192.168.1.9' or 'em4590' in h_lower:
+            label = f"Wi-Fi Repeater EM4590 ({proto.upper()})"
+        elif ip in ('192.168.1.10', '192.168.0.2') or 'wr841n' in h_lower:
+            label = f"TP-Link WR841N ({proto.upper()})"
+        elif ip in halo_node_info or 'mercusys-halo' in h_lower:
+            lbl = halo_node_info.get(ip, {}).get('label', f'Halo Node ({ip})')
+            label = f"{lbl} ({proto.upper()})"
+        elif is_router_cfg:
+            label = f"{router_name} ({proto.upper()})"
+        elif 'proxmox' in t_low or port == 8006:
+            label = "Proxmox VE (:8006)"
+        elif 'portainer' in t_low or port in (9000, 9443):
+            label = f"Portainer ({proto.upper()} :{port})"
+        elif 'grafana' in t_low or (port == 3000 and 'grafana' in t_low):
+            label = "Grafana (:3000)"
+        elif title and len(title) < 40 and not any(k in t_low for k in ['http 40', '404', 'error', 'default site', 'unauthorized']):
+            label = f"{title} (:{port})"
+        elif is_router:
+            label = f"Router Web UI ({proto.upper()})"
         else:
-            label = f"Web Service (:{port})"
+            label = f"Web ({proto.upper()})" if port in (80, 443) else f"Web Service (:{port})"
 
         add_link(label, url)
-
-    # 3. Fallback for infrastructure/servers without detected open ports yet
-    if not links:
-        if is_router or dev_cat in ('infra', 'server') or any(k in c_lower for k in ['router', 'repeater', 'access point', 'server', 'node']):
-            add_link('Web Management (HTTP)', f'http://{ip}')
-            add_link('Web Management (HTTPS)', f'https://{ip}')
 
     return links
 
@@ -1418,7 +1434,7 @@ def api_state():
             'dev_vendor': dev_vendor,
             'dev_icon': dev_icon,
             'dev_cat': dev_cat,
-            'web_links': get_device_web_links(ip, hostname, dev_class, dev_cat, routers, halo_node_info)
+            'web_links': []
         })
 
     seen_ips = {d['ip'] for d in devices if d.get('ip')}
@@ -1511,7 +1527,7 @@ def api_state():
                 'dev_vendor': dev_vendor,
                 'dev_icon': dev_icon,
                 'dev_cat': dev_cat,
-                'web_links': get_device_web_links(aip, hostname, dev_class, dev_cat, routers, halo_node_info)
+                'web_links': []
             })
             seen_ips.add(aip)
 
@@ -1555,17 +1571,17 @@ def api_state():
                 active_ips.add(x.strip())
 
     now = time.time()
-    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 120)]
+    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 180)]
     if ips_to_scan:
-        with ThreadPoolExecutor(max_workers=min(25, max(1, len(ips_to_scan) * 10))) as pool:
-            futures = {pool.submit(scan_device_web_ports, a_ip): a_ip for a_ip in ips_to_scan}
+        with ThreadPoolExecutor(max_workers=min(25, max(1, len(ips_to_scan) * 5))) as pool:
+            futures = {pool.submit(scan_device_verified_services, a_ip): a_ip for a_ip in ips_to_scan}
             for f in futures:
                 a_ip = futures[f]
                 try:
-                    open_ports = f.result()
-                    _SERVICE_SCAN_CACHE[a_ip] = (now, open_ports)
+                    v_services = f.result()
+                    _SERVICE_SCAN_CACHE[a_ip] = (now, v_services)
                 except Exception:
-                    _SERVICE_SCAN_CACHE[a_ip] = (now, set())
+                    _SERVICE_SCAN_CACHE[a_ip] = (now, [])
 
     # Update web_links for all devices with detected services
     for d in devices:
