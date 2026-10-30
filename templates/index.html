@@ -687,6 +687,153 @@
         .topo-client:hover { border-color: var(--accent); }
         .diag-item { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
         .diag-item.critical { border-left-color: #ef4444; background: rgba(239,68,68,0.07); }
+        /* Interactive Bluetooth-mesh / radial topology */
+        .topo-stage {
+            position: relative;
+            width: 100%;
+            height: 74vh;
+            min-height: 580px;
+            background: radial-gradient(circle at 50% 50%, #111827 0%, #090d16 70%, #060911 100%);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.75), 0 10px 30px rgba(0, 0, 0, 0.45);
+            user-select: none;
+        }
+        .topo-stage:fullscreen {
+            height: 100vh;
+            border-radius: 0;
+            border: none;
+        }
+        #topo-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: grab;
+        }
+        #topo-canvas:active {
+            cursor: grabbing;
+        }
+        .topo-overlay-top {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            right: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            pointer-events: none;
+            flex-wrap: wrap;
+            z-index: 10;
+        }
+        .topo-search-box {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 8px;
+            padding: 6px 12px;
+            width: 270px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .topo-search-box:focus-within {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+        }
+        .topo-search-box input {
+            background: transparent;
+            border: none;
+            color: #f8fafc;
+            font-size: 0.82rem;
+            width: 100%;
+            outline: none;
+        }
+        .topo-controls {
+            pointer-events: auto;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(8px);
+            padding: 5px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+        .topo-ctrl-btn {
+            background: rgba(30, 41, 59, 0.75);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .topo-ctrl-btn:hover {
+            border-color: #38bdf8;
+            color: #f8fafc;
+            background: rgba(56, 189, 248, 0.15);
+        }
+        .topo-ctrl-btn.active {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        .topo-legend {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: rgba(11, 15, 25, 0.86);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            padding: 7px 18px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            color: #cbd5e1;
+            pointer-events: auto;
+            z-index: 10;
+            white-space: nowrap;
+        }
+        .topo-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .topo-dot-core { width: 14px; height: 11px; border-radius: 4px; background: #00a8e8; box-shadow: 0 0 8px #00a8e8; display: inline-block; }
+        .topo-dot-hub { width: 11px; height: 11px; border-radius: 50%; background: #00e5ff; box-shadow: 0 0 8px #00e5ff; display: inline-block; }
+        .topo-dot-static { width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b981; display: inline-block; }
+        .topo-dot-dyn { width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 6px #38bdf8; display: inline-block; }
+        .topo-dot-off { width: 10px; height: 10px; border-radius: 50%; background: #52525b; display: inline-block; }
+        .topo-tooltip {
+            position: absolute;
+            display: none;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #38bdf8;
+            border-radius: 10px;
+            padding: 10px 13px;
+            color: #f8fafc;
+            font-size: 0.78rem;
+            line-height: 1.45;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.75);
+            z-index: 25;
+            max-width: 290px;
+        }
         .diag-item.warn { border-left-color: #f59e0b; background: rgba(245,158,11,0.06); }
         .diag-item.info { border-left-color: #38bdf8; }
         .tag-chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; background: rgba(56,189,248,0.14); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.3); margin-right: 4px; }
@@ -1048,18 +1195,59 @@
         </div>
     </div>
 
-    <!-- TAB 4: NETWORK TOPOLOGY -->
+    <!-- TAB 4: NETWORK TOPOLOGY (CIRCULAR / BLUETOOTH MESH VISUALIZER) -->
     <div id="view-topology" style="display:none;">
-        <div class="card" style="margin-bottom:14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <div>
-                    <h3 style="margin:0;">🕸️ Network Topology & Access Nodes</h3>
-                    <p style="margin:4px 0 0; font-size:0.83rem; color:var(--muted);">Live tree from the main gateway to each Mesh node / access point and its connected clients.</p>
+        <div id="topo-stage" class="topo-stage">
+            <canvas id="topo-canvas"></canvas>
+
+            <!-- Top floating bar -->
+            <div class="topo-overlay-top">
+                <div class="topo-search-box">
+                    <span style="color:#94a3b8; font-size:0.85rem;">🔍</span>
+                    <input type="text" id="topo-search" placeholder="Search node, host, IP or MAC..." oninput="onTopoSearchInput()" onkeydown="if(event.key==='Enter') focusFirstTopoMatch()">
+                    <button id="topo-search-clear" onclick="clearTopoSearch()" style="display:none; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem; padding:0;">✕</button>
                 </div>
-                <button class="btn btn-outline" onclick="manualRefresh()">🔄 Refresh Topology</button>
+
+                <div class="topo-controls">
+                    <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Show or hide offline devices in the mesh">
+                        👁️ Offline
+                    </button>
+                    <button id="topo-btn-label" class="topo-ctrl-btn" onclick="cycleTopoLabelMode()" title="Change label text next to each node">
+                        🏷️ <span id="topo-lbl-mode-txt">Name</span>
+                    </button>
+                    <button id="topo-btn-fx" class="topo-ctrl-btn active" onclick="toggleTopoEffects()" title="Toggle network traffic pulses and sonar waves">
+                        ✨ Pulses
+                    </button>
+                    <button class="topo-ctrl-btn" onclick="resetTopoLayout()" title="Recalculate circular layout and center map">
+                        🎯 Center
+                    </button>
+                    <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" title="Show or hide card list below the map">
+                        🗂️ Cards
+                    </button>
+                    <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refresh network state">
+                        🔄
+                    </button>
+                    <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Fullscreen">
+                        ⛶
+                    </button>
+                </div>
+            </div>
+
+            <!-- Floating tooltip -->
+            <div id="topo-tooltip" class="topo-tooltip"></div>
+
+            <!-- Bottom legend bar -->
+            <div class="topo-legend">
+                <span class="topo-legend-item"><span class="topo-dot-core"></span> Gateway / AdGuard Core</span>
+                <span class="topo-legend-item"><span class="topo-dot-hub"></span> Mesh Nodes / Routers / Switch</span>
+                <span class="topo-legend-item"><span class="topo-dot-static"></span> Online (Static IP)</span>
+                <span class="topo-legend-item"><span class="topo-dot-dyn"></span> Online (Dynamic)</span>
+                <span class="topo-legend-item"><span class="topo-dot-off"></span> Offline</span>
+                <span style="color:#64748b; font-size:0.72rem; margin-left:4px;">🖱️ Wheel: Zoom · Drag: Move · Click: Sheet</span>
             </div>
         </div>
-        <div id="topology-container"></div>
+
+        <div id="topology-container" style="display:none; margin-top:14px;"></div>
     </div>
 
     <!-- TAB 5: PRESENCE TIMELINE -->
@@ -2801,8 +2989,673 @@ function confirmAssignFromMap() {
     fillForm(dev.hostname || '', dev.mac, ipMapTargetIp);
 }
 
-// --- NETWORK TOPOLOGY ---
+// --- NETWORK TOPOLOGY (CIRCULAR / BLUETOOTH MESH VISUALIZER) ---
+let topoState = {
+    initialized: false,
+    showOffline: true,
+    labelMode: 'name', // 'name' | 'name_ip' | 'mac'
+    effectsOn: true,
+    showCards: false,
+    searchQuery: '',
+    panX: 0,
+    panY: 0,
+    scale: 1,
+    nodes: [],
+    links: [],
+    particles: [],
+    hoverNode: null,
+    dragNode: null,
+    isPanning: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    movedDuringDrag: false,
+    animFrame: null,
+    customPositions: {}
+};
+
+function toggleTopoOffline() {
+    topoState.showOffline = !topoState.showOffline;
+    const btn = document.getElementById('topo-btn-offline');
+    if (btn) btn.classList.toggle('active', topoState.showOffline);
+    buildTopoGraph(false);
+}
+
+function cycleTopoLabelMode() {
+    const modes = ['name', 'name_ip', 'mac'];
+    const labels = { name: 'Name', name_ip: 'Name + IP', mac: 'MAC' };
+    const idx = (modes.indexOf(topoState.labelMode) + 1) % modes.length;
+    topoState.labelMode = modes[idx];
+    const el = document.getElementById('topo-lbl-mode-txt');
+    if (el) el.textContent = labels[topoState.labelMode];
+}
+
+function toggleTopoEffects() {
+    topoState.effectsOn = !topoState.effectsOn;
+    const btn = document.getElementById('topo-btn-fx');
+    if (btn) btn.classList.toggle('active', topoState.effectsOn);
+}
+
+function toggleTopoCards() {
+    topoState.showCards = !topoState.showCards;
+    const btn = document.getElementById('topo-btn-cards');
+    if (btn) btn.classList.toggle('active', topoState.showCards);
+    const box = document.getElementById('topology-container');
+    if (box) box.style.display = topoState.showCards ? 'block' : 'none';
+}
+
+function toggleTopoFullscreen() {
+    const stage = document.getElementById('topo-stage');
+    if (!stage) return;
+    if (!document.fullscreenElement) {
+        stage.requestFullscreen().catch(() => {});
+    } else {
+        document.exitFullscreen().catch(() => {});
+    }
+}
+
+function onTopoSearchInput() {
+    const inp = document.getElementById('topo-search');
+    const clr = document.getElementById('topo-search-clear');
+    topoState.searchQuery = (inp ? inp.value : '').trim().toLowerCase();
+    if (clr) clr.style.display = topoState.searchQuery ? 'inline' : 'none';
+}
+
+function clearTopoSearch() {
+    const inp = document.getElementById('topo-search');
+    if (inp) inp.value = '';
+    onTopoSearchInput();
+}
+
+function focusFirstTopoMatch() {
+    if (!topoState.searchQuery) return;
+    const m = topoState.nodes.find(n => nodeMatchesSearch(n));
+    if (m) centerOnPoint(m.x, m.y, 1.35);
+}
+
+function nodeMatchesSearch(n) {
+    const q = topoState.searchQuery;
+    if (!q) return false;
+    const d = n.dev || {};
+    const hay = `${n.label || ''} ${n.sub || ''} ${d.hostname || ''} ${d.ip || ''} ${(d.live_ips || []).join(' ')} ${d.mac || ''} ${d.dev_vendor || ''} ${d.room || ''}`.toLowerCase();
+    return hay.includes(q);
+}
+
+function resetTopoLayout() {
+    topoState.customPositions = {};
+    buildTopoGraph(true);
+}
+
+function centerOnPoint(wx, wy, targetScale = null) {
+    const canvas = document.getElementById('topo-canvas');
+    if (!canvas) return;
+    if (targetScale != null) topoState.scale = targetScale;
+    topoState.panX = canvas.width / (2 * (window.devicePixelRatio || 1)) - wx * topoState.scale;
+    topoState.panY = canvas.height / (2 * (window.devicePixelRatio || 1)) - wy * topoState.scale;
+}
+
+function fitTopoToScreen() {
+    const canvas = document.getElementById('topo-canvas');
+    if (!canvas || topoState.nodes.length === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.width / dpr;
+    const ch = canvas.height / dpr;
+    if (cw < 50 || ch < 50) return;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    topoState.nodes.forEach(n => {
+        const pad = n.type === 'client' ? 115 : 60;
+        if (n.x - pad < minX) minX = n.x - pad;
+        if (n.x + pad > maxX) maxX = n.x + pad;
+        if (n.y - 45 < minY) minY = n.y - 45;
+        if (n.y + 45 > maxY) maxY = n.y + 45;
+    });
+    const bw = Math.max(200, maxX - minX);
+    const bh = Math.max(200, maxY - minY);
+    const scaleX = (cw - 80) / bw;
+    const scaleY = (ch - 110) / bh;
+    topoState.scale = Math.max(0.38, Math.min(1.25, Math.min(scaleX, scaleY)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    topoState.panX = cw / 2 - cx * topoState.scale;
+    topoState.panY = ch / 2 - cy * topoState.scale;
+}
+
+function buildTopoGraph(fitView = false) {
+    const isOnline = d => (d.conn_medium !== 'offline') && (Boolean(d.live_ips && d.live_ips.length > 0) || (d.router_type && d.router_type !== 'offline'));
+    const groups = {};
+    allDevices.forEach(d => {
+        if (!topoState.showOffline && !isOnline(d)) return;
+        const key = d.router_node || (d.conn_medium === 'cable' ? 'Wired LAN / Switch' : 'Wi-Fi / Access Point');
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(d);
+    });
+
+    const nodes = [];
+    const links = [];
+
+    const corePos = topoState.customPositions['__core__'] || { x: 0, y: 0 };
+    const coreNode = {
+        id: '__core__',
+        type: 'core',
+        label: 'Gateway / AdGuard Home',
+        sub: '192.168.1.1 · 192.168.1.249',
+        x: corePos.x,
+        y: corePos.y,
+        r: 14,
+        color: '#00a8e8',
+        online: true
+    };
+    nodes.push(coreNode);
+
+    const entries = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+    const hubCount = entries.length;
+
+    entries.forEach(([hubName, devs], idx) => {
+        const hubId = 'hub:' + hubName;
+        const baseAngle = hubCount === 1 ? 0 : (-Math.PI / 2 + (idx * 2 * Math.PI) / hubCount);
+        const clientCount = devs.length;
+        const useDualRing = clientCount > 24;
+        const ring1Radius = Math.max(135, Math.min(210, clientCount * 6.5));
+        const ring2Radius = ring1Radius + 78;
+        const clusterOuterRadius = useDualRing ? ring2Radius : ring1Radius;
+
+        const hubDist = hubCount === 1 ? 260 : Math.max(330, clusterOuterRadius + 155 + (hubCount > 3 ? 60 : 0));
+
+        const savedHub = topoState.customPositions[hubId];
+        const hx = savedHub ? savedHub.x : Math.cos(baseAngle) * hubDist;
+        const hy = savedHub ? savedHub.y : Math.sin(baseAngle) * hubDist;
+
+        const onlineDevs = devs.filter(isOnline).length;
+        const isCableHub = hubName.toLowerCase().includes('wired') || hubName.toLowerCase().includes('cable') || hubName.toLowerCase().includes('lan') || hubName.toLowerCase().includes('main');
+
+        const hubNode = {
+            id: hubId,
+            type: 'hub',
+            label: hubName,
+            sub: `${onlineDevs} active / ${devs.length} dev.`,
+            x: hx,
+            y: hy,
+            r: 10.5,
+            color: isCableHub ? '#10b981' : '#00e5ff',
+            online: onlineDevs > 0,
+            onlineCount: onlineDevs,
+            totalCount: devs.length,
+            isCable: isCableHub,
+            angleFromCore: baseAngle
+        };
+        nodes.push(hubNode);
+
+        links.push({
+            from: coreNode,
+            to: hubNode,
+            type: 'trunk',
+            online: onlineDevs > 0,
+            color: isCableHub ? '#10b981' : '#00b4d8',
+            medium: isCableHub ? 'cable' : 'wifi'
+        });
+
+        const sortedDevs = [...devs].sort((a, b) => {
+            const oa = isOnline(a) ? 1 : 0;
+            const ob = isOnline(b) ? 1 : 0;
+            if (oa !== ob) return ob - oa;
+            return (a.hostname || '').localeCompare(b.hostname || '');
+        });
+
+        const angleToCore = Math.atan2(coreNode.y - hy, coreNode.x - hx);
+        const gapRad = hubCount > 0 ? 0.42 : 0;
+        const spanRad = Math.PI * 2 - gapRad * 2;
+        const startRad = angleToCore + gapRad;
+
+        sortedDevs.forEach((d, cIdx) => {
+            const cid = 'dev:' + (d.mac || d.ip || cIdx);
+            const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
+            const ang = startRad + t * spanRad;
+            const rad = (useDualRing && (cIdx % 2 === 1)) ? ring2Radius : ring1Radius;
+
+            const savedClient = topoState.customPositions[cid];
+            const cx = savedClient ? savedClient.x : hx + Math.cos(ang) * rad;
+            const cy = savedClient ? savedClient.y : hy + Math.sin(ang) * rad;
+
+            const on = isOnline(d);
+            let dotColor = '#52525b';
+            if (d.blocked) dotColor = '#ef4444';
+            else if (on && d.static) dotColor = '#10b981';
+            else if (on) dotColor = '#38bdf8';
+
+            const ipShow = (d.live_ips && d.live_ips[0]) || d.ip || '';
+            const cNode = {
+                id: cid,
+                type: 'client',
+                label: d.hostname && d.hostname !== '(Unnamed)' ? d.hostname : (d.mac || ipShow),
+                sub: ipShow,
+                x: cx,
+                y: cy,
+                relX: cx - hx,
+                relY: cy - hy,
+                angle: ang,
+                r: on ? 6 : 5,
+                color: dotColor,
+                online: on,
+                static: !!d.static,
+                blocked: !!d.blocked,
+                dev: d,
+                hubId: hubId
+            };
+            nodes.push(cNode);
+
+            links.push({
+                from: hubNode,
+                to: cNode,
+                type: 'spoke',
+                online: on,
+                color: d.blocked ? 'rgba(239,68,68,0.5)' : (on ? (d.static ? 'rgba(16,185,129,0.45)' : 'rgba(56,189,248,0.42)') : 'rgba(148,163,184,0.18)'),
+                medium: d.conn_medium
+            });
+        });
+    });
+
+    topoState.nodes = nodes;
+    topoState.links = links;
+
+    const particles = [];
+    links.forEach((lk, lIdx) => {
+        if (!lk.online) return;
+        const count = lk.type === 'trunk' ? 3 : 1;
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                linkIdx: lIdx,
+                t: (i / count) + Math.random() * 0.25,
+                speed: lk.type === 'trunk' ? 0.0045 : (0.0025 + Math.random() * 0.002),
+                color: lk.type === 'trunk' ? '#00e5ff' : (lk.to.static ? '#34d399' : '#38bdf8'),
+                size: lk.type === 'trunk' ? 3.2 : 2.1
+            });
+        }
+    });
+    topoState.particles = particles;
+
+    if (fitView) {
+        fitTopoToScreen();
+    }
+}
+
+function getClientDisplayText(n) {
+    if (n.type !== 'client') return n.label;
+    const d = n.dev || {};
+    const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
+    const host = (d.hostname && d.hostname !== '(Unnamed)') ? d.hostname : (d.mac || ip);
+    if (topoState.labelMode === 'mac') return (d.mac || host).toUpperCase();
+    if (topoState.labelMode === 'name_ip') return ip ? `${host} (${ip})` : host;
+    return host;
+}
+
+function initTopoCanvas() {
+    const canvas = document.getElementById('topo-canvas');
+    const stage = document.getElementById('topo-stage');
+    if (!canvas || !stage) return;
+
+    function resizeCanvas() {
+        const rect = stage.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+    }
+    resizeCanvas();
+
+    if (!topoState.initialized) {
+        topoState.initialized = true;
+        window.addEventListener('resize', () => {
+            if (currentMainTab === 'topology') {
+                resizeCanvas();
+            }
+        });
+
+        const toWorld = (clientX, clientY) => {
+            const rect = canvas.getBoundingClientRect();
+            const sx = clientX - rect.left;
+            const sy = clientY - rect.top;
+            return {
+                sx, sy,
+                wx: (sx - topoState.panX) / topoState.scale,
+                wy: (sy - topoState.panY) / topoState.scale
+            };
+        };
+
+        const findNodeAt = (wx, wy) => {
+            const hitScale = Math.max(0.7, 1 / topoState.scale);
+            for (let i = topoState.nodes.length - 1; i >= 0; i--) {
+                const n = topoState.nodes[i];
+                const dx = wx - n.x;
+                const dy = wy - n.y;
+                const hitR = (n.r + 7) * hitScale;
+                if (dx * dx + dy * dy <= hitR * hitR) return n;
+            }
+            return null;
+        };
+
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
+            const factor = e.deltaY < 0 ? 1.13 : 0.885;
+            const nextScale = Math.max(0.28, Math.min(3.6, topoState.scale * factor));
+            topoState.panX = sx - wx * nextScale;
+            topoState.panY = sy - wy * nextScale;
+            topoState.scale = nextScale;
+        }, { passive: false });
+
+        canvas.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
+            const hit = findNodeAt(wx, wy);
+            topoState.movedDuringDrag = false;
+            topoState.dragStartX = sx;
+            topoState.dragStartY = sy;
+            if (hit) {
+                topoState.dragNode = hit;
+            } else {
+                topoState.isPanning = true;
+            }
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (currentMainTab !== 'topology') return;
+            const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
+
+            if (topoState.dragNode) {
+                if (Math.hypot(sx - topoState.dragStartX, sy - topoState.dragStartY) > 4) {
+                    topoState.movedDuringDrag = true;
+                }
+                const n = topoState.dragNode;
+                const dx = wx - n.x;
+                const dy = wy - n.y;
+                n.x = wx;
+                n.y = wy;
+                topoState.customPositions[n.id] = { x: n.x, y: n.y };
+
+                if (n.type === 'hub') {
+                    topoState.nodes.forEach(c => {
+                        if (c.hubId === n.id) {
+                            c.x += dx;
+                            c.y += dy;
+                            topoState.customPositions[c.id] = { x: c.x, y: c.y };
+                        }
+                    });
+                }
+                return;
+            }
+
+            if (topoState.isPanning) {
+                const dx = sx - topoState.dragStartX;
+                const dy = sy - topoState.dragStartY;
+                if (Math.hypot(dx, dy) > 3) topoState.movedDuringDrag = true;
+                topoState.panX += dx;
+                topoState.panY += dy;
+                topoState.dragStartX = sx;
+                topoState.dragStartY = sy;
+                return;
+            }
+
+            const hit = findNodeAt(wx, wy);
+            topoState.hoverNode = hit;
+            canvas.style.cursor = hit ? 'pointer' : 'grab';
+            updateTopoTooltip(hit, sx, sy);
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (currentMainTab !== 'topology') return;
+            if (topoState.dragNode && !topoState.movedDuringDrag) {
+                const n = topoState.dragNode;
+                if (n.type === 'client' && n.dev) {
+                    const ipShow = (n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip || '';
+                    openDeviceSheet(n.dev.mac, ipShow);
+                } else if (n.type === 'hub') {
+                    centerOnPoint(n.x, n.y, Math.max(topoState.scale, 1.05));
+                } else if (n.type === 'core') {
+                    fitTopoToScreen();
+                }
+            }
+            topoState.dragNode = null;
+            topoState.isPanning = false;
+        });
+    }
+}
+
+function updateTopoTooltip(node, sx, sy) {
+    const tip = document.getElementById('topo-tooltip');
+    const stage = document.getElementById('topo-stage');
+    if (!tip || !stage) return;
+    if (!node) {
+        tip.style.display = 'none';
+        return;
+    }
+
+    if (node.type === 'core') {
+        tip.innerHTML = `
+            <div style="font-weight:800; color:#38bdf8; font-size:0.86rem;">🌐 ${escapeHtml(node.label)}</div>
+            <div style="color:#94a3b8; font-size:0.75rem; margin-top:2px;">Main Gateway & AdGuard Home DNS/DHCP Server</div>
+            <div style="margin-top:4px; font-size:0.74rem; color:#cbd5e1;">Click to fit the entire mesh to the viewport.</div>
+        `;
+    } else if (node.type === 'hub') {
+        tip.innerHTML = `
+            <div style="font-weight:800; color:#00e5ff; font-size:0.86rem;">📡 ${escapeHtml(node.label)}</div>
+            <div style="margin-top:3px; color:#cbd5e1;">Online clients: <strong style="color:#86efac;">${node.onlineCount}</strong> of <strong>${node.totalCount}</strong></div>
+            <div style="margin-top:4px; font-size:0.72rem; color:#94a3b8;">Drag this node to reposition its entire client starburst.</div>
+        `;
+    } else if (node.type === 'client' && node.dev) {
+        const d = node.dev;
+        const ipShow = (d.live_ips && d.live_ips[0]) || d.ip || '—';
+        const svcs = (d.web_links || []).map(w => w.label).join(', ');
+        tip.innerHTML = `
+            <div style="display:flex; align-items:center; gap:6px; font-weight:800; color:#f8fafc; font-size:0.86rem;">
+                <span>${d.dev_icon || '💻'}</span>
+                <span>${escapeHtml(d.hostname || '(Unnamed)')}</span>
+            </div>
+            <div style="color:#94a3b8; font-size:0.73rem; margin-bottom:5px;">${escapeHtml(d.dev_class || '')} ${d.dev_vendor ? '· ' + escapeHtml(d.dev_vendor) : ''}</div>
+            <div style="font-size:0.76rem; color:#cbd5e1;">
+                <div><strong>IP:</strong> <code style="color:#38bdf8;">${ipShow}</code> · <strong>Type:</strong> ${d.static ? '📌 Static' : '⚡ Dynamic'}</div>
+                <div><strong>MAC:</strong> <code>${d.mac}</code> ${d.random_mac ? '<span style="color:#fcd34d;">(🎲 Random)</span>' : ''}</div>
+                <div><strong>Node:</strong> ${escapeHtml(d.router_node || '—')} (${d.conn_medium === 'wifi' ? '📶 Wi-Fi' : (d.conn_medium === 'cable' ? '🔌 Wired' : '⚪ Offline')})</div>
+                ${d.latency_ms != null ? `<div><strong>Latency:</strong> <span style="color:#86efac;">${d.latency_ms.toFixed(1)} ms</span> ${d.os_guess ? `· ${escapeHtml(d.os_guess)}` : ''}</div>` : ''}
+                ${d.room ? `<div><strong>Room:</strong> 📍 ${escapeHtml(d.room)}</div>` : ''}
+                ${svcs ? `<div style="margin-top:3px; color:#fcd34d;"><strong>Services:</strong> ${escapeHtml(svcs)}</div>` : ''}
+            </div>
+            <div style="margin-top:6px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.71rem; color:#38bdf8;">🖱️ Click to open Device Sheet</div>
+        `;
+    }
+
+    tip.style.display = 'block';
+    const rect = stage.getBoundingClientRect();
+    const left = Math.min(rect.width - 305, sx + 16);
+    const top = Math.max(14, Math.min(rect.height - 190, sy + 14));
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+}
+
+function drawTopoFrame(now) {
+    if (currentMainTab === 'topology') {
+        const canvas = document.getElementById('topo-canvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
+
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.translate(topoState.panX, topoState.panY);
+            ctx.scale(topoState.scale, topoState.scale);
+
+            const hov = topoState.hoverNode;
+            const hasSearch = Boolean(topoState.searchQuery);
+
+            const isLinkHighlighted = lk => {
+                if (!hov) return false;
+                if (hov.type === 'core') return lk.type === 'trunk';
+                if (hov.type === 'hub') return lk.from.id === hov.id || lk.to.id === hov.id;
+                if (hov.type === 'client') {
+                    return lk.to.id === hov.id || (lk.type === 'trunk' && lk.to.id === hov.hubId);
+                }
+                return false;
+            };
+
+            const isNodeHighlighted = n => {
+                if (hasSearch) return nodeMatchesSearch(n);
+                if (!hov) return true;
+                if (hov.id === n.id) return true;
+                if (hov.type === 'core') return n.type === 'hub' || n.type === 'core';
+                if (hov.type === 'hub') return n.hubId === hov.id || n.id === '__core__';
+                if (hov.type === 'client') return n.id === hov.hubId || n.id === '__core__';
+                return false;
+            };
+
+            // 1. Draw trunk & spoke links
+            topoState.links.forEach(lk => {
+                const hi = isLinkHighlighted(lk);
+                const searchDim = hasSearch && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
+                const hovDim = hov && !hi;
+
+                ctx.beginPath();
+                ctx.moveTo(lk.from.x, lk.from.y);
+                ctx.lineTo(lk.to.x, lk.to.y);
+
+                if (hi) {
+                    ctx.strokeStyle = lk.type === 'trunk' ? '#00e5ff' : '#38bdf8';
+                    ctx.lineWidth = lk.type === 'trunk' ? 2.6 : 1.8;
+                    ctx.globalAlpha = 0.95;
+                } else {
+                    ctx.strokeStyle = lk.color;
+                    ctx.lineWidth = lk.type === 'trunk' ? 2.0 : 1.05;
+                    ctx.globalAlpha = (searchDim || hovDim) ? 0.12 : 0.85;
+                }
+                ctx.stroke();
+            });
+
+            // 2. Draw animated traffic particles & sonar rings
+            if (topoState.effectsOn) {
+                ctx.globalAlpha = 0.95;
+                topoState.particles.forEach(p => {
+                    p.t += p.speed;
+                    if (p.t > 1) p.t -= 1;
+                    const lk = topoState.links[p.linkIdx];
+                    if (!lk) return;
+                    if (hov && !isLinkHighlighted(lk)) return;
+                    if (hasSearch && !nodeMatchesSearch(lk.to)) return;
+
+                    const px = lk.from.x + (lk.to.x - lk.from.x) * p.t;
+                    const py = lk.from.y + (lk.to.y - lk.from.y) * p.t;
+                    ctx.beginPath();
+                    ctx.arc(px, py, p.size, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.shadowColor = p.color;
+                    ctx.shadowBlur = 8;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                });
+
+                const pulsePhase = ((now || 0) % 2600) / 2600;
+                topoState.nodes.forEach(n => {
+                    if (n.type === 'hub' && n.online) {
+                        ctx.beginPath();
+                        ctx.arc(n.x, n.y, n.r + pulsePhase * 26, 0, Math.PI * 2);
+                        ctx.strokeStyle = n.color;
+                        ctx.lineWidth = 1.2;
+                        ctx.globalAlpha = (1 - pulsePhase) * 0.35;
+                        ctx.stroke();
+                    }
+                });
+            }
+
+            // 3. Draw nodes & text labels
+            topoState.nodes.forEach(n => {
+                const hi = isNodeHighlighted(n);
+                const isDirectHover = hov && hov.id === n.id;
+                const matched = hasSearch && nodeMatchesSearch(n);
+                ctx.globalAlpha = hi ? 1 : 0.16;
+
+                if (n.type === 'core') {
+                    const sz = n.r * 2.1;
+                    const rx = n.x - sz / 2;
+                    const ry = n.y - sz / 2;
+                    ctx.save();
+                    ctx.shadowColor = '#00a8e8';
+                    ctx.shadowBlur = isDirectHover ? 22 : 14;
+                    ctx.fillStyle = '#00a8e8';
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(rx, ry, sz, sz, 7);
+                    else ctx.rect(rx, ry, sz, sz);
+                    ctx.fill();
+                    ctx.restore();
+
+                    ctx.font = '700 12.5px system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(n.label, n.x + sz / 2 + 10, n.y - 5);
+                    ctx.font = '500 10px monospace';
+                    ctx.fillStyle = '#7dd3fc';
+                    ctx.fillText(n.sub, n.x + sz / 2 + 10, n.y + 9);
+                } else if (n.type === 'hub') {
+                    ctx.save();
+                    ctx.shadowColor = n.color;
+                    ctx.shadowBlur = isDirectHover ? 20 : 12;
+                    ctx.fillStyle = n.color;
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, isDirectHover ? n.r + 2 : n.r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                    ctx.font = '700 11.5px system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(n.label, n.x + n.r + 8, n.y - 5);
+                    ctx.font = '500 9.5px system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.fillText(n.sub, n.x + n.r + 8, n.y + 8);
+                } else {
+                    ctx.save();
+                    if (n.online || matched || isDirectHover) {
+                        ctx.shadowColor = matched ? '#f59e0b' : n.color;
+                        ctx.shadowBlur = (matched || isDirectHover) ? 14 : 6;
+                    }
+                    ctx.fillStyle = matched ? '#fbbf24' : n.color;
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, (isDirectHover || matched) ? n.r + 2.2 : n.r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                    if (topoState.scale >= 0.42 || isDirectHover || matched) {
+                        const hub = topoState.nodes.find(h => h.id === n.hubId);
+                        const isLeftSide = hub ? (n.x < hub.x) : (Math.cos(n.angle || 0) < 0);
+                        const txt = getClientDisplayText(n);
+                        ctx.font = (isDirectHover || matched)
+                            ? '700 11px system-ui, -apple-system, sans-serif'
+                            : '500 10px system-ui, -apple-system, sans-serif';
+                        ctx.fillStyle = (isDirectHover || matched) ? '#ffffff' : (n.online ? '#e2e8f0' : '#94a3b8');
+                        ctx.textAlign = isLeftSide ? 'right' : 'left';
+                        ctx.textBaseline = 'middle';
+                        const offsetX = isLeftSide ? -(n.r + 6) : (n.r + 6);
+                        ctx.fillText(txt, n.x + offsetX, n.y);
+                    }
+                }
+            });
+
+            ctx.restore();
+        }
+    }
+    topoState.animFrame = requestAnimationFrame(drawTopoFrame);
+}
+
 function renderTopology() {
+    initTopoCanvas();
+    const firstRender = topoState.nodes.length === 0;
+    buildTopoGraph(firstRender);
+    if (!topoState.animFrame) {
+        topoState.animFrame = requestAnimationFrame(drawTopoFrame);
+    }
+
     const container = document.getElementById('topology-container');
     if (!container) return;
 
@@ -2814,27 +3667,7 @@ function renderTopology() {
     });
 
     const isOnline = d => Boolean(d.live_ips && d.live_ips.length > 0);
-    const gatewayDev = allDevices.find(d => d.ip === '192.168.1.1' || (d.live_ips || []).includes('192.168.1.1'));
-    const piDev = allDevices.find(d => d.ip === '192.168.1.249' || (d.live_ips || []).includes('192.168.1.249'));
-
-    let html = `
-        <div class="topo-node-card" style="border-color:rgba(56,189,248,0.5); background:linear-gradient(180deg, rgba(56,189,248,0.1), rgba(30,41,59,0.9));">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:1.8rem;">🌐</span>
-                    <div>
-                        <div style="font-weight:800; font-size:1.05rem;">Main Internet / Fiber Gateway (192.168.1.1)</div>
-                        <div style="font-size:0.8rem; color:var(--muted);">
-                            ${gatewayDev ? `MAC: <code>${gatewayDev.mac}</code> · Latency: ${gatewayDev.latency_ms ?? '<1'} ms` : 'Default subnet gateway'}
-                            ${piDev ? ` · 🍓 AdGuard DHCP/DNS Server: <code>${piDev.ip}</code> (${escapeHtml(piDev.hostname)})` : ''}
-                        </div>
-                    </div>
-                </div>
-                <span class="badge badge-online">${allDevices.filter(isOnline).length} online / ${allDevices.length} total devices</span>
-            </div>
-        </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:14px;">
-    `;
+    let html = `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:14px;">`;
 
     Object.entries(groups).sort((a, b) => b[1].length - a[1].length).forEach(([nodeName, devs]) => {
         const onlineCount = devs.filter(isOnline).length;
