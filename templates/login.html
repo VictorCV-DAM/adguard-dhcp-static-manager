@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Initial Setup' if mode == 'setup' else 'Sign In' }} — AdGuard DHCP Manager</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <style>
+        :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8; --danger:#ef4444; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            font-family: system-ui, -apple-system, sans-serif; color: var(--text); padding: 20px;
+            background: radial-gradient(circle at 20% 15%, rgba(56,189,248,0.12), transparent 45%),
+                        radial-gradient(circle at 85% 85%, rgba(29,78,216,0.15), transparent 45%), var(--bg);
+        }
+        .box {
+            width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 32px 28px; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+            animation: pop .25s ease-out;
+        }
+        @keyframes pop { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+        .logo { display:flex; justify-content:center; margin-bottom: 14px; }
+        .logo svg { width: 64px; height: 64px; filter: drop-shadow(0 6px 18px rgba(56,189,248,0.35)); }
+        h1 { font-size: 1.3rem; text-align: center; margin: 0 0 6px; }
+        p.sub { text-align: center; color: var(--muted); font-size: 0.86rem; margin: 0 0 22px; line-height: 1.5; }
+        label { display:block; font-size: 0.82rem; font-weight: 600; margin: 0 0 6px; color: #cbd5e1; }
+        .field { margin-bottom: 14px; position: relative; }
+        input[type=text], input[type=password] {
+            width: 100%; padding: 11px 12px; border-radius: 9px; border: 1px solid var(--border);
+            background: #0f172a; color: var(--text); font-size: 0.95rem; outline: none; transition: border-color .15s, box-shadow .15s;
+        }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,0.18); }
+        .toggle-pw { position:absolute; right:8px; top:31px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:1rem; padding:4px; }
+        .remember {
+            display:flex; align-items:flex-start; gap:10px; margin: 6px 0 20px; padding: 10px 12px;
+            background:#0f172a; border:1px solid var(--border); border-radius:9px; cursor:pointer; user-select:none;
+        }
+        .remember input { margin-top: 2px; width: 17px; height: 17px; accent-color: var(--accent); cursor:pointer; }
+        .remember strong { display:block; font-size: 0.86rem; }
+        .remember span { font-size: 0.75rem; color: var(--muted); }
+        button.submit {
+            width: 100%; padding: 12px; border: none; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 0.95rem;
+            color: #fff; background: linear-gradient(135deg, #0ea5e9, #1d4ed8); transition: transform .12s, filter .12s;
+        }
+        button.submit:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .error {
+            background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.45); color: #fca5a5;
+            padding: 10px 12px; border-radius: 9px; font-size: 0.84rem; margin-bottom: 16px;
+        }
+        .foot { text-align:center; margin-top: 18px; font-size: 0.74rem; color: #64748b; }
+    </style>
+</head>
+<body>
+<form class="box" method="post" autocomplete="on">
+    <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+            <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8"/><stop offset="50%" stop-color="#0284c7"/><stop offset="100%" stop-color="#1d4ed8"/>
+            </linearGradient></defs>
+            <path d="M32 4 L56 14 V30 C56 46.5 45.8 56.8 32 61 C18.2 56.8 8 46.5 8 30 V14 Z" fill="url(#g)" stroke="#7dd3fc" stroke-width="2"/>
+            <path d="M22 32.5 L29 39.5 L43 24.5" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+    {% if mode == 'setup' %}
+        <h1>Initial Setup</h1>
+        <p class="sub">Create the administrator account that will protect this panel. You only need to do this once.</p>
+    {% else %}
+        <h1>AdGuard Home — DHCP Panel</h1>
+        <p class="sub">Sign in to manage your local network.</p>
+    {% endif %}
+
+    {% if error %}<div class="error">⚠️ {{ error }}</div>{% endif %}
+
+    <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus value="{{ request.form.get('username', '') }}">
+    </div>
+    <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="{{ 'new-password' if mode == 'setup' else 'current-password' }}" required>
+        <button type="button" class="toggle-pw" onclick="togglePw('password', this)" title="Show/hide">👁️</button>
+    </div>
+    {% if mode == 'setup' %}
+    <div class="field">
+        <label for="password2">Confirm Password</label>
+        <input type="password" id="password2" name="password2" autocomplete="new-password" required>
+    </div>
+    {% endif %}
+
+    <label class="remember">
+        <input type="checkbox" name="remember" checked>
+        <div>
+            <strong>Keep me signed in on this device</strong>
+            <span>Won't ask for your password again for 1 year. Uncheck on shared computers.</span>
+        </div>
+    </label>
+
+    <button class="submit" type="submit">{{ 'Create account & sign in' if mode == 'setup' else 'Sign In' }}</button>
+    <div class="foot">🔒 Password stored with secure hash · Rate-limited after 5 failed attempts</div>
+</form>
+<script>
+function togglePw(id, btn) {
+    const el = document.getElementById(id);
+    el.type = el.type === 'password' ? 'text' : 'password';
+    btn.textContent = el.type === 'password' ? '👁️' : '🙈';
+}
+</script>
+</body>
+</html>

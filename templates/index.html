@@ -646,6 +646,52 @@
             background: rgba(56, 189, 248, 0.12);
             transform: scale(1.15);
         }
+        /* --- Down service cards, history strip, IP Map, Topology, Timeline, Diagnostics --- */
+        .service-card.is-down {
+            border-color: rgba(239, 68, 68, 0.65);
+            background: linear-gradient(180deg, rgba(239, 68, 68, 0.09) 0%, rgba(30, 41, 59, 0.96) 55%);
+        }
+        .status-indicator-down {
+            display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+            background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.5);
+            font-size: 0.72rem; font-weight: 700; color: #fca5a5;
+        }
+        .status-dot-down { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .svc-history-strip { display: flex; gap: 2px; align-items: center; height: 12px; margin-top: 6px; }
+        .svc-history-bar { flex: 1; height: 100%; border-radius: 2px; background: #22c55e; opacity: 0.85; min-width: 3px; }
+        .svc-history-bar.down { background: #ef4444; opacity: 1; }
+        .ipmap-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; margin-top: 14px;
+        }
+        .ip-cell {
+            padding: 7px 6px; border-radius: 8px; border: 1px solid var(--border); background: #0f172a;
+            cursor: pointer; text-align: center; transition: transform .12s, border-color .12s; position: relative;
+        }
+        .ip-cell:hover { transform: translateY(-2px); border-color: var(--accent); z-index: 2; }
+        .ip-cell .ip-num { font-family: monospace; font-weight: 800; font-size: 0.84rem; }
+        .ip-cell .ip-host { font-size: 0.65rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .ip-cell.free { background: rgba(15, 23, 42, 0.55); color: #64748b; border-style: dashed; }
+        .ip-cell.static_online { background: rgba(34, 197, 94, 0.16); border-color: rgba(34, 197, 94, 0.55); color: #86efac; }
+        .ip-cell.static_offline { background: rgba(34, 197, 94, 0.06); border-color: rgba(34, 197, 94, 0.28); color: #6ee7b7; opacity: 0.7; }
+        .ip-cell.dynamic_online { background: rgba(56, 189, 248, 0.16); border-color: rgba(56, 189, 248, 0.55); color: #7dd3fc; }
+        .ip-cell.dynamic_offline { background: rgba(56, 189, 248, 0.06); border-color: rgba(56, 189, 248, 0.25); color: #93c5fd; opacity: 0.65; }
+        .ip-cell.manual_static { background: rgba(168, 85, 247, 0.18); border-color: rgba(168, 85, 247, 0.55); color: #d8b4fe; }
+        .ip-cell.conflict { background: rgba(239, 68, 68, 0.25); border-color: #ef4444; color: #fecaca; animation: pulse-green 1.5s infinite; }
+        .ip-cell.in-pool { box-shadow: inset 0 -3px 0 rgba(245, 158, 11, 0.55); }
+        .tl-row { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: center; padding: 7px 10px; border-bottom: 1px solid rgba(51,65,85,0.5); font-size: 0.82rem; }
+        .tl-bar { position: relative; height: 16px; background: #0f172a; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+        .tl-seg { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #22c55e, #10b981); border-radius: 2px; }
+        .topo-node-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+        .topo-clients { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-top: 12px; }
+        .topo-client { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .topo-client:hover { border-color: var(--accent); }
+        .diag-item { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .diag-item.critical { border-left-color: #ef4444; background: rgba(239,68,68,0.07); }
+        .diag-item.warn { border-left-color: #f59e0b; background: rgba(245,158,11,0.06); }
+        .diag-item.info { border-left-color: #38bdf8; }
+        .tag-chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; background: rgba(56,189,248,0.14); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.3); margin-right: 4px; }
+        .hostname-link { color: var(--text); text-decoration: none; cursor: pointer; border-bottom: 1px dotted rgba(148,163,184,0.4); }
+        .hostname-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
     </style>
 </head>
 <body>
@@ -672,7 +718,7 @@
                 <p class="subtitle">Reassign static IPs by purging stale dynamic leases immediately without lowering your 12-hour IoT lease duration.</p>
             </div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
                 <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="toggleNetworkMenu(event)">🌐 Network Devices ▾</button>
                 <div id="network-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid #38bdf8; border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:320px; z-index:150; padding:8px 0;">
@@ -684,8 +730,49 @@
                     </div>
                 </div>
             </div>
+            <button class="btn btn-outline" onclick="openAlertsModal()" title="Configure alerts (ntfy, Telegram, Webhook) and view event log">🔔 Alerts</button>
+            <button class="btn btn-outline" onclick="openBackupModal()" title="Export or import full configuration, static IPs, and CSV">💾 Export / Import</button>
             <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columns</button>
-            <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Settings (AdGuard / Routers)</button>
+            <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Settings</button>
+            <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
+                <button class="btn btn-outline" onclick="toggleUserMenu(event)" title="Account & session">👤 {{ auth_user or 'Account' }} ▾</button>
+                <div id="user-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid var(--border); border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:230px; z-index:150; padding:6px 0;">
+                    <a href="#" onclick="openSecurityModal(event)" class="dropdown-item-link" style="display:block; padding:9px 14px; font-size:0.84rem; color:#f8fafc; text-decoration:none;">🔑 Change username / password</a>
+                    <a href="#" onclick="logoutAllSessions(event)" class="dropdown-item-link" style="display:block; padding:9px 14px; font-size:0.84rem; color:#f8fafc; text-decoration:none;">📱 Sign out on other devices</a>
+                    <div style="border-top:1px solid rgba(148,163,184,0.15); margin:4px 0;"></div>
+                    <a href="/logout" class="dropdown-item-link" style="display:block; padding:9px 14px; font-size:0.84rem; color:#f87171; text-decoration:none;">🚪 Sign out</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ACCOUNT & PASSWORD -->
+    <div id="security-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(4px);" onclick="if(event.target === this) closeSecurityModal()">
+        <div class="popup-modal" style="width:92%; max-width:440px; text-align:left; border-color:#38bdf8; background:#1e293b; border-radius:14px; padding:22px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+                <h3 style="margin:0; font-size:1.1rem; color:#f8fafc;">🔑 Panel Credentials</h3>
+                <button onclick="closeSecurityModal()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
+            </div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>Username</label>
+                <input type="text" id="sec-username" value="{{ auth_user or '' }}" style="width:100%;">
+            </div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>New Password (leave blank to keep current)</label>
+                <input type="password" id="sec-new" autocomplete="new-password" style="width:100%;">
+            </div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>Confirm New Password</label>
+                <input type="password" id="sec-new2" autocomplete="new-password" style="width:100%;">
+            </div>
+            <div class="form-group" style="margin-bottom:16px;">
+                <label>Current Password (required to confirm)</label>
+                <input type="password" id="sec-current" autocomplete="current-password" style="width:100%;" onkeydown="if(event.key==='Enter') submitSecurity()">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn btn-outline" onclick="closeSecurityModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitSecurity()">💾 Save</button>
+            </div>
         </div>
     </div>
 
@@ -787,12 +874,25 @@
     </div>
 
     <!-- MAIN TABS NAVIGATION -->
-    <div class="main-tabs-bar" style="display:flex; gap:12px; margin: 20px 0 16px 0; border-bottom: 2px solid var(--border); padding-bottom: 4px;">
+    <div class="main-tabs-bar" style="display:flex; gap:10px; margin: 20px 0 16px 0; border-bottom: 2px solid var(--border); padding-bottom: 4px; flex-wrap:wrap;">
         <button id="tab-btn-devices" class="tab-nav-btn active" onclick="switchMainTab('devices')">
             📋 Network Devices <span id="tab-badge-devices" class="tab-badge">0</span>
         </button>
         <button id="tab-btn-services" class="tab-nav-btn" onclick="switchMainTab('services')">
             🌐 Web Services & Apps <span id="tab-badge-services" class="tab-badge tab-badge-services">0</span>
+            <span id="tab-services-down-badge" class="tab-badge" style="display:none; background:rgba(239,68,68,0.22); color:#fca5a5;">0</span>
+        </button>
+        <button id="tab-btn-ipmap" class="tab-nav-btn" onclick="switchMainTab('ipmap')">
+            🗺️ IP Map (.1–.254)
+        </button>
+        <button id="tab-btn-topology" class="tab-nav-btn" onclick="switchMainTab('topology')">
+            🕸️ Network Topology
+        </button>
+        <button id="tab-btn-timeline" class="tab-nav-btn" onclick="switchMainTab('timeline')">
+            📅 Presence Timeline
+        </button>
+        <button id="tab-btn-diagnostics" class="tab-nav-btn" onclick="switchMainTab('diagnostics')">
+            ⚠️ Diagnostics <span id="tab-badge-diag" class="tab-badge" style="display:none; background:rgba(245,158,11,0.22); color:#fcd34d;">0</span>
         </button>
     </div>
 
@@ -910,6 +1010,7 @@
                 <div class="filter-group">
                     <button class="pill-btn active" data-svc-cat="all" onclick="setServiceCategoryFilter('all')">All <span id="svc-count-all" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="favorites" onclick="setServiceCategoryFilter('favorites')">⭐ Favorites <span id="svc-count-favorites" class="pill-count">0</span></button>
+                    <button class="pill-btn" data-svc-cat="down" onclick="setServiceCategoryFilter('down')">🔴 Down <span id="svc-count-down" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="domotica" onclick="setServiceCategoryFilter('domotica')">🏠 Smart Home <span id="svc-count-domotica" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="multimedia" onclick="setServiceCategoryFilter('multimedia')">🎬 Media <span id="svc-count-multimedia" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="red" onclick="setServiceCategoryFilter('red')">🌐 Network & Routers <span id="svc-count-red" class="pill-count">0</span></button>
@@ -922,10 +1023,306 @@
             <!-- Dynamically generated service cards -->
         </div>
     </div> <!-- END view-services -->
+
+    <!-- TAB 3: VISUAL IP MAP (1-254) -->
+    <div id="view-ipmap" style="display:none;">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h3 style="margin:0;">🗺️ Visual Subnet Map <code>192.168.1.1 – 192.168.1.254</code></h3>
+                    <p style="margin:4px 0 0; font-size:0.83rem; color:var(--muted);">
+                        Click a <strong>free</strong> IP to assign it as static to a device, or click an <strong>occupied</strong> IP to open its device sheet.
+                        <span id="ipmap-range-lbl" style="margin-left:8px; color:#fcd34d;"></span>
+                    </p>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; font-size:0.76rem; align-items:center;">
+                    <span class="badge" style="background:rgba(15,23,42,0.9); border:1px solid var(--border); color:#94a3b8;">⬜ Free (<span id="ipm-free">0</span>)</span>
+                    <span class="badge" style="background:rgba(34,197,94,0.2); border:1px solid rgba(34,197,94,0.55); color:#86efac;">📌 Static Active (<span id="ipm-static">0</span>)</span>
+                    <span class="badge" style="background:rgba(56,189,248,0.2); border:1px solid rgba(56,189,248,0.55); color:#7dd3fc;">⚡ Dynamic (<span id="ipm-dyn">0</span>)</span>
+                    <span class="badge" style="background:rgba(168,85,247,0.22); border:1px solid rgba(168,85,247,0.55); color:#d8b4fe;">🔧 Manual Static (<span id="ipm-man">0</span>)</span>
+                    <span class="badge" style="background:rgba(239,68,68,0.25); border:1px solid #ef4444; color:#fecaca;">🚨 Conflict (<span id="ipm-conf">0</span>)</span>
+                    <span style="color:#fcd34d; font-size:0.73rem;">▬ Amber bottom border = Dynamic DHCP pool</span>
+                </div>
+            </div>
+            <div id="ipmap-grid" class="ipmap-grid"></div>
+        </div>
+    </div>
+
+    <!-- TAB 4: NETWORK TOPOLOGY -->
+    <div id="view-topology" style="display:none;">
+        <div class="card" style="margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h3 style="margin:0;">🕸️ Network Topology & Access Nodes</h3>
+                    <p style="margin:4px 0 0; font-size:0.83rem; color:var(--muted);">Live tree from the main gateway to each Mesh node / access point and its connected clients.</p>
+                </div>
+                <button class="btn btn-outline" onclick="manualRefresh()">🔄 Refresh Topology</button>
+            </div>
+        </div>
+        <div id="topology-container"></div>
+    </div>
+
+    <!-- TAB 5: PRESENCE TIMELINE -->
+    <div id="view-timeline" style="display:none;">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                <div>
+                    <h3 style="margin:0;">📅 Device Presence Timeline</h3>
+                    <p style="margin:4px 0 0; font-size:0.82rem; color:var(--muted);">Green segments = connected. Ideal for spotting overnight disconnects or IoT dropouts. <span id="tl-since" style="color:#38bdf8;"></span></p>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="text" id="tl-search" placeholder="Filter device..." oninput="renderTimelineRows()" style="padding:6px 10px; font-size:0.82rem; background:#0f172a; border:1px solid var(--border); border-radius:8px; color:#f8fafc;">
+                    <button class="btn btn-outline" onclick="loadTimeline(6)">6h</button>
+                    <button class="btn btn-outline" onclick="loadTimeline(24)">24h</button>
+                    <button class="btn btn-outline" onclick="loadTimeline(72)">3 days</button>
+                    <button class="btn btn-outline" onclick="loadTimeline(168)">7 days</button>
+                </div>
+            </div>
+            <div id="timeline-container"></div>
+        </div>
+    </div>
+
+    <!-- TAB 6: NETWORK DIAGNOSTICS -->
+    <div id="view-diagnostics" style="display:none;">
+        <div class="card" style="margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div id="diag-score-box" style="width:68px; height:68px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.35rem; font-weight:800; border:4px solid #22c55e; color:#86efac; background:rgba(34,197,94,0.1);">100</div>
+                    <div>
+                        <h3 style="margin:0;">⚠️ Automatic Network & DHCP Diagnostics</h3>
+                        <p style="margin:4px 0 0; font-size:0.83rem; color:var(--muted);">Analyzes ARP IP conflicts, static reservations inside the DHCP pool, down services, randomized MACs, and orphaned leases.</p>
+                    </div>
+                </div>
+                <button class="btn btn-outline" onclick="loadDiagnostics()">🔄 Run Analysis</button>
+            </div>
+        </div>
+        <div id="diagnostics-container"></div>
+    </div>
+
+    <!-- MODAL: DEVICE DETAIL SHEET -->
+    <div id="device-sheet-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99998; justify-content:center; align-items:center; backdrop-filter:blur(4px); padding:16px;" onclick="if(event.target===this) closeDeviceSheet()">
+        <div class="popup-modal" style="width:96%; max-width:860px; max-height:90vh; overflow-y:auto; text-align:left; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:12px; margin-bottom:14px;">
+                <div>
+                    <h3 id="ds-title" style="margin:0; font-size:1.2rem; color:#f8fafc;">🧾 Device Sheet</h3>
+                    <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
+                </div>
+                <button onclick="closeDeviceSheet()" style="background:none; border:none; color:#94a3b8; font-size:1.3rem; cursor:pointer;">✕</button>
+            </div>
+
+            <!-- Quick actions -->
+            <div id="ds-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;"></div>
+
+            <!-- Technical metrics -->
+            <div id="ds-metrics" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; margin-bottom:14px;"></div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px;">
+                <!-- Custom notes, room & tags -->
+                <div style="background:#0f172a; padding:12px; border-radius:10px; border:1px solid var(--border);">
+                    <strong style="display:block; margin-bottom:8px; font-size:0.88rem;">🏷️ Classification & Custom Notes</strong>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:0.78rem; color:var(--muted);">Room / Location</label>
+                        <input type="text" id="ds-room" placeholder="e.g. Living Room, Office, Kitchen, Rack..." style="width:100%; padding:7px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:0.78rem; color:var(--muted);">Tags (comma-separated)</label>
+                        <input type="text" id="ds-tags" placeholder="e.g. iot, critical, guest, camera" style="width:100%; padding:7px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:0.78rem; color:var(--muted);">Notes (model, purpose, purchase date...)</label>
+                        <textarea id="ds-notes" rows="3" style="width:100%; padding:7px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:inherit;"></textarea>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label style="font-size:0.8rem; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="checkbox" id="ds-known"> Known / authorized device
+                        </label>
+                        <button class="btn btn-success" style="padding:6px 12px; font-size:0.8rem;" onclick="saveDeviceMeta()">💾 Save Sheet</button>
+                    </div>
+                </div>
+
+                <!-- AdGuard Home DNS activity -->
+                <div style="background:#0f172a; padding:12px; border-radius:10px; border:1px solid var(--border);">
+                    <strong style="display:block; margin-bottom:8px; font-size:0.88rem;">🛡️ Recent DNS Queries (AdGuard Home)</strong>
+                    <div id="ds-dns" style="font-size:0.8rem; color:var(--muted); max-height:220px; overflow-y:auto;">Loading DNS activity...</div>
+                </div>
+            </div>
+
+            <!-- TCP Port Scanner -->
+            <div style="background:#0f172a; padding:12px; border-radius:10px; border:1px solid var(--border); margin-top:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <strong style="font-size:0.88rem;">🔍 Device TCP Port Scanner</strong>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button class="btn btn-outline" style="padding:5px 10px; font-size:0.76rem;" onclick="startPortScan('common')">⚡ Common Ports (~45)</button>
+                        <button class="btn btn-outline" style="padding:5px 10px; font-size:0.76rem;" onclick="startPortScan('top')">🔎 Ports 1–1024</button>
+                        <button class="btn btn-outline" style="padding:5px 10px; font-size:0.76rem;" onclick="startPortScan('full')">🌐 Full 1–65535</button>
+                    </div>
+                </div>
+                <div id="ds-portscan" style="margin-top:8px; font-size:0.8rem; color:var(--muted);">Select a mode to scan for open ports (SSH, SMB, MQTT, RTSP, databases, web...).</div>
+            </div>
+
+            <!-- Connection history -->
+            <div style="background:#0f172a; padding:12px; border-radius:10px; border:1px solid var(--border); margin-top:14px;">
+                <strong style="display:block; margin-bottom:6px; font-size:0.88rem;">🕒 Connection & Event History</strong>
+                <div id="ds-events" style="font-size:0.78rem; color:var(--muted); max-height:150px; overflow-y:auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ASSIGN FREE IP FROM MAP -->
+    <div id="ip-assign-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); z-index:99999; justify-content:center; align-items:center;" onclick="if(event.target===this) this.style.display='none'">
+        <div class="popup-modal" style="width:92%; max-width:460px; text-align:left; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8;">
+            <h3 style="margin:0 0 8px;">📌 Assign Free IP <code id="ipm-target-ip" style="color:#38bdf8;"></code></h3>
+            <p style="font-size:0.83rem; color:var(--muted); margin:0 0 12px;">Choose a network device to bind to this IP address or pre-fill the top form:</p>
+            <select id="ipm-device-select" style="width:100%; padding:9px; background:#0f172a; border:1px solid var(--border); border-radius:8px; color:#f8fafc; margin-bottom:14px;"></select>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn btn-outline" onclick="document.getElementById('ip-assign-overlay').style.display='none'">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmAssignFromMap()">Assign Static IP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ALERTS & NOTIFICATIONS -->
+    <div id="alerts-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99999; justify-content:center; align-items:center; padding:16px;" onclick="if(event.target===this) this.style.display='none'">
+        <div class="popup-modal" style="width:96%; max-width:680px; max-height:90vh; overflow-y:auto; text-align:left; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+                <h3 style="margin:0;">🔔 Network Alerts & Event Log</h3>
+                <button onclick="document.getElementById('alerts-overlay').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:12px; cursor:pointer;">
+                <input type="checkbox" id="al-enabled"> Enable automatic alert notifications
+            </label>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:12px;">
+                <div class="form-group">
+                    <label style="font-size:0.8rem;">ntfy URL (e.g. <code>https://ntfy.sh/my-lan</code>)</label>
+                    <input type="text" id="al-ntfy" placeholder="https://ntfy.sh/..." style="width:100%;">
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.8rem;">Telegram Bot Token</label>
+                    <input type="password" id="al-tg-token" placeholder="123456:ABC-DEF..." style="width:100%;">
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.8rem;">Telegram Chat ID</label>
+                    <input type="text" id="al-tg-chat" placeholder="e.g. 123456789" style="width:100%;">
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.8rem;">Webhook URL (Home Assistant / Discord)</label>
+                    <input type="text" id="al-webhook" placeholder="http://192.168.1.219:8123/api/webhook/..." style="width:100%;">
+                </div>
+            </div>
+            <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; font-size:0.82rem;">
+                <label><input type="checkbox" id="al-new-dev"> 🚨 New unknown device</label>
+                <label><input type="checkbox" id="al-svc-down"> 🔴 Web service down</label>
+                <label><input type="checkbox" id="al-svc-up"> 🟢 Service recovered</label>
+                <label><input type="checkbox" id="al-watched"> ⚠️ Watched device offline</label>
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="font-size:0.8rem;">Watched MACs (comma-separated — alerts when offline)</label>
+                <input type="text" id="al-watched-macs" placeholder="00:50:56:2c:65:e2, ..." style="width:100%;">
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+                <button class="btn btn-outline" onclick="testAlerts()">🔔 Send Test Alert</button>
+                <button class="btn btn-success" onclick="saveAlertsConfig()">💾 Save Alerts</button>
+            </div>
+            <strong style="display:block; margin-bottom:6px; font-size:0.86rem;">📜 Recent Logged Events</strong>
+            <div id="al-events-list" style="background:#0f172a; border-radius:8px; padding:10px; max-height:220px; overflow-y:auto; font-size:0.78rem; color:var(--muted);"></div>
+        </div>
+    </div>
+
+    <!-- MODAL: EXPORT / IMPORT CONFIGURATION & CSV -->
+    <div id="backup-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99999; justify-content:center; align-items:center; padding:16px;" onclick="if(event.target===this) this.style.display='none'">
+        <div class="popup-modal" style="width:96%; max-width:660px; max-height:90vh; overflow-y:auto; text-align:left; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+                <h3 style="margin:0;">💾 Export & Import Configuration / Backups</h3>
+                <button onclick="document.getElementById('backup-overlay').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
+            </div>
+
+            <div style="background:#0f172a; padding:14px; border-radius:10px; border:1px solid var(--border); margin-bottom:14px;">
+                <strong style="display:block; margin-bottom:6px;">📤 Export</strong>
+                <p style="font-size:0.82rem; color:var(--muted); margin:0 0 10px;">Saves all AdGuard static IPs, routers, custom service names, favorites, device notes/rooms, and alert settings.</p>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="bk-inc-secrets"> Include router/AdGuard passwords and tokens in JSON
+                </label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-primary" onclick="exportBackupJson()">⬇️ Download Full Backup (.JSON)</button>
+                    <button class="btn btn-outline" onclick="exportDevicesCsv()">📊 Export Table to Excel (.CSV)</button>
+                </div>
+            </div>
+
+            <div style="background:#0f172a; padding:14px; border-radius:10px; border:1px solid var(--border);">
+                <strong style="display:block; margin-bottom:6px;">📥 Import Backup (.JSON) with Diff Preview</strong>
+                <input type="file" id="bk-file" accept=".json,application/json" onchange="previewBackupFile(this)" style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">
+                <div id="bk-preview-box" style="display:none; font-size:0.82rem; border-top:1px solid var(--border); padding-top:10px; margin-top:6px;"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
+// --- Session guard: redirect to /login on 401 ---
+(function () {
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async function (...args) {
+        const res = await origFetch(...args);
+        if (res.status === 401) {
+            try {
+                const data = await res.clone().json();
+                if (data && data.auth_required) {
+                    window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+                }
+            } catch (e) {}
+        }
+        return res;
+    };
+})();
+
+function toggleUserMenu(ev) {
+    ev.stopPropagation();
+    const m = document.getElementById('user-menu-dropdown');
+    const vis = m.style.display === 'block';
+    closeAllDropdowns();
+    if (!vis) m.style.display = 'block';
+}
+
+function openSecurityModal(ev) {
+    if (ev) ev.preventDefault();
+    closeAllDropdowns();
+    ['sec-new', 'sec-new2', 'sec-current'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('security-overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('sec-new').focus(), 50);
+}
+
+function closeSecurityModal() {
+    document.getElementById('security-overlay').style.display = 'none';
+}
+
+async function submitSecurity() {
+    const username = document.getElementById('sec-username').value.trim();
+    const nw = document.getElementById('sec-new').value;
+    const nw2 = document.getElementById('sec-new2').value;
+    const current = document.getElementById('sec-current').value;
+    if (!current) return showMessage('Please enter your current password to confirm changes.');
+    if (nw !== nw2) return showMessage('New passwords do not match.');
+    const res = await fetch('/api/auth/change-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, new: nw, current })
+    });
+    const data = await res.json();
+    if (data.status === 'success') closeSecurityModal();
+    showMessage(data.message);
+}
+
+async function logoutAllSessions(ev) {
+    if (ev) ev.preventDefault();
+    closeAllDropdowns();
+    showConfirmPopup('Sign out from <strong>all other devices</strong>? This browser will remain signed in.', async () => {
+        const res = await fetch('/api/auth/logout-all', { method: 'POST' });
+        const data = await res.json();
+        showMessage(data.message);
+    });
+}
+
 let allDevices = [];
+let downServices = [];
 let routersConfig = [];
 let sortState = { colId: 'ip', asc: true };
 let dragSrcColId = null;
@@ -934,13 +1331,18 @@ let serviceCategoryFilter = 'all';
 
 function switchMainTab(tab) {
     currentMainTab = tab;
-    document.getElementById('tab-btn-devices').classList.toggle('active', tab === 'devices');
-    document.getElementById('tab-btn-services').classList.toggle('active', tab === 'services');
-    document.getElementById('view-devices').style.display = tab === 'devices' ? 'block' : 'none';
-    document.getElementById('view-services').style.display = tab === 'services' ? 'block' : 'none';
-    if (tab === 'services') {
-        renderServicesCards();
-    }
+    const tabs = ['devices', 'services', 'ipmap', 'topology', 'timeline', 'diagnostics'];
+    tabs.forEach(t => {
+        const btn = document.getElementById('tab-btn-' + t);
+        const view = document.getElementById('view-' + t);
+        if (btn) btn.classList.toggle('active', t === tab);
+        if (view) view.style.display = (t === tab) ? 'block' : 'none';
+    });
+    if (tab === 'services') renderServicesCards();
+    else if (tab === 'ipmap') loadIpMap();
+    else if (tab === 'topology') renderTopology();
+    else if (tab === 'timeline') loadTimeline(24);
+    else if (tab === 'diagnostics') loadDiagnostics();
 }
 
 function setServiceCategoryFilter(cat) {
@@ -984,40 +1386,28 @@ function resetAllFilters() {
 }
 
 const DEFAULT_COLUMNS = [
-    { id: 'hostname', label: 'Device', visible: true, width: 180 },
-    { id: 'prediction', label: 'Predicted Class / Vendor', visible: true, width: 210 },
-    { id: 'medium', label: 'Medium', visible: true, width: 130 },
-    { id: 'router', label: 'Router / Node', visible: true, width: 175 },
-    { id: 'ip', label: 'AdGuard IP', visible: true, width: 130 },
-    { id: 'arp', label: 'Active IP (ARP)', visible: true, width: 155 },
+    { id: 'hostname', label: 'Device', visible: true, width: 195 },
+    { id: 'prediction', label: 'Predicted Class / Vendor', visible: true, width: 200 },
+    { id: 'medium', label: 'Medium', visible: true, width: 120 },
+    { id: 'router', label: 'Router / Node', visible: true, width: 165 },
+    { id: 'ip', label: 'AdGuard IP', visible: true, width: 125 },
+    { id: 'arp', label: 'Active IP (ARP)', visible: true, width: 140 },
+    { id: 'latency', label: 'Latency / OS', visible: true, width: 135 },
+    { id: 'seen', label: 'Seen / Room', visible: false, width: 145 },
     { id: 'mac', label: 'MAC', visible: true, width: 145 },
-    { id: 'type', label: 'Type', visible: true, width: 110 },
-    { id: 'actions', label: 'Actions', visible: true, width: 210 }
+    { id: 'type', label: 'Type', visible: true, width: 100 },
+    { id: 'actions', label: 'Actions', visible: true, width: 235 }
 ];
 
 let columnsConfig = loadColumnsConfig();
 
 function loadColumnsConfig() {
     try {
-        const raw = localStorage.getItem('dhcp_panel_columns_en_v2');
+        const raw = localStorage.getItem('dhcp_panel_columns_en_v3');
         if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length === DEFAULT_COLUMNS.length) {
                 return parsed;
-            }
-        }
-        const oldRaw = localStorage.getItem('dhcp_panel_columns_en_v1');
-        if (oldRaw) {
-            const oldParsed = JSON.parse(oldRaw);
-            if (Array.isArray(oldParsed)) {
-                if (!oldParsed.some(c => c.id === 'medium')) {
-                    const insertIdx = oldParsed.findIndex(c => c.id === 'router');
-                    const newCol = { id: 'medium', label: 'Medium', visible: true, width: 130 };
-                    if (insertIdx >= 0) oldParsed.splice(insertIdx, 0, newCol);
-                    else oldParsed.push(newCol);
-                }
-                localStorage.setItem('dhcp_panel_columns_en_v2', JSON.stringify(oldParsed));
-                return oldParsed;
             }
         }
     } catch (e) {}
@@ -1025,7 +1415,7 @@ function loadColumnsConfig() {
 }
 
 function saveColumnsConfig() {
-    localStorage.setItem('dhcp_panel_columns_en_v2', JSON.stringify(columnsConfig));
+    localStorage.setItem('dhcp_panel_columns_en_v3', JSON.stringify(columnsConfig));
 }
 
 function resetColumns() {
@@ -1341,10 +1731,14 @@ async function loadState(isManual = false) {
         if (lblExp) lblExp.textContent = data.expired_count;
 
         allDevices = data.devices || [];
+        downServices = data.down_services || [];
         renderGlobalNetworkMenu(data.network_links || []);
         renderTable();
         renderServicesCards();
         updateTabsCounts();
+        if (currentMainTab === 'ipmap') loadIpMap();
+        else if (currentMainTab === 'topology') renderTopology();
+        else if (currentMainTab === 'diagnostics') loadDiagnostics();
 
         lastRefreshTime = new Date();
         updateRefreshTimestamp();
@@ -1569,7 +1963,7 @@ function renderServicesCards() {
     const q = (document.getElementById('search-services') ? document.getElementById('search-services').value : '').trim().toLowerCase();
     const favsList = getFavoriteServices();
 
-    // 1. Gather all services from all devices
+    // 1. Gather all active services and remembered down services
     let items = [];
     allDevices.forEach(d => {
         if (!d.web_links || d.web_links.length === 0) return;
@@ -1579,16 +1973,30 @@ function renderServicesCards() {
                 meta.originalName = meta.name;
                 meta.name = l.label;
             }
-            items.push({
-                service: l,
-                device: d,
-                meta: meta
-            });
+            items.push({ service: l, device: d, meta: meta, isDown: l.status === 'down' });
+        });
+    });
+    (downServices || []).forEach(ds => {
+        const meta = Object.assign({}, getServiceMeta(ds.label, ds.port, ds.hostname));
+        if (ds.custom_name) {
+            meta.originalName = meta.name;
+            meta.name = ds.custom_name;
+        }
+        items.push({
+            service: {
+                url: ds.url, label: ds.custom_name || ds.label, default_label: ds.label,
+                is_custom: Boolean(ds.custom_name), port: ds.port, status: 'down',
+                uptime_24h: ds.uptime_24h, history: ds.history, last_seen_up: ds.last_seen_up
+            },
+            device: { hostname: ds.hostname || ds.ip, ip: ds.ip, mac: ds.mac, dev_icon: ds.dev_icon || '💻', conn_medium: 'offline', router_node: 'No response' },
+            meta: meta,
+            isDown: true
         });
     });
 
-    // Sort: favorites first, then alphabetically
+    // Sort: down first (visual alert), then favorites, then alphabetically
     items.sort((a, b) => {
+        if (a.isDown !== b.isDown) return a.isDown ? -1 : 1;
         const isFavA = favsList.includes(a.service.url) ? 1 : 0;
         const isFavB = favsList.includes(b.service.url) ? 1 : 0;
         if (isFavA !== isFavB) return isFavB - isFavA;
@@ -1598,6 +2006,7 @@ function renderServicesCards() {
     // Counts per category and favorites
     const totalServices = items.length;
     const cntFavs = items.filter(it => favsList.includes(it.service.url)).length;
+    const cntDown = items.filter(it => it.isDown).length;
     const cntDomotica = items.filter(it => it.meta.cat === 'domotica').length;
     const cntMultimedia = items.filter(it => it.meta.cat === 'multimedia').length;
     const cntRed = items.filter(it => it.meta.cat === 'red').length;
@@ -1606,15 +2015,18 @@ function renderServicesCards() {
     const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setEl('svc-count-all', totalServices);
     setEl('svc-count-favorites', cntFavs);
+    setEl('svc-count-down', cntDown);
     setEl('svc-count-domotica', cntDomotica);
     setEl('svc-count-multimedia', cntMultimedia);
     setEl('svc-count-red', cntRed);
     setEl('svc-count-infra', cntInfra);
 
-    // 2. Filter by category or favorites
+    // 2. Filter by category, down, or favorites
     let filtered = items;
     if (serviceCategoryFilter === 'favorites') {
         filtered = filtered.filter(it => favsList.includes(it.service.url));
+    } else if (serviceCategoryFilter === 'down') {
+        filtered = filtered.filter(it => it.isDown);
     } else if (serviceCategoryFilter !== 'all') {
         filtered = filtered.filter(it => it.meta.cat === serviceCategoryFilter);
     }
@@ -1656,13 +2068,19 @@ function renderServicesCards() {
     }
 
     container.innerHTML = filtered.map(it => {
-        const { service, device, meta } = it;
+        const { service, device, meta, isDown } = it;
         const cleanUrl = service.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
         const isFav = favsList.includes(service.url);
-        const topBorder = isFav ? '#f59e0b' : meta.border;
+        const topBorder = isDown ? '#ef4444' : (isFav ? '#f59e0b' : meta.border);
+        const statusHtml = isDown
+            ? `<div class="status-indicator-down" title="Service stopped responding (last seen online: ${service.last_seen_up || 'unknown'})"><span class="status-dot-down"></span><span>DOWN</span></div>`
+            : `<div class="status-indicator-live" title="Service verified and responding on local network"><span class="status-dot-pulse"></span><span>ONLINE${service.latency_ms != null ? ' · ' + Math.round(service.latency_ms) + 'ms' : ''}</span></div>`;
+        const histBars = (service.history && service.history.length > 0)
+            ? `<div class="svc-history-strip" title="Recent availability history (24h: ${service.uptime_24h != null ? service.uptime_24h + '%' : '100%'})">${service.history.map(h => `<span class="svc-history-bar ${h[0] ? '' : 'down'}"></span>`).join('')}</div>`
+            : '';
 
         return `
-            <div class="service-card ${isFav ? 'is-favorite' : ''}" style="border-top: 3px solid ${topBorder};">
+            <div class="service-card ${isFav ? 'is-favorite' : ''} ${isDown ? 'is-down' : ''}" style="border-top: 3px solid ${topBorder};">
                 <div class="service-card-header">
                     <div class="service-icon-box" style="background: ${meta.bg}; color: ${meta.border}; border: 1px solid ${meta.border};">
                         ${meta.icon}
@@ -1674,11 +2092,8 @@ function renderServicesCards() {
                                 ${isFav ? '<span class="badge-fav">⭐ Favorite</span>' : ''}
                                 ${service.is_custom ? `<span class="badge-custom-name" title="Original name: ${escapeHtml(meta.originalName || service.default_label || '')}">✏️ Custom</span>` : ''}
                             </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div class="status-indicator-live" title="Service verified and responding on local network">
-                                    <span class="status-dot-pulse"></span>
-                                    <span>ONLINE</span>
-                                </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                ${statusHtml}
                                 <button class="btn-star ${isFav ? 'active' : ''}" onclick="toggleServiceFavorite(event, '${service.url}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
                                     ${isFav ? '⭐' : '☆'}
                                 </button>
@@ -1693,6 +2108,7 @@ function renderServicesCards() {
 
                 <div class="service-card-desc">
                     ${meta.desc}
+                    ${histBars}
                 </div>
 
                 <div class="service-card-body">
@@ -1707,18 +2123,19 @@ function renderServicesCards() {
                         <code class="service-ip-port">${cleanUrl}</code>
                     </div>
                     <div class="service-info-row">
-                        <span class="service-info-label">Medium / Link:</span>
+                        <span class="service-info-label">24h Uptime:</span>
                         <span class="service-info-val" style="font-size:0.75rem;">
-                            ${device.conn_medium === 'wifi' ? '📶 Wi-Fi' : '🔌 Wired'} · ${device.router_node || 'LAN'}
+                            ${service.uptime_24h != null ? service.uptime_24h + '%' : '100%'} · ${device.conn_medium === 'wifi' ? '📶 Wi-Fi' : (device.conn_medium === 'cable' ? '🔌 Wired' : '⚠️ No response')}
                         </span>
                     </div>
                 </div>
 
-                <div class="service-card-footer">
-                    <a href="${service.url}" target="_blank" rel="noopener noreferrer" class="service-open-btn">
+                <div class="service-card-footer" style="display:flex; gap:8px;">
+                    <a href="${service.url}" target="_blank" rel="noopener noreferrer" class="service-open-btn" style="flex:1;">
                         <span>Open ${escapeHtml(meta.name)}</span>
                         <span style="font-size: 0.95rem;">↗</span>
                     </a>
+                    ${isDown ? `<button class="btn btn-outline" style="padding:6px 10px; font-size:0.76rem; color:#f87171; border-color:rgba(239,68,68,0.4);" onclick="forgetDownService('${service.url}')" title="Forget this service if you uninstalled it">🗑️ Forget</button>` : ''}
                 </div>
             </div>
         `;
@@ -1803,6 +2220,8 @@ function toggleRowWebMenu(ev, ipSafe) {
 function closeAllDropdowns() {
     const globalMenu = document.getElementById('network-menu-dropdown');
     if (globalMenu) globalMenu.style.display = 'none';
+    const userMenu = document.getElementById('user-menu-dropdown');
+    if (userMenu) userMenu.style.display = 'none';
     document.querySelectorAll('.row-web-menu').forEach(el => {
         el.style.display = 'none';
         const tr = el.closest('tr');
@@ -1833,6 +2252,8 @@ function getSortValue(d, colId) {
         case 'arp': return ipToNum((d.live_ips && d.live_ips[0]) || '');
         case 'router': return (d.router_node || '').toLowerCase();
         case 'type': return d.static ? 0 : 1;
+        case 'latency': return d.latency_ms != null ? d.latency_ms : 99999;
+        case 'seen': return d.last_seen || '';
         default: return '';
     }
 }
@@ -2012,7 +2433,8 @@ function renderTable() {
         // 4. General text search query (including ports, web service labels, URLs, IP, MAC, hostname, etc.)
         const portsText = openPorts.map(p => `${p} :${p} port:${p} puerto:${p}`).join(' ');
         const servicesText = (d.web_links || []).map(w => `${w.label} ${w.default_label || ''} ${w.url}`).join(' ');
-        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText}`.toLowerCase();
+        const tagsText = `${d.room || ''} ${(d.tags || []).join(' ')} ${d.notes || ''} ${d.os_guess || ''}`;
+        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText} ${tagsText}`.toLowerCase();
         return text.includes(q);
     });
 
@@ -2114,19 +2536,51 @@ function renderTable() {
             }
         }
 
+        const badges = [];
+        if (d.blocked) badges.push(`<span class="tag-chip" style="background:rgba(239,68,68,0.2); border-color:#ef4444; color:#fca5a5;" title="DNS access blocked in AdGuard Home">⛔ Blocked</span>`);
+        if (d.known === false) badges.push(`<span class="tag-chip" style="background:rgba(245,158,11,0.2); border-color:#f59e0b; color:#fcd34d;" title="New device not yet marked as known">🆕 New</span>`);
+        if (d.room) badges.push(`<span class="tag-chip" title="Room / Location">📍 ${escapeHtml(d.room)}</span>`);
+        (d.tags || []).slice(0, 2).forEach(t => badges.push(`<span class="tag-chip">🏷️ ${escapeHtml(t)}</span>`));
+
+        const hostHtml = `
+            <div>
+                <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Open device sheet, history, DNS & port scanner"><strong>${escapeHtml(d.hostname)}</strong></a>
+                ${badges.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:3px;">${badges.join('')}</div>` : ''}
+            </div>
+        `;
+
+        const macHtml = `<code>${d.mac}</code>` + (d.random_mac ? ` <span class="tag-chip" style="background:rgba(245,158,11,0.16); border-color:rgba(245,158,11,0.45); color:#fcd34d;" title="Private/randomized MAC address (LAA bit set)">🎲 Random</span>` : '');
+
+        let latHtml = '<span style="color:var(--muted); font-size:0.76rem;">—</span>';
+        if (d.latency_ms != null) {
+            const ms = d.latency_ms;
+            const col = ms < 15 ? '#86efac' : (ms < 60 ? '#fcd34d' : '#fca5a5');
+            latHtml = `<div style="font-size:0.78rem;"><strong style="color:${col};">${ms.toFixed(1)} ms</strong>${d.os_guess ? `<div style="font-size:0.68rem; color:var(--muted);" title="Estimated from TTL=${d.ttl}">${escapeHtml(d.os_guess)}</div>` : ''}</div>`;
+        } else if (d.os_guess) {
+            latHtml = `<span style="font-size:0.72rem; color:var(--muted);">${escapeHtml(d.os_guess)}</span>`;
+        }
+
+        const seenHtml = `<div style="font-size:0.73rem; color:var(--muted); line-height:1.35;">
+            ${d.last_seen ? `<div>Last: <strong style="color:#cbd5e1;">${fmtRelTime(d.last_seen)}</strong></div>` : ''}
+            ${d.first_seen ? `<div>1st: ${fmtRelTime(d.first_seen)}</div>` : ''}
+        </div>`;
+
         const cellMap = {
-            hostname: `<strong>${d.hostname}</strong>`,
+            hostname: hostHtml,
             prediction: predHtml,
             medium: mediumHtml,
-            mac: `<code>${d.mac}</code>`,
+            mac: macHtml,
             ip: `<code>${d.ip}</code>`,
             arp: arpHtml,
             router: routerHtml,
+            latency: latHtml,
+            seen: seenHtml,
             type: typeBadge,
             actions: `
-                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                <div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
                     ${webDropdownHtml}
-                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${d.hostname}', '${d.mac}', '${d.ip}')">Edit / Set</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Device sheet: notes, DNS, history, WoL, block Internet & port scan">🧾 Sheet</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${(d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Edit / Set</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="pingDevice('${d.ip}')">Ping</button>
                     <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Delete</button>
                 </div>
@@ -2227,6 +2681,596 @@ async function setDuration(seconds) {
     });
     const data = await res.json();
     showMessage(data.message);
+    loadState();
+}
+
+// =========================================================================
+// NEW FEATURES: RELATIVE TIME, DOWN SERVICES, IP MAP, TOPOLOGY, TIMELINE,
+// DIAGNOSTICS, DEVICE SHEET, ALERTS, BACKUP / EXPORT
+// =========================================================================
+
+function fmtRelTime(ts) {
+    if (!ts) return '—';
+    const sec = typeof ts === 'number' ? ts : Math.floor(new Date(ts).getTime() / 1000);
+    if (!sec || isNaN(sec)) return String(ts);
+    const diff = Math.max(0, Math.floor(Date.now() / 1000 - sec));
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+}
+
+async function forgetDownService(url) {
+    const res = await fetch('/api/services/forget', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+        downServices = downServices.filter(s => s.url !== url);
+        const badgeDown = document.getElementById('tab-services-down-badge');
+        if (badgeDown) {
+            badgeDown.style.display = downServices.length > 0 ? 'inline-block' : 'none';
+            badgeDown.textContent = `🔴 ${downServices.length}`;
+        }
+        renderServicesCards();
+    }
+}
+
+// --- VISUAL IP MAP (192.168.1.1 - 192.168.1.254) ---
+let ipMapTargetIp = '';
+
+async function loadIpMap() {
+    const grid = document.getElementById('ipmap-grid');
+    if (!grid) return;
+    const res = await fetch('/api/ipmap');
+    const data = await res.json();
+    const cells = data.cells || [];
+
+    const rl = document.getElementById('ipmap-range-lbl');
+    if (rl && data.range && data.range.start) {
+        rl.textContent = `(Dynamic DHCP Pool: ${data.range.start} – ${data.range.end})`;
+    }
+
+    let cFree = 0, cStatic = 0, cDyn = 0, cMan = 0, cConf = 0;
+    const statusCssMap = {
+        free: 'free',
+        static_on: 'static_online',
+        static_off: 'static_offline',
+        dynamic_on: 'dynamic_online',
+        dynamic_off: 'dynamic_offline',
+        manual: 'manual_static',
+        conflict: 'conflict'
+    };
+
+    grid.innerHTML = cells.map(c => {
+        if (c.status === 'free') cFree++;
+        else if (c.status.startsWith('static')) cStatic++;
+        else if (c.status.startsWith('dynamic')) cDyn++;
+        else if (c.status === 'manual') cMan++;
+        else if (c.status === 'conflict') cConf++;
+
+        const dev0 = (c.devices && c.devices[0]) || {};
+        const cssStatus = statusCssMap[c.status] || c.status;
+        const cls = `ip-cell ${cssStatus} ${c.in_pool ? 'in-pool' : ''}`;
+        const label = dev0.hostname || (dev0.mac ? dev0.mac.slice(-5) : (c.status === 'free' ? 'Free' : ''));
+        const tip = c.status === 'free'
+            ? `${c.ip} — Free ${c.in_pool ? '(inside DHCP pool)' : '(ideal for static IP)'}`
+            : `${c.ip}\n${(c.devices || []).map(x => `${x.hostname || '(unnamed)'} [${x.mac}]`).join('\n')}\nStatus: ${c.status}`;
+        return `<div class="${cls}" title="${escapeHtml(tip)}" onclick="onIpCellClick('${c.ip}', '${c.status}', '${dev0.mac || ''}')">
+            <div class="ip-num">.${c.n}</div>
+            <div class="ip-host">${escapeHtml(label)}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('ipm-free').textContent = cFree;
+    document.getElementById('ipm-static').textContent = cStatic;
+    document.getElementById('ipm-dyn').textContent = cDyn;
+    document.getElementById('ipm-man').textContent = cMan;
+    document.getElementById('ipm-conf').textContent = cConf;
+}
+
+function onIpCellClick(ip, status, mac) {
+    if (status !== 'free' && mac) {
+        openDeviceSheet(mac, ip);
+        return;
+    }
+    ipMapTargetIp = ip;
+    document.getElementById('ipm-target-ip').textContent = ip;
+    const sel = document.getElementById('ipm-device-select');
+    const sorted = [...allDevices].sort((a, b) => (a.static === b.static ? 0 : a.static ? 1 : -1));
+    sel.innerHTML = `<option value="__form__">✍️ Only fill IP ${ip} in top form</option>` +
+        sorted.map(d => `<option value="${d.mac}">${escapeHtml(d.hostname || '(Unnamed)')} — ${d.ip || (d.live_ips && d.live_ips[0]) || ''} [${d.mac}] ${d.static ? '(Already static)' : '(Dynamic)'}</option>`).join('');
+    document.getElementById('ip-assign-overlay').style.display = 'flex';
+}
+
+function confirmAssignFromMap() {
+    const val = document.getElementById('ipm-device-select').value;
+    document.getElementById('ip-assign-overlay').style.display = 'none';
+    if (val === '__form__') {
+        switchMainTab('devices');
+        document.getElementById('in-ip').value = ipMapTargetIp;
+        document.getElementById('in-hostname').focus();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+    }
+    const dev = allDevices.find(d => d.mac === val);
+    if (!dev) return;
+    switchMainTab('devices');
+    fillForm(dev.hostname || '', dev.mac, ipMapTargetIp);
+}
+
+// --- NETWORK TOPOLOGY ---
+function renderTopology() {
+    const container = document.getElementById('topology-container');
+    if (!container) return;
+
+    const groups = {};
+    allDevices.forEach(d => {
+        const key = d.router_node || (d.conn_medium === 'cable' ? 'Wired LAN / Switch' : 'Wi-Fi / Access Point');
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(d);
+    });
+
+    const isOnline = d => Boolean(d.live_ips && d.live_ips.length > 0);
+    const gatewayDev = allDevices.find(d => d.ip === '192.168.1.1' || (d.live_ips || []).includes('192.168.1.1'));
+    const piDev = allDevices.find(d => d.ip === '192.168.1.249' || (d.live_ips || []).includes('192.168.1.249'));
+
+    let html = `
+        <div class="topo-node-card" style="border-color:rgba(56,189,248,0.5); background:linear-gradient(180deg, rgba(56,189,248,0.1), rgba(30,41,59,0.9));">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:1.8rem;">🌐</span>
+                    <div>
+                        <div style="font-weight:800; font-size:1.05rem;">Main Internet / Fiber Gateway (192.168.1.1)</div>
+                        <div style="font-size:0.8rem; color:var(--muted);">
+                            ${gatewayDev ? `MAC: <code>${gatewayDev.mac}</code> · Latency: ${gatewayDev.latency_ms ?? '<1'} ms` : 'Default subnet gateway'}
+                            ${piDev ? ` · 🍓 AdGuard DHCP/DNS Server: <code>${piDev.ip}</code> (${escapeHtml(piDev.hostname)})` : ''}
+                        </div>
+                    </div>
+                </div>
+                <span class="badge badge-online">${allDevices.filter(isOnline).length} online / ${allDevices.length} total devices</span>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:14px;">
+    `;
+
+    Object.entries(groups).sort((a, b) => b[1].length - a[1].length).forEach(([nodeName, devs]) => {
+        const onlineCount = devs.filter(isOnline).length;
+        const isCable = nodeName.toLowerCase().includes('wired') || nodeName.toLowerCase().includes('cable') || nodeName.toLowerCase().includes('lan') || nodeName.toLowerCase().includes('main');
+        const icon = isCable ? '🔌' : '📡';
+        html += `
+            <div class="topo-node-card" style="margin-bottom:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:8px;">
+                    <div>
+                        <strong style="font-size:0.96rem;">${icon} ${escapeHtml(nodeName)}</strong>
+                        <div style="font-size:0.75rem; color:var(--muted);">${onlineCount} online of ${devs.length} associated</div>
+                    </div>
+                    <span class="badge ${onlineCount > 0 ? 'badge-online' : 'badge-offline'}">${onlineCount} / ${devs.length}</span>
+                </div>
+                <div class="topo-clients">
+                    ${devs.sort((a, b) => (isOnline(b) ? 1 : 0) - (isOnline(a) ? 1 : 0)).map(d => {
+                        const on = isOnline(d);
+                        const ipShow = (d.live_ips && d.live_ips[0]) || d.ip || '—';
+                        return `
+                        <div class="topo-client" onclick="openDeviceSheet('${d.mac}', '${ipShow}')" style="opacity:${on ? 1 : 0.55};">
+                            <span class="status-dot ${on ? 'dot-online' : 'dot-offline'}"></span>
+                            <div style="min-width:0; flex:1;">
+                                <div style="font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(d.hostname || '(Unnamed)')}</div>
+                                <div style="font-size:0.72rem; color:var(--muted);"><code>${ipShow}</code> ${d.latency_ms != null ? `· ${d.latency_ms.toFixed(1)}ms` : ''}</div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    container.innerHTML = html;
+}
+
+// --- PRESENCE TIMELINE ---
+let timelineDataCache = null;
+
+async function loadTimeline(hours = 24) {
+    const res = await fetch(`/api/timeline?hours=${hours}`);
+    timelineDataCache = await res.json();
+    const sinceEl = document.getElementById('tl-since');
+    if (sinceEl && timelineDataCache.history_since) {
+        const d = new Date(timelineDataCache.history_since);
+        sinceEl.textContent = `(Monitoring since ${d.toLocaleString()})`;
+    }
+    renderTimelineRows();
+}
+
+function renderTimelineRows() {
+    const container = document.getElementById('timeline-container');
+    if (!container || !timelineDataCache) return;
+    const q = (document.getElementById('tl-search')?.value || '').toLowerCase();
+    const start = timelineDataCache.start;
+    const end = timelineDataCache.end;
+    const span = Math.max(1, end - start);
+    const tlList = Array.isArray(timelineDataCache.devices) ? timelineDataCache.devices : [];
+    const segsByMac = {};
+    tlList.forEach(item => { segsByMac[item.mac] = item.segments || []; });
+
+    const filtered = allDevices.filter(d => {
+        if (!q) return true;
+        return (d.hostname || '').toLowerCase().includes(q) || (d.ip || '').includes(q) || (d.mac || '').includes(q);
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div style="color:var(--muted); padding:20px; text-align:center;">No devices match the filter.</div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(d => {
+        const on = Boolean(d.live_ips && d.live_ips.length > 0);
+        const segs = segsByMac[d.mac] || (on ? [[Math.max(start, end - 300), end]] : []);
+        const bars = segs.map(([s, e]) => {
+            const left = Math.max(0, Math.min(100, ((s - start) / span) * 100));
+            const width = Math.max(0.8, Math.min(100 - left, ((e - s) / span) * 100));
+            const sDate = new Date(s * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            const eDate = new Date(e * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            return `<div class="tl-seg" style="left:${left}%; width:${width}%;" title="Online: ${sDate} – ${eDate}"></div>`;
+        }).join('');
+
+        return `
+            <div class="tl-row">
+                <div style="min-width:0; cursor:pointer;" onclick="openDeviceSheet('${d.mac}', '${d.ip || ''}')">
+                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#f8fafc;">
+                        <span class="status-dot ${on ? 'dot-online' : 'dot-offline'}"></span>${escapeHtml(d.hostname || '(Unnamed)')}
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--muted);"><code>${d.ip || ''}</code> · ${escapeHtml(d.router_node || '')}</div>
+                </div>
+                <div class="tl-bar">${bars}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// --- NETWORK DIAGNOSTICS ---
+async function loadDiagnostics() {
+    const box = document.getElementById('diagnostics-container');
+    const scoreBox = document.getElementById('diag-score-box');
+    if (!box) return;
+    const res = await fetch('/api/diagnostics');
+    const data = await res.json();
+
+    if (scoreBox) {
+        scoreBox.textContent = data.score;
+        const col = data.score >= 85 ? '#22c55e' : (data.score >= 60 ? '#f59e0b' : '#ef4444');
+        scoreBox.style.borderColor = col;
+        scoreBox.style.color = col;
+    }
+
+    const issues = data.issues || [];
+    if (issues.length === 0) {
+        box.innerHTML = `<div class="card" style="text-align:center; color:#86efac; padding:28px;">✅ <strong>All clear:</strong> No IP conflicts, DHCP pool overlaps, or down services detected.</div>`;
+        return;
+    }
+
+    box.innerHTML = issues.map(i => {
+        const sev = i.severity === 'warning' ? 'warn' : i.severity;
+        const icon = sev === 'critical' ? '🚨' : (sev === 'warn' ? '⚠️' : 'ℹ️');
+        return `
+            <div class="diag-item ${sev}">
+                <div style="font-size:1.3rem;">${icon}</div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; color:#f8fafc; margin-bottom:2px;">${escapeHtml(i.title)}</div>
+                    <div style="font-size:0.83rem; color:#cbd5e1;">${escapeHtml(i.detail)}</div>
+                    ${i.fix ? `<div style="font-size:0.76rem; color:#38bdf8; margin-top:3px;">💡 Recommendation: ${escapeHtml(i.fix)}</div>` : ''}
+                </div>
+                ${i.mac ? `<button class="btn btn-outline" style="padding:5px 10px; font-size:0.76rem;" onclick="openDeviceSheet('${i.mac}', '${i.ip || ''}')">🧾 View Device</button>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// --- DEVICE DETAIL SHEET ---
+let currentSheetMac = '';
+let currentSheetIp = '';
+let portScanTimer = null;
+
+async function openDeviceSheet(mac, ipHint = '') {
+    currentSheetMac = mac;
+    const dev = allDevices.find(d => d.mac === mac) || { mac };
+    currentSheetIp = ipHint || (dev.live_ips && dev.live_ips[0]) || dev.ip || '';
+
+    document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Unnamed Device)'}`;
+    document.getElementById('ds-subtitle').innerHTML = `MAC: <code>${mac}</code> · IP: <code>${currentSheetIp || '—'}</code> · Vendor: <strong>${escapeHtml(dev.dev_vendor || 'Unknown')}</strong>`;
+    document.getElementById('ds-dns').innerHTML = 'Querying AdGuard Home log...';
+    document.getElementById('ds-events').innerHTML = 'Loading history...';
+    document.getElementById('ds-portscan').innerHTML = 'Select a mode above to scan for open TCP ports on this device.';
+    document.getElementById('device-sheet-overlay').style.display = 'flex';
+
+    const res = await fetch(`/api/device/${encodeURIComponent(mac)}?ip=${encodeURIComponent(currentSheetIp)}`);
+    const data = await res.json();
+    const meta = data.device || {};
+    document.getElementById('ds-room').value = meta.room || '';
+    document.getElementById('ds-tags').value = Array.isArray(meta.tags) ? meta.tags.join(', ') : (meta.tags || '');
+    document.getElementById('ds-notes').value = meta.notes || '';
+    document.getElementById('ds-known').checked = meta.known !== false;
+
+    const blocked = !!dev.blocked;
+    document.getElementById('ds-actions').innerHTML = `
+        <button class="btn ${blocked ? 'btn-success' : 'btn-danger'}" style="padding:6px 12px; font-size:0.8rem;" onclick="toggleBlockDevice('${mac}', ${!blocked})">
+            ${blocked ? '✅ Unblock Internet (DNS)' : '⛔ Block Internet (DNS)'}
+        </button>
+        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">⚡ Wake-on-LAN</button>
+        ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="pingDevice('${currentSheetIp}')">📡 Ping</button>` : ''}
+        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\\'")}', '${mac}', '${dev.ip || currentSheetIp}')">✏️ Edit DHCP Lease</button>
+    `;
+
+    const lat = dev.latency_ms ?? meta.latency_ms;
+    document.getElementById('ds-metrics').innerHTML = `
+        <div style="background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.7rem; color:var(--muted);">LATENCY / ESTIMATED OS</div>
+            <div style="font-weight:700; font-size:0.9rem; margin-top:2px;">${lat != null ? `${Number(lat).toFixed(1)} ms` : 'No response'} · ${escapeHtml(dev.os_guess || '—')}</div>
+        </div>
+        <div style="background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.7rem; color:var(--muted);">ONLINE PRESENCE (7 DAYS)</div>
+            <div style="font-weight:700; font-size:0.9rem; margin-top:2px; color:#86efac;">${data.online_pct_7d != null ? `${data.online_pct_7d}% of time` : 'Collecting...'}</div>
+        </div>
+        <div style="background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.7rem; color:var(--muted);">FIRST SEEN</div>
+            <div style="font-weight:700; font-size:0.85rem; margin-top:2px;">${meta.first_seen ? new Date(meta.first_seen).toLocaleString() : '—'}</div>
+        </div>
+        <div style="background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.7rem; color:var(--muted);">MAC TYPE</div>
+            <div style="font-weight:700; font-size:0.85rem; margin-top:2px;">${dev.random_mac ? '<span style="color:#fcd34d;">🎲 Randomized / Private</span>' : '🏭 Hardware OUI (Fixed)'}</div>
+        </div>
+    `;
+
+    const dns = data.dns;
+    if (data.dns_error) {
+        document.getElementById('ds-dns').innerHTML = `<div style="color:var(--muted);">${escapeHtml(data.dns_error)}</div>`;
+    } else if (!dns || !dns.total) {
+        document.getElementById('ds-dns').innerHTML = `<div style="color:var(--muted);">No recent queries in current log for <code>${currentSheetIp}</code>.</div>`;
+    } else {
+        const bPct = dns.total ? Math.round((dns.blocked_total / dns.total) * 100) : 0;
+        document.getElementById('ds-dns').innerHTML = `
+            <div style="margin-bottom:6px; color:#cbd5e1;">Analyzed: <strong>${dns.total}</strong> · Blocked: <strong style="color:#f87171;">${dns.blocked_total} (${bPct}%)</strong></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <div>
+                    <div style="font-size:0.72rem; color:#38bdf8; font-weight:700;">TOP DOMAINS</div>
+                    ${(dns.top_domains || []).map(([dom, cnt]) => `<div style="display:flex; justify-content:space-between; gap:4px;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(dom)}</span><code>${cnt}</code></div>`).join('')}
+                </div>
+                <div>
+                    <div style="font-size:0.72rem; color:#f87171; font-weight:700;">TOP BLOCKED</div>
+                    ${(dns.top_blocked || []).length ? dns.top_blocked.map(([dom, cnt]) => `<div style="display:flex; justify-content:space-between; gap:4px;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(dom)}</span><code>${cnt}</code></div>`).join('') : '<div style="color:var(--muted);">None</div>'}
+                </div>
+            </div>
+        `;
+    }
+
+    const evs = data.events || [];
+    document.getElementById('ds-events').innerHTML = evs.length
+        ? evs.map(e => `<div>• <strong>${new Date(e.time || e.ts * 1000).toLocaleString()}</strong> — ${e.event === 'online' ? '🟢 Connected' : (e.event === 'offline' ? '⚪ Disconnected' : '🆕 Discovered')} (${e.ip || '—'})</div>`).join('')
+        : '<div>No events recorded yet.</div>';
+}
+
+function closeDeviceSheet() {
+    document.getElementById('device-sheet-overlay').style.display = 'none';
+    if (portScanTimer) { clearInterval(portScanTimer); portScanTimer = null; }
+}
+
+async function saveDeviceMeta() {
+    const tagsArr = document.getElementById('ds-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const body = {
+        room: document.getElementById('ds-room').value.trim(),
+        tags: tagsArr,
+        notes: document.getElementById('ds-notes').value.trim(),
+        known: document.getElementById('ds-known').checked
+    };
+    const res = await fetch(`/api/device/${encodeURIComponent(currentSheetMac)}/meta`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    showMessage(data.message);
+    loadState();
+}
+
+async function toggleBlockDevice(mac, block) {
+    const dev = allDevices.find(d => d.mac === mac) || {};
+    const ip = currentSheetIp || (dev.live_ips && dev.live_ips[0]) || dev.ip || '';
+    const res = await fetch('/api/device/block', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mac, ip, block })
+    });
+    const data = await res.json();
+    showMessage(data.message);
+    await loadState();
+    openDeviceSheet(mac, ip);
+}
+
+async function sendWol(mac) {
+    const res = await fetch('/api/wol', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mac })
+    });
+    const data = await res.json();
+    showMessage(data.message);
+}
+
+async function startPortScan(mode) {
+    if (!currentSheetIp) return showMessage('Device has no known IP address to scan.');
+    const box = document.getElementById('ds-portscan');
+    box.innerHTML = '⏳ Starting TCP port scan...';
+    const res = await fetch('/api/portscan', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ip: currentSheetIp, mode })
+    });
+    const data = await res.json();
+    if (data.status !== 'success') {
+        box.innerHTML = `<span style="color:#f87171;">${escapeHtml(data.message)}</span>`;
+        return;
+    }
+    const jobId = data.job_id;
+    if (portScanTimer) clearInterval(portScanTimer);
+    portScanTimer = setInterval(async () => {
+        const r = await fetch(`/api/portscan/${jobId}`);
+        const j = await r.json();
+        const pct = j.total ? Math.round((j.done / j.total) * 100) : 0;
+        const openHtml = (j.open || []).map(o => `<span class="badge badge-static" style="margin-right:6px; margin-top:4px;" title="${escapeHtml(o.banner || '')}">🟢 :${o.port} ${o.service ? `(${escapeHtml(o.service)})` : ''}</span>`).join('') || '<span style="color:var(--muted);">No open ports detected so far</span>';
+        box.innerHTML = `
+            <div>${!j.finished ? `⏳ Scanning <code>${j.ip}</code>: ${j.done}/${j.total} (${pct}%)...` : `✅ Scan finished on <code>${j.ip}</code> (${j.total} ports checked in ${j.elapsed || 0}s):`}</div>
+            <div style="margin-top:6px;">${openHtml}</div>
+        `;
+        if (j.finished) {
+            clearInterval(portScanTimer);
+            portScanTimer = null;
+        }
+    }, 800);
+}
+
+// --- ALERTS & EVENTS ---
+async function openAlertsModal() {
+    document.getElementById('alerts-overlay').style.display = 'flex';
+    const [cfgRes, evRes] = await Promise.all([fetch('/api/alerts/config'), fetch('/api/events')]);
+    const cfgWrap = await cfgRes.json();
+    const cfg = cfgWrap.alerts || cfgWrap;
+    const evData = await evRes.json();
+
+    document.getElementById('al-enabled').checked = !!cfg.enabled;
+    document.getElementById('al-ntfy').value = cfg.ntfy_url || '';
+    document.getElementById('al-tg-token').value = cfg.telegram_token || '';
+    document.getElementById('al-tg-chat').value = cfg.telegram_chat_id || '';
+    document.getElementById('al-webhook').value = cfg.webhook_url || '';
+    document.getElementById('al-new-dev').checked = cfg.notify_new_device !== false;
+    document.getElementById('al-svc-down').checked = cfg.notify_service_down !== false;
+    document.getElementById('al-svc-up').checked = cfg.notify_service_up !== false;
+    document.getElementById('al-watched').checked = cfg.notify_watched_offline !== false;
+    document.getElementById('al-watched-macs').value = (cfg.watched_macs || []).join(', ');
+
+    const list = document.getElementById('al-events-list');
+    const evs = evData.events || [];
+    list.innerHTML = evs.length
+        ? evs.map(e => `<div style="padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);"><strong>${new Date(e.time || e.ts * 1000).toLocaleString()}</strong> · <span style="color:#38bdf8;">${escapeHtml(e.title)}</span> — ${escapeHtml(e.detail)}</div>`).join('')
+        : '<div>No events logged yet.</div>';
+}
+
+async function saveAlertsConfig() {
+    const body = {
+        enabled: document.getElementById('al-enabled').checked,
+        ntfy_url: document.getElementById('al-ntfy').value.trim(),
+        telegram_token: document.getElementById('al-tg-token').value.trim(),
+        telegram_chat_id: document.getElementById('al-tg-chat').value.trim(),
+        webhook_url: document.getElementById('al-webhook').value.trim(),
+        notify_new_device: document.getElementById('al-new-dev').checked,
+        notify_service_down: document.getElementById('al-svc-down').checked,
+        notify_service_up: document.getElementById('al-svc-up').checked,
+        notify_watched_offline: document.getElementById('al-watched').checked,
+        watched_macs: document.getElementById('al-watched-macs').value.split(',').map(s => s.trim()).filter(Boolean)
+    };
+    const res = await fetch('/api/alerts/config', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    showMessage(data.message);
+}
+
+async function testAlerts() {
+    await saveAlertsConfig();
+    const res = await fetch('/api/alerts/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
+    const data = await res.json();
+    showMessage(data.message);
+}
+
+// --- EXPORT / IMPORT CONFIGURATION & CSV ---
+let pendingBackupData = null;
+
+function openBackupModal() {
+    pendingBackupData = null;
+    document.getElementById('bk-file').value = '';
+    document.getElementById('bk-preview-box').style.display = 'none';
+    document.getElementById('backup-overlay').style.display = 'flex';
+}
+
+function exportBackupJson() {
+    const inc = document.getElementById('bk-inc-secrets').checked ? '1' : '0';
+    window.location.href = `/api/backup/export?secrets=${inc}`;
+}
+
+function exportDevicesCsv() {
+    const headers = ['Hostname', 'MAC', 'AdGuard_IP', 'Active_IP', 'Status', 'DHCP_Type', 'Medium', 'Router_Node', 'Vendor', 'Class', 'Latency_ms', 'Estimated_OS', 'Room', 'Tags', 'Notes'];
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = allDevices.map(d => [
+        d.hostname, d.mac, d.ip, (d.live_ips || []).join(' '), (d.live_ips && d.live_ips.length) ? 'Online' : 'Offline',
+        d.static ? 'Static' : 'Dynamic', d.conn_medium, d.router_node,
+        d.dev_vendor, d.dev_class, d.latency_ms ?? '', d.os_guess ?? '',
+        d.room ?? '', (d.tags || []).join(';'), d.notes ?? ''
+    ].map(esc).join(','));
+    const csv = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `network-devices-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+}
+
+async function previewBackupFile(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+        const text = await file.text();
+        pendingBackupData = JSON.parse(text);
+        const res = await fetch('/api/backup/preview', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(pendingBackupData)
+        });
+        const resp = await res.json();
+        if (resp.status !== 'success') {
+            showMessage(resp.message || 'Invalid backup');
+            return;
+        }
+        const d = resp.diff;
+        const box = document.getElementById('bk-preview-box');
+        box.style.display = 'block';
+        box.innerHTML = `
+            <div style="margin-bottom:8px; color:#86efac; font-weight:700;">✅ Valid backup file (exported: ${d.exported_at || '—'}) — Diff Summary:</div>
+            <ul style="margin:0 0 10px 18px; color:#cbd5e1;">
+                <li>Static leases: <strong>${d.leases.add.length} new</strong>, <strong>${d.leases.change.length} modified</strong>, ${d.leases.same.length} unchanged${d.leases.conflict.length ? `, <span style="color:#f87171;">${d.leases.conflict.length} conflicting</span>` : ''}</li>
+                <li>Routers in backup: <strong>${(d.routers.backup || []).length}</strong> (${d.routers.new} new)</li>
+                <li>Custom service names: <strong>${d.names.total}</strong> (${d.names.changed} changes)</li>
+                <li>Device sheets / notes: <strong>${d.meta.total}</strong></li>
+            </ul>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+                <label><input type="checkbox" id="bk-ap-cfg" checked> Restore Routers & service names</label>
+                <label><input type="checkbox" id="bk-ap-meta" checked> Restore device notes/rooms/tags</label>
+                <label><input type="checkbox" id="bk-ap-leases" checked> Apply static DHCP leases in AdGuard</label>
+            </div>
+            <button class="btn btn-success" onclick="applyBackupNow()">🚀 Apply Restore Now</button>
+        `;
+    } catch (e) {
+        showMessage('Failed to read backup JSON file.');
+    }
+}
+
+async function applyBackupNow() {
+    if (!pendingBackupData) return;
+    const cfgOn = document.getElementById('bk-ap-cfg').checked;
+    const body = {
+        backup: pendingBackupData,
+        options: {
+            config: cfgOn,
+            names: cfgOn,
+            alerts: cfgOn,
+            meta: document.getElementById('bk-ap-meta').checked,
+            leases: document.getElementById('bk-ap-leases').checked,
+            leases_mode: 'merge'
+        }
+    };
+    const res = await fetch('/api/backup/apply', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    document.getElementById('backup-overlay').style.display = 'none';
+    showMessage(data.message);
+    loadConfig();
     loadState();
 }
 

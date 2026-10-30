@@ -1,4 +1,8 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
+from datetime import timedelta
+import extras
 import subprocess
 import threading
 import concurrent.futures
@@ -818,6 +822,13 @@ def load_config():
     return cfg
 
 
+def save_config_raw(cfg):
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, indent=2)
+    _HALO_CACHE["timestamp"] = 0.0
+    return cfg
+
+
 def save_config(new_cfg):
     cfg = load_config()
     for k in ('leases_path', 'yaml_path', 'docker_container', 'adguard_url', 'adguard_user', 'adguard_pass'):
@@ -827,10 +838,7 @@ def save_config(new_cfg):
         cfg['custom_service_names'] = new_cfg['custom_service_names']
     if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
         cfg['routers'] = new_cfg['routers']
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-        json.dump(cfg, f, indent=2)
-    _HALO_CACHE["timestamp"] = 0.0
-    return cfg
+    return save_config_raw(cfg)
 
 
 def run_sudo(cmd_list):
@@ -1026,7 +1034,208 @@ def ip_sort_key(ip_str):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', auth_user=session.get('user', ''))
+
+
+# ==========================================================================
+#  AUTHENTICATION (login, "keep me signed in", password change, revocation)
+# ==========================================================================
+AUTH_PATH = os.environ.get('DHCP_PANEL_AUTH_PATH') or os.path.join(os.path.dirname(CONFIG_PATH), 'auth.json')
+_AUTH_LOCK = threading.Lock()
+_LOGIN_ATTEMPTS = {}  # {ip: [failed attempt timestamps]}
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SEC = 300
+REMEMBER_DAYS = 365
+
+
+def load_auth():
+    data = {}
+    if os.path.exists(AUTH_PATH):
+        try:
+            with open(AUTH_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f) or {}
+        except Exception:
+            data = {}
+    changed = False
+    if not data.get('secret_key'):
+        data['secret_key'] = secrets.token_hex(32)
+        changed = True
+    if 'session_version' not in data:
+        data['session_version'] = 1
+        changed = True
+    if changed:
+        save_auth(data)
+    return data
+
+
+def save_auth(data):
+    with _AUTH_LOCK:
+        tmp = AUTH_PATH + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, AUTH_PATH)
+        try:
+            os.chmod(AUTH_PATH, 0o600)
+        except Exception:
+            pass
+
+
+_AUTH_BOOT = load_auth()
+app.secret_key = _AUTH_BOOT['secret_key']
+app.config.update(
+    SESSION_COOKIE_NAME='dhcp_panel_session',
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=REMEMBER_DAYS),
+)
+
+
+def auth_configured():
+    a = load_auth()
+    return bool(a.get('username') and a.get('password_hash'))
+
+
+def is_logged_in():
+    if not session.get('user'):
+        return False
+    a = load_auth()
+    return session.get('user') == a.get('username') and session.get('sv') == a.get('session_version')
+
+
+def _client_ip():
+    return request.remote_addr or 'unknown'
+
+
+def _too_many_attempts(ip):
+    now = time.time()
+    for k in list(_LOGIN_ATTEMPTS.keys()):
+        _LOGIN_ATTEMPTS[k] = [t for t in _LOGIN_ATTEMPTS[k] if now - t < LOGIN_WINDOW_SEC]
+        if not _LOGIN_ATTEMPTS[k]:
+            _LOGIN_ATTEMPTS.pop(k, None)
+    total = sum(len(v) for v in _LOGIN_ATTEMPTS.values())
+    return len(_LOGIN_ATTEMPTS.get(ip, [])) >= LOGIN_MAX_ATTEMPTS or total >= LOGIN_MAX_ATTEMPTS * 6
+
+
+PUBLIC_ENDPOINTS = {'login', 'logout', 'setup', 'favicon', 'static'}
+
+
+@app.before_request
+def require_login():
+    if request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+    if not auth_configured():
+        if request.path.startswith('/api/'):
+            return jsonify({'status': 'error', 'auth_required': True, 'message': 'Create an admin user first.'}), 401
+        return redirect(url_for('setup'))
+    if is_logged_in():
+        return None
+    if request.path.startswith('/api/'):
+        return jsonify({'status': 'error', 'auth_required': True, 'message': 'Session expired. Please sign in again.'}), 401
+    return redirect(url_for('login', next=request.path))
+
+
+def _start_session(username, remember):
+    a = load_auth()
+    session.clear()
+    session['user'] = username
+    session['sv'] = a.get('session_version', 1)
+    session.permanent = bool(remember)
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if auth_configured():
+        return redirect(url_for('login'))
+    error = ''
+    if request.method == 'POST':
+        user = (request.form.get('username') or '').strip()
+        pw = request.form.get('password') or ''
+        pw2 = request.form.get('password2') or ''
+        if len(user) < 3:
+            error = 'Username must be at least 3 characters.'
+        elif len(pw) < 6:
+            error = 'Password must be at least 6 characters.'
+        elif pw != pw2:
+            error = 'Passwords do not match.'
+        else:
+            a = load_auth()
+            a['username'] = user
+            a['password_hash'] = generate_password_hash(pw)
+            save_auth(a)
+            _start_session(user, request.form.get('remember') == 'on')
+            return redirect(url_for('index'))
+    return render_template('login.html', mode='setup', error=error)
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not auth_configured():
+        return redirect(url_for('setup'))
+    if is_logged_in():
+        return redirect(url_for('index'))
+    error = ''
+    ip = _client_ip()
+    if request.method == 'POST':
+        if _too_many_attempts(ip):
+            error = f'Too many failed attempts. Please wait {LOGIN_WINDOW_SEC // 60} minutes.'
+        else:
+            user = (request.form.get('username') or '').strip()
+            pw = request.form.get('password') or ''
+            a = load_auth()
+            if user == a.get('username') and check_password_hash(a.get('password_hash', ''), pw):
+                _LOGIN_ATTEMPTS.pop(ip, None)
+                _start_session(user, request.form.get('remember') == 'on')
+                nxt = request.args.get('next') or '/'
+                if not nxt.startswith('/') or nxt.startswith('//'):
+                    nxt = '/'
+                return redirect(nxt)
+            _LOGIN_ATTEMPTS.setdefault(ip, []).append(time.time())
+            left = LOGIN_MAX_ATTEMPTS - len(_LOGIN_ATTEMPTS[ip])
+            error = 'Invalid username or password.' + (f' {left} attempt(s) remaining.' if left > 0 else '')
+    return render_template('login.html', mode='login', error=error)
+
+
+@app.route('/logout', methods=['GET', 'POST'])
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+def api_change_password():
+    req = request.json or {}
+    current = req.get('current') or ''
+    new_pw = req.get('new') or ''
+    new_user = (req.get('username') or '').strip()
+    a = load_auth()
+    if not check_password_hash(a.get('password_hash', ''), current):
+        return jsonify({'status': 'error', 'message': 'Current password is incorrect.'})
+    if new_user and len(new_user) < 3:
+        return jsonify({'status': 'error', 'message': 'Username must be at least 3 characters.'})
+    if new_pw and len(new_pw) < 6:
+        return jsonify({'status': 'error', 'message': 'New password must be at least 6 characters.'})
+    if new_user:
+        a['username'] = new_user
+    if new_pw:
+        a['password_hash'] = generate_password_hash(new_pw)
+    a['session_version'] = int(a.get('session_version', 1)) + 1
+    save_auth(a)
+    _start_session(a['username'], session.permanent)
+    return jsonify({'status': 'success', 'message': 'Credentials updated. All other open sessions have been signed out.'})
+
+
+@app.route('/api/auth/logout-all', methods=['POST'])
+def api_logout_all():
+    a = load_auth()
+    a['session_version'] = int(a.get('session_version', 1)) + 1
+    save_auth(a)
+    _start_session(a['username'], session.permanent)
+    return jsonify({'status': 'success', 'message': 'All other sessions on other devices have been signed out.'})
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def api_auth_me():
+    return jsonify({'status': 'success', 'user': session.get('user'), 'remember': bool(session.permanent)})
 
 
 @app.route('/favicon.svg')
@@ -1309,8 +1518,7 @@ def api_discover_routers():
     })
 
 
-@app.route('/api/state', methods=['GET'])
-def api_state():
+def build_state(force_refresh=False):
     cfg = load_config()
     routers = cfg.get('routers', [])
     data = read_leases()
@@ -1603,7 +1811,6 @@ def api_state():
                 active_ips.add(x.strip())
 
     now = time.time()
-    force_refresh = bool(request.args.get('refresh') or request.args.get('force'))
     if force_refresh:
         _SERVICE_SCAN_CACHE.clear()
 
@@ -1684,7 +1891,7 @@ def api_state():
             'icon': '🔀'
         })
 
-    return jsonify({
+    return {
         'status': 'success',
         'lease_duration': get_lease_duration(),
         'ghost_count': ghost_count,
@@ -1692,7 +1899,15 @@ def api_state():
         'devices': devices,
         'network_links': global_network_links,
         'custom_service_names': custom_names
-    })
+    }
+
+
+@app.route('/api/state', methods=['GET'])
+def api_state():
+    force_refresh = bool(request.args.get('refresh') or request.args.get('force'))
+    state = build_state(force_refresh=force_refresh)
+    extras.enrich_state(state)
+    return jsonify(state)
 
 
 @app.route('/api/services/rename', methods=['POST'])
@@ -1910,5 +2125,19 @@ def api_set_duration():
     })
 
 
+extras.init_app(app, {
+    'CONFIG_PATH': CONFIG_PATH,
+    'YAML_PATH': DEFAULT_CONFIG['yaml_path'],
+    'load_config': load_config,
+    'save_config_raw': save_config_raw,
+    'build_state': build_state,
+    'is_locally_administered_mac': is_locally_administered_mac,
+    'run_sudo': run_sudo,
+    'get_arp_table': get_arp_table,
+    'read_leases': read_leases,
+    'write_leases': write_leases,
+})
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=int(os.environ.get('DHCP_PANEL_PORT', '5001')))

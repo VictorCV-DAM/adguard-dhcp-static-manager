@@ -1,5 +1,11 @@
 config.json
+auth.json
+alerts.json
+service_names.json
+panel_history.db
+panel_history.db-*
 __pycache__/
 *.py[cod]
 .env
 *.bak
+
