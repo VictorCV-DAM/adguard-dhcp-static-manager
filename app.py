@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify, Response
 import subprocess
 import threading
 import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+import socket
 import random
 import hashlib
 import json
@@ -595,48 +597,145 @@ def is_wireless_only_device(dev_class, dev_cat, hostname, mac):
     return False
 
 
-def get_device_web_links(ip, hostname, dev_class, dev_cat, routers=None, halo_node_info=None):
-    """Returns management web URLs for core network devices or servers."""
-    links = []
+_SERVICE_SCAN_CACHE = {}  # {ip: (timestamp, set(open_ports))}
+
+COMMON_PORT_SPECS = [80, 81, 443, 3000, 5000, 5001, 8000, 8006, 8080, 8081, 8123, 8443, 8888, 9000, 9443]
+
+def scan_device_web_ports(ip, timeout=0.18):
+    """Quickly scans common web ports on a host."""
     ip = (ip or '').strip()
+    if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip:
+        return set()
+    open_ports = set()
+    def _test(port):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(timeout)
+            res = s.connect_ex((ip, port))
+            s.close()
+            return port if res == 0 else None
+        except Exception:
+            return None
+    with ThreadPoolExecutor(max_workers=min(15, len(COMMON_PORT_SPECS))) as ex:
+        for p in ex.map(_test, COMMON_PORT_SPECS):
+            if p:
+                open_ports.add(p)
+    return open_ports
+
+
+def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True):
+    """Returns management web URLs for any network device or server with web services."""
+    ip = (ip or '').strip()
+    if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip:
+        return []
+
     h_lower = (hostname or '').lower()
     c_lower = (dev_class or '').lower()
     routers = routers or []
     halo_node_info = halo_node_info or {}
 
+    is_router_cfg = False
+    router_name = ""
+    for r in routers:
+        r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
+        if ip in r_ips:
+            is_router_cfg = True
+            router_name = r.get('name') or 'Router'
+            break
+
+    is_router = (ip in ('192.168.1.1', '192.168.0.1') or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
+
+    now = time.time()
+    cached = _SERVICE_SCAN_CACHE.get(ip)
+    if cached and (now - cached[0]) < 120:
+        open_ports = cached[1]
+    elif is_active:
+        open_ports = scan_device_web_ports(ip)
+        _SERVICE_SCAN_CACHE[ip] = (now, open_ports)
+    else:
+        open_ports = set()
+
+    links = []
+    seen_urls = set()
+
+    def add_link(label, url):
+        if url not in seen_urls:
+            seen_urls.add(url)
+            links.append({'label': label, 'url': url})
+
+    # 1. Known identities with custom friendly labels
     if ip in ('192.168.1.1', '192.168.0.1'):
-        links.append({'label': 'Gateway Router (HTTP)', 'url': f'http://{ip}'})
-        links.append({'label': 'Gateway Router (HTTPS)', 'url': f'https://{ip}'})
+        add_link('Gateway Router (HTTP)', f'http://{ip}')
+        add_link('Gateway Router (HTTPS)', f'https://{ip}')
     elif ip == '192.168.1.9' or 'em4590' in h_lower:
-        links.append({'label': 'Wi-Fi Repeater EM4590', 'url': f'http://{ip}'})
-        links.append({'label': 'Repeater EM4590 (HTTPS)', 'url': f'https://{ip}'})
+        add_link('Wi-Fi Repeater EM4590', f'http://{ip}')
+        add_link('Repeater EM4590 (HTTPS)', f'https://{ip}')
     elif ip in ('192.168.1.10', '192.168.0.2') or 'wr841n' in h_lower:
-        links.append({'label': 'TP-Link WR841N Web', 'url': f'http://{ip}'})
+        add_link('TP-Link WR841N Web', f'http://{ip}')
     elif ip in halo_node_info or 'mercusys-halo' in h_lower:
         lbl = halo_node_info.get(ip, {}).get('label', f'Halo Node ({ip})')
-        links.append({'label': f'{lbl} Web', 'url': f'http://{ip}'})
-        links.append({'label': 'Halo Web (HTTPS)', 'url': f'https://{ip}'})
-    elif ip == '192.168.1.249':
-        links.append({'label': 'AdGuard Home (:8080)', 'url': f'http://{ip}:8080'})
-        links.append({'label': 'DHCP Panel (:5001)', 'url': f'http://{ip}:5001'})
-        links.append({'label': 'Wi-Fi Panel (:5000)', 'url': f'http://{ip}:5000'})
-    elif ip == '192.168.1.219' or 'ha-vm' in h_lower or 'homeassistant' in h_lower:
-        links.append({'label': 'Home Assistant (:8123)', 'url': f'http://{ip}:8123'})
-        links.append({'label': 'Nginx Proxy Manager (:81)', 'url': f'http://{ip}:81'})
-        links.append({'label': 'Web Proxy HTTPS (:443)', 'url': f'https://{ip}'})
-    else:
-        is_router_cfg = False
-        for r in routers:
-            r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
-            if ip in r_ips:
-                rname = r.get('name') or 'Router'
-                links.append({'label': f'{rname} (HTTP)', 'url': f'http://{ip}'})
-                links.append({'label': f'{rname} (HTTPS)', 'url': f'https://{ip}'})
-                is_router_cfg = True
-                break
-        if not is_router_cfg and (dev_cat in ('infra', 'server') or any(k in c_lower for k in ['router', 'repeater', 'access point', 'server', 'node'])):
-            links.append({'label': f'Web Management (HTTP)', 'url': f'http://{ip}'})
-            links.append({'label': f'Web Management (HTTPS)', 'url': f'https://{ip}'})
+        add_link(f'{lbl} Web', f'http://{ip}')
+        add_link('Halo Web (HTTPS)', f'https://{ip}')
+    elif is_router_cfg:
+        add_link(f'{router_name} (HTTP)', f'http://{ip}')
+        add_link(f'{router_name} (HTTPS)', f'https://{ip}')
+
+    if ip == '192.168.1.249':
+        add_link('AdGuard Home (:8080)', f'http://{ip}:8080')
+        add_link('DHCP Panel (:5001)', f'http://{ip}:5001')
+        add_link('Wi-Fi Panel (:5000)', f'http://{ip}:5000')
+
+    # 2. Dynamically discovered web services
+    for port in sorted(open_ports):
+        proto = "https" if port in (443, 8006, 8443, 9443) else "http"
+        port_suffix = f":{port}" if port not in (80, 443) else ""
+        url = f"{proto}://{ip}{port_suffix}"
+
+        if port == 80:
+            label = "Router / Web UI (HTTP)" if is_router else "Web HTTP (:80)"
+        elif port == 81:
+            label = "Nginx Proxy Manager (:81)"
+        elif port == 443:
+            if is_router:
+                label = "Router Secure Web (HTTPS)"
+            elif 81 in open_ports or 'ha-vm' in h_lower or 'vm' in c_lower or 'server' in c_lower:
+                label = "Web Proxy HTTPS (:443)"
+            else:
+                label = "Secure Web HTTPS (:443)"
+        elif port == 3000:
+            label = "Web App / Grafana (:3000)"
+        elif port == 5000:
+            label = "Wi-Fi Panel (:5000)" if ip == '192.168.1.249' else "Web App (:5000)"
+        elif port == 5001:
+            label = "DHCP Panel (:5001)" if ip == '192.168.1.249' else "Admin Panel (:5001)"
+        elif port == 8000:
+            label = "Web Service (:8000)"
+        elif port == 8006:
+            label = "Proxmox VE (:8006)"
+        elif port == 8080:
+            label = "AdGuard Home (:8080)" if ip == '192.168.1.249' else "Web Admin (:8080)"
+        elif port == 8081:
+            label = "Web Service (:8081)"
+        elif port == 8123:
+            label = "Home Assistant (:8123)"
+        elif port == 8443:
+            label = "Web Admin HTTPS (:8443)"
+        elif port == 8888:
+            label = "Jupyter / Web (:8888)"
+        elif port == 9000:
+            label = "Portainer (:9000)"
+        elif port == 9443:
+            label = "Portainer HTTPS (:9443)"
+        else:
+            label = f"Web Service (:{port})"
+
+        add_link(label, url)
+
+    # 3. Fallback for infrastructure/servers without detected open ports yet
+    if not links:
+        if is_router or dev_cat in ('infra', 'server') or any(k in c_lower for k in ['router', 'repeater', 'access point', 'server', 'node']):
+            add_link('Web Management (HTTP)', f'http://{ip}')
+            add_link('Web Management (HTTPS)', f'https://{ip}')
 
     return links
 
@@ -1437,13 +1536,49 @@ def api_state():
             'dev_vendor': 'Raspberry Pi Foundation',
             'dev_icon': '🍓',
             'dev_cat': 'server',
-            'web_links': [
-                {'label': 'AdGuard Home (:8080)', 'url': 'http://192.168.1.249:8080'},
-                {'label': 'DHCP Panel (:5001)', 'url': 'http://192.168.1.249:5001'},
-                {'label': 'Wi-Fi Panel (:5000)', 'url': 'http://192.168.1.249:5000'}
-            ]
+            'web_links': []
         })
         seen_ips.add('192.168.1.249')
+
+    # Fast parallel pre-scan of common web ports for all active devices
+    active_ips = set()
+    for d in devices:
+        if d.get('live_ips'):
+            active_ips.add(d['ip'])
+            for lip in d['live_ips']:
+                active_ips.add(lip)
+    active_ips.add('192.168.1.1')
+    active_ips.add('192.168.1.249')
+    for r in routers:
+        for x in (r.get('ip') or '').split(','):
+            if x.strip():
+                active_ips.add(x.strip())
+
+    now = time.time()
+    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 120)]
+    if ips_to_scan:
+        with ThreadPoolExecutor(max_workers=min(25, max(1, len(ips_to_scan) * 10))) as pool:
+            futures = {pool.submit(scan_device_web_ports, a_ip): a_ip for a_ip in ips_to_scan}
+            for f in futures:
+                a_ip = futures[f]
+                try:
+                    open_ports = f.result()
+                    _SERVICE_SCAN_CACHE[a_ip] = (now, open_ports)
+                except Exception:
+                    _SERVICE_SCAN_CACHE[a_ip] = (now, set())
+
+    # Update web_links for all devices with detected services
+    for d in devices:
+        is_active = bool(d.get('live_ips')) or d['ip'] in ('192.168.1.1', '192.168.1.249')
+        d['web_links'] = get_device_web_links(
+            d['ip'],
+            d.get('hostname', ''),
+            d.get('dev_class', ''),
+            d.get('dev_cat', ''),
+            routers,
+            halo_node_info,
+            is_active=is_active
+        )
 
     devices.sort(key=lambda d: (not d['static'], ip_sort_key(d['ip'])))
 
