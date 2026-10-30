@@ -96,6 +96,7 @@
             background: var(--card);
             border-radius: 10px;
             border: 1px solid var(--border);
+            min-height: 520px;
         }
         table {
             width: 100%;
@@ -1011,9 +1012,12 @@ function toggleRowWebMenu(ev, ipSafe) {
             tr.style.zIndex = '9999';
             tr.style.position = 'relative';
         }
-        // Auto-reposition upwards if too close to bottom
+        // Auto-reposition upwards if too close to bottom of container or window
         const rect = m.getBoundingClientRect();
-        if (rect.bottom > (window.innerHeight - 30)) {
+        const wrap = m.closest('.table-wrap');
+        const wrapBottom = wrap ? wrap.getBoundingClientRect().bottom - 12 : (window.innerHeight - 30);
+        const limitBottom = Math.min(window.innerHeight - 30, wrapBottom);
+        if (rect.bottom > limitBottom) {
             m.style.top = 'auto';
             m.style.bottom = 'calc(100% + 4px)';
         } else {
@@ -1249,6 +1253,11 @@ function renderTable() {
 
     const tbody = document.getElementById('tbody');
     tbody.innerHTML = '';
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" style="text-align:center; padding:80px 20px; color:var(--muted); font-size:0.95rem;">No devices found matching current filters</td></tr>`;
+        return;
+    }
 
     for (const d of filtered) {
         const tr = document.createElement('tr');
