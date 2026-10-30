@@ -339,6 +339,200 @@
             background: #334155 !important;
             color: #38bdf8 !important;
         }
+
+        /* Main Tabs */
+        .tab-nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 10px 18px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -6px;
+        }
+        .tab-nav-btn:hover {
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .tab-nav-btn.active {
+            color: #38bdf8;
+            border-bottom-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .tab-badge {
+            background: #334155;
+            color: #f1f5f9;
+            font-size: 0.72rem;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-weight: 700;
+        }
+        .tab-badge-services {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+        }
+
+        /* Services Cards Grid */
+        .services-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 18px;
+            margin-top: 16px;
+            min-height: 400px;
+        }
+        .service-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .service-card:hover {
+            transform: translateY(-2px);
+            border-color: #38bdf8;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+        }
+        .service-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .service-icon-box {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.45rem;
+            flex-shrink: 0;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.25);
+        }
+        .service-tag {
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 2px 7px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.07);
+            color: #94a3b8;
+        }
+        .service-title {
+            margin: 4px 0 0 0;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1.25;
+        }
+        .service-card-desc {
+            font-size: 0.76rem;
+            color: var(--muted);
+            margin: 4px 0 10px 0;
+            line-height: 1.35;
+        }
+        .service-card-body {
+            background: rgba(15, 23, 42, 0.55);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .service-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            margin-bottom: 6px;
+        }
+        .service-info-row:last-child {
+            margin-bottom: 0;
+        }
+        .service-info-label {
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .service-info-val {
+            color: #e2e8f0;
+            font-weight: 600;
+            text-align: right;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 190px;
+        }
+        .service-ip-port {
+            font-family: monospace;
+            font-size: 0.8rem;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #38bdf8;
+            font-weight: 600;
+        }
+        .service-card-footer {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .service-open-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(2, 132, 199, 0.25));
+            border: 1px solid #38bdf8;
+            color: #38bdf8;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.16s ease;
+        }
+        .service-open-btn:hover {
+            background: #38bdf8;
+            color: #0f172a;
+            box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4);
+        }
+
+        /* Pulsing Status Light */
+        .status-indicator-live {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #34d399;
+            letter-spacing: 0.04em;
+        }
+        .status-dot-pulse {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #10b981;
+            box-shadow: 0 0 8px #10b981;
+            animation: pulseGlow 1.8s infinite;
+        }
     </style>
 </head>
 <body>
@@ -442,6 +636,18 @@
         </div>
     </div>
 
+    <!-- MAIN TABS NAVIGATION -->
+    <div class="main-tabs-bar" style="display:flex; gap:12px; margin: 20px 0 16px 0; border-bottom: 2px solid var(--border); padding-bottom: 4px;">
+        <button id="tab-btn-devices" class="tab-nav-btn active" onclick="switchMainTab('devices')">
+            📋 Network Devices <span id="tab-badge-devices" class="tab-badge">0</span>
+        </button>
+        <button id="tab-btn-services" class="tab-nav-btn" onclick="switchMainTab('services')">
+            🌐 Web Services & Apps <span id="tab-badge-services" class="tab-badge tab-badge-services">0</span>
+        </button>
+    </div>
+
+    <!-- TAB 1: DEVICES VIEW -->
+    <div id="view-devices">
     <div class="grid">
         <div class="card">
             <h3>Assign / Change Static IP</h3>
@@ -534,6 +740,37 @@
             <tbody id="tbody"></tbody>
         </table>
     </div>
+    </div> <!-- END view-devices -->
+
+    <!-- TAB 2: SERVICES CARDS VIEW -->
+    <div id="view-services" style="display:none;">
+        <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+            <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
+                <input type="text" id="search-services" class="search-bar" style="flex:1; min-width:280px;" placeholder="Search services by name, host, IP, or port..." oninput="renderServicesCards()">
+                <div style="display:inline-flex; align-items:center; gap:8px;">
+                    <button class="btn btn-outline" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="manualRefresh()" title="Refresh immediately">
+                        <span class="refresh-icon-copy" style="font-size:0.95rem;">🔄</span>
+                        <span>Refresh</span>
+                    </button>
+                    <span id="services-summary-badge" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">0 active services</span>
+                </div>
+            </div>
+            <div class="filter-pills" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Category:</span>
+                <div class="filter-group">
+                    <button class="pill-btn active" data-svc-cat="all" onclick="setServiceCategoryFilter('all')">All <span id="svc-count-all" class="pill-count">0</span></button>
+                    <button class="pill-btn" data-svc-cat="domotica" onclick="setServiceCategoryFilter('domotica')">🏠 Smart Home <span id="svc-count-domotica" class="pill-count">0</span></button>
+                    <button class="pill-btn" data-svc-cat="multimedia" onclick="setServiceCategoryFilter('multimedia')">🎬 Media <span id="svc-count-multimedia" class="pill-count">0</span></button>
+                    <button class="pill-btn" data-svc-cat="red" onclick="setServiceCategoryFilter('red')">🌐 Network & Routers <span id="svc-count-red" class="pill-count">0</span></button>
+                    <button class="pill-btn" data-svc-cat="infra" onclick="setServiceCategoryFilter('infra')">⚡ Servers / Infra <span id="svc-count-infra" class="pill-count">0</span></button>
+                </div>
+            </div>
+        </div>
+
+        <div id="services-cards-container" class="services-cards-grid">
+            <!-- Dynamically generated service cards -->
+        </div>
+    </div> <!-- END view-services -->
 </div>
 
 <script>
@@ -541,6 +778,28 @@ let allDevices = [];
 let routersConfig = [];
 let sortState = { colId: 'ip', asc: true };
 let dragSrcColId = null;
+let currentMainTab = 'devices';
+let serviceCategoryFilter = 'all';
+
+function switchMainTab(tab) {
+    currentMainTab = tab;
+    document.getElementById('tab-btn-devices').classList.toggle('active', tab === 'devices');
+    document.getElementById('tab-btn-services').classList.toggle('active', tab === 'services');
+    document.getElementById('view-devices').style.display = tab === 'devices' ? 'block' : 'none';
+    document.getElementById('view-services').style.display = tab === 'services' ? 'block' : 'none';
+    if (tab === 'services') {
+        renderServicesCards();
+    }
+}
+
+function setServiceCategoryFilter(cat) {
+    serviceCategoryFilter = cat;
+    document.querySelectorAll('[data-svc-cat]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.svcCat === cat);
+    });
+    renderServicesCards();
+}
+
 let tableFilters = {
     status: 'all',    // 'all', 'online', 'offline'
     medium: 'all',    // 'all', 'wifi', 'cable'
@@ -913,9 +1172,9 @@ async function loadState(isManual = false) {
     if (isRefreshing) return;
     isRefreshing = true;
 
-    const icon = document.getElementById('refresh-icon');
+    const icons = document.querySelectorAll('#refresh-icon, .refresh-icon-copy');
     const text = document.getElementById('refresh-text');
-    if (icon) icon.classList.add('spinning');
+    icons.forEach(ic => ic.classList.add('spinning'));
     if (isManual && text) text.textContent = 'Refreshing...';
 
     try {
@@ -933,6 +1192,8 @@ async function loadState(isManual = false) {
         allDevices = data.devices || [];
         renderGlobalNetworkMenu(data.network_links || []);
         renderTable();
+        renderServicesCards();
+        updateTabsCounts();
 
         lastRefreshTime = new Date();
         updateRefreshTimestamp();
@@ -947,9 +1208,216 @@ async function loadState(isManual = false) {
         }
     } finally {
         isRefreshing = false;
-        if (icon) icon.classList.remove('spinning');
+        icons.forEach(ic => ic.classList.remove('spinning'));
         if (text) text.textContent = 'Refresh';
     }
+}
+
+function updateTabsCounts() {
+    const totalDevs = allDevices.length;
+    let totalServicesCount = 0;
+    allDevices.forEach(d => {
+        if (d.web_links) totalServicesCount += d.web_links.length;
+    });
+    const badgeDevs = document.getElementById('tab-badge-devices');
+    if (badgeDevs) badgeDevs.textContent = totalDevs;
+    const badgeSvcs = document.getElementById('tab-badge-services');
+    if (badgeSvcs) badgeSvcs.textContent = totalServicesCount;
+}
+
+function getServiceMeta(label, port, hostname) {
+    const l = (label || '').toLowerCase();
+    const h = (hostname || '').toLowerCase();
+    const p = parseInt(port, 10);
+
+    if (l.includes('immich') || p === 2283) {
+        return { name: 'Immich', icon: '📸', tag: 'Photos & Gallery', bg: 'rgba(99, 102, 241, 0.2)', border: '#6366f1', cat: 'multimedia', desc: 'Self-hosted photo and video backup solution' };
+    }
+    if (l.includes('home assistant observer') || p === 4357) {
+        return { name: 'Home Assistant Observer', icon: '🩺', tag: 'HA Diagnostics', bg: 'rgba(6, 182, 212, 0.2)', border: '#06b6d4', cat: 'domotica', desc: 'Supervisor diagnostics and system recovery portal' };
+    }
+    if (l.includes('home assistant') || p === 8123) {
+        return { name: 'Home Assistant', icon: '🏠', tag: 'Smart Home & IoT', bg: 'rgba(56, 189, 248, 0.2)', border: '#38bdf8', cat: 'domotica', desc: 'Open-source central home automation platform' };
+    }
+    if (l.includes('nginx proxy manager') || p === 81) {
+        return { name: 'Nginx Proxy Manager', icon: '🔀', tag: 'Reverse Proxy', bg: 'rgba(245, 158, 11, 0.2)', border: '#f59e0b', cat: 'infra', desc: 'Web reverse proxy routing and SSL certificate manager' };
+    }
+    if (l.includes('npm test') || (p === 8082 && l.includes('default site'))) {
+        return { name: 'NPM Default Site', icon: '🌐', tag: 'Web Server', bg: 'rgba(100, 116, 139, 0.2)', border: '#64748b', cat: 'infra', desc: 'Nginx Proxy Manager default landing page' };
+    }
+    if (l.includes('plex') || p === 32400) {
+        return { name: 'Plex Media Server', icon: '🎬', tag: 'Media Streaming', bg: 'rgba(234, 179, 8, 0.2)', border: '#eab308', cat: 'multimedia', desc: 'Organize and stream movies, TV shows, and music' };
+    }
+    if (l.includes('jellyfin') || p === 8096) {
+        return { name: 'Jellyfin', icon: '🍿', tag: 'Media Streaming', bg: 'rgba(168, 85, 247, 0.2)', border: '#a855f7', cat: 'multimedia', desc: 'Free Software Media System' };
+    }
+    if (l.includes('adguard') || (p === 8080 && h.includes('pi-server'))) {
+        return { name: 'AdGuard Home', icon: '🛡️', tag: 'DNS & Security', bg: 'rgba(16, 185, 129, 0.2)', border: '#10b981', cat: 'red', desc: 'Network-wide ads & trackers blocking DNS/DHCP server' };
+    }
+    if (l.includes('dhcp panel') || p === 5001) {
+        return { name: 'Static DHCP Panel', icon: '📋', tag: 'Network Manager', bg: 'rgba(56, 189, 248, 0.2)', border: '#38bdf8', cat: 'red', desc: 'Manage static DHCP bindings and instant lease purging' };
+    }
+    if (l.includes('wi-fi panel') || p === 5000) {
+        return { name: 'Wi-Fi Panel', icon: '📶', tag: 'Wi-Fi Manager', bg: 'rgba(59, 130, 246, 0.2)', border: '#3b82f6', cat: 'red', desc: 'Monitor wireless network clients and signals' };
+    }
+    if (l.includes('webrtc') || l.includes('go2rtc') || p === 1984) {
+        return { name: 'go2rtc WebRTC', icon: '📹', tag: 'Camera Streaming', bg: 'rgba(236, 72, 153, 0.2)', border: '#ec4899', cat: 'multimedia', desc: 'Ultimate camera streaming server with low latency' };
+    }
+    if (l.includes('broadlink') || p === 8099) {
+        return { name: 'Broadlink Manager v2', icon: '📡', tag: 'RF/IR Remote Control', bg: 'rgba(139, 92, 246, 0.2)', border: '#8b5cf6', cat: 'domotica', desc: 'Smart RF and IR remote control signal hub' };
+    }
+    if (l.includes('ewelink') || p === 8325) {
+        return { name: 'eWeLink Smart Home', icon: '💡', tag: 'Sonoff Automation', bg: 'rgba(14, 165, 233, 0.2)', border: '#0ea5e9', cat: 'domotica', desc: 'Local bridge and controller for Sonoff / eWeLink devices' };
+    }
+    if (l.includes('quota monitor') || (p === 5050 && l.includes('quota'))) {
+        return { name: 'Quota Monitor', icon: '⚡', tag: 'Quota Monitor', bg: 'rgba(20, 184, 166, 0.2)', border: '#14b8a6', cat: 'infra', desc: 'Antigravity AI token and usage quotas monitor' };
+    }
+    if (l.includes('router') || l.includes('halo') || l.includes('repeater') || l.includes('wr841n') || p === 80 || p === 443) {
+        const isSecure = p === 443;
+        return { name: label.replace(/\s*\((?:HTTP|HTTPS)\)/i, ''), icon: '🌐', tag: 'Network Infrastructure', bg: 'rgba(2, 132, 199, 0.2)', border: '#0284c7', cat: 'red', desc: `Web administration UI (${isSecure ? 'HTTPS' : 'HTTP'})` };
+    }
+    if (l.includes('proxmox') || p === 8006) {
+        return { name: 'Proxmox VE', icon: '🖥️', tag: 'Virtualization', bg: 'rgba(249, 115, 22, 0.2)', border: '#f97316', cat: 'infra', desc: 'Virtualization management platform for VMs & containers' };
+    }
+    if (l.includes('portainer') || p === 9000 || p === 9443) {
+        return { name: 'Portainer', icon: '🐳', tag: 'Docker Containers', bg: 'rgba(2, 132, 199, 0.2)', border: '#0284c7', cat: 'infra', desc: 'Containerized application management environment' };
+    }
+    if (l.includes('vaultwarden') || l.includes('bitwarden')) {
+        return { name: 'Vaultwarden', icon: '🔐', tag: 'Passwords & Vault', bg: 'rgba(16, 185, 129, 0.2)', border: '#10b981', cat: 'infra', desc: 'Open source lightweight password manager' };
+    }
+    if (l.includes('syncthing') || p === 8384) {
+        return { name: 'Syncthing', icon: '🔄', tag: 'Synchronization', bg: 'rgba(6, 182, 212, 0.2)', border: '#06b6d4', cat: 'infra', desc: 'Continuous decentralized file synchronization' };
+    }
+    if (l.includes('uptime kuma') || p === 3001) {
+        return { name: 'Uptime Kuma', icon: '⏱️', tag: 'Monitoring', bg: 'rgba(34, 197, 94, 0.2)', border: '#22c55e', cat: 'infra', desc: 'Self-hosted monitoring and status tool' };
+    }
+    if (l.includes('grafana') || p === 3000) {
+        return { name: 'Grafana', icon: '📊', tag: 'Metrics & Dashboards', bg: 'rgba(249, 115, 22, 0.2)', border: '#f97316', cat: 'infra', desc: 'Operational observability and analytics platform' };
+    }
+    
+    return { name: label, icon: '🌐', tag: 'Web Service', bg: 'rgba(100, 116, 139, 0.2)', border: '#64748b', cat: 'infra', desc: `Service accessible on port ${port || ''}` };
+}
+
+function renderServicesCards() {
+    const container = document.getElementById('services-cards-container');
+    if (!container) return;
+
+    const q = (document.getElementById('search-services') ? document.getElementById('search-services').value : '').trim().toLowerCase();
+
+    // 1. Gather all services from all devices
+    let items = [];
+    allDevices.forEach(d => {
+        if (!d.web_links || d.web_links.length === 0) return;
+        d.web_links.forEach(l => {
+            const meta = getServiceMeta(l.label, l.port, d.hostname);
+            items.push({
+                service: l,
+                device: d,
+                meta: meta
+            });
+        });
+    });
+
+    // Counts per category
+    const totalServices = items.length;
+    const cntDomotica = items.filter(it => it.meta.cat === 'domotica').length;
+    const cntMultimedia = items.filter(it => it.meta.cat === 'multimedia').length;
+    const cntRed = items.filter(it => it.meta.cat === 'red').length;
+    const cntInfra = items.filter(it => it.meta.cat === 'infra').length;
+
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setEl('svc-count-all', totalServices);
+    setEl('svc-count-domotica', cntDomotica);
+    setEl('svc-count-multimedia', cntMultimedia);
+    setEl('svc-count-red', cntRed);
+    setEl('svc-count-infra', cntInfra);
+
+    // 2. Filter by category
+    let filtered = items;
+    if (serviceCategoryFilter !== 'all') {
+        filtered = filtered.filter(it => it.meta.cat === serviceCategoryFilter);
+    }
+
+    // 3. Filter by text query
+    if (q) {
+        filtered = filtered.filter(it => {
+            const text = `${it.meta.name} ${it.meta.tag} ${it.service.label} ${it.service.url} ${it.service.port || ''} ${it.device.hostname} ${it.device.ip} ${it.device.dev_class || ''}`.toLowerCase();
+            return text.includes(q);
+        });
+    }
+
+    // Update summary badge
+    const summary = document.getElementById('services-summary-badge');
+    if (summary) {
+        summary.textContent = `${filtered.length} of ${totalServices} active services`;
+    }
+
+    // 4. Render cards
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 70px 20px; color: var(--muted); background: var(--card); border-radius: 12px; border: 1px solid var(--border);">
+                <div style="font-size: 2.2rem; margin-bottom: 10px;">🔍</div>
+                <div style="font-size: 1.05rem; font-weight: 600; color: #f8fafc;">No web services found</div>
+                <div style="font-size: 0.85rem; margin-top: 4px;">Try changing the category filter or search query.</div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtered.map(it => {
+        const { service, device, meta } = it;
+        const cleanUrl = service.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+        return `
+            <div class="service-card" style="border-top: 3px solid ${meta.border};">
+                <div class="service-card-header">
+                    <div class="service-icon-box" style="background: ${meta.bg}; color: ${meta.border}; border: 1px solid ${meta.border};">
+                        ${meta.icon}
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span class="service-tag">${meta.tag}</span>
+                            <div class="status-indicator-live" title="Service verified and responding on local network">
+                                <span class="status-dot-pulse"></span>
+                                <span>ONLINE</span>
+                            </div>
+                        </div>
+                        <h4 class="service-title" title="${meta.name}">${meta.name}</h4>
+                    </div>
+                </div>
+
+                <div class="service-card-desc">
+                    ${meta.desc}
+                </div>
+
+                <div class="service-card-body">
+                    <div class="service-info-row">
+                        <span class="service-info-label">Host:</span>
+                        <span class="service-info-val" title="${device.hostname} (${device.dev_class || ''})">
+                            ${device.dev_icon || '💻'} ${device.hostname}
+                        </span>
+                    </div>
+                    <div class="service-info-row">
+                        <span class="service-info-label">Address:</span>
+                        <code class="service-ip-port">${cleanUrl}</code>
+                    </div>
+                    <div class="service-info-row">
+                        <span class="service-info-label">Medium / Link:</span>
+                        <span class="service-info-val" style="font-size:0.75rem;">
+                            ${device.conn_medium === 'wifi' ? '📶 Wi-Fi' : '🔌 Wired'} · ${device.router_node || 'LAN'}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="service-card-footer">
+                    <a href="${service.url}" target="_blank" rel="noopener noreferrer" class="service-open-btn">
+                        <span>Open ${meta.name}</span>
+                        <span style="font-size: 0.95rem;">↗</span>
+                    </a>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 function updateRefreshTimestamp() {
