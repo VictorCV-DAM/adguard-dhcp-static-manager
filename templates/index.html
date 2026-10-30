@@ -533,6 +533,52 @@
             box-shadow: 0 0 8px #10b981;
             animation: pulseGlow 1.8s infinite;
         }
+
+        /* Favorites */
+        .btn-star {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #64748b;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            padding: 0;
+            flex-shrink: 0;
+        }
+        .btn-star:hover {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: #f59e0b;
+            color: #f59e0b;
+            transform: scale(1.12);
+        }
+        .btn-star.active {
+            background: rgba(245, 158, 11, 0.18);
+            border-color: #f59e0b;
+            color: #f59e0b;
+            text-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
+        }
+        .service-card.is-favorite {
+            border-color: rgba(245, 158, 11, 0.65) !important;
+            box-shadow: 0 6px 24px rgba(245, 158, 11, 0.12);
+        }
+        .badge-fav {
+            background: rgba(245, 158, 11, 0.18);
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            color: #f59e0b;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
     </style>
 </head>
 <body>
@@ -759,6 +805,7 @@
                 <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Category:</span>
                 <div class="filter-group">
                     <button class="pill-btn active" data-svc-cat="all" onclick="setServiceCategoryFilter('all')">All <span id="svc-count-all" class="pill-count">0</span></button>
+                    <button class="pill-btn" data-svc-cat="favorites" onclick="setServiceCategoryFilter('favorites')">⭐ Favorites <span id="svc-count-favorites" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="domotica" onclick="setServiceCategoryFilter('domotica')">🏠 Smart Home <span id="svc-count-domotica" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="multimedia" onclick="setServiceCategoryFilter('multimedia')">🎬 Media <span id="svc-count-multimedia" class="pill-count">0</span></button>
                     <button class="pill-btn" data-svc-cat="red" onclick="setServiceCategoryFilter('red')">🌐 Network & Routers <span id="svc-count-red" class="pill-count">0</span></button>
@@ -1298,11 +1345,41 @@ function getServiceMeta(label, port, hostname) {
     return { name: label, icon: '🌐', tag: 'Web Service', bg: 'rgba(100, 116, 139, 0.2)', border: '#64748b', cat: 'infra', desc: `Service accessible on port ${port || ''}` };
 }
 
+function getFavoriteServices() {
+    try {
+        return JSON.parse(localStorage.getItem('fav_services') || '[]');
+    } catch (e) {
+        return [];
+    }
+}
+
+function isServiceFavorite(url) {
+    if (!url) return false;
+    return getFavoriteServices().includes(url);
+}
+
+function toggleServiceFavorite(ev, url) {
+    if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+    }
+    let favs = getFavoriteServices();
+    if (favs.includes(url)) {
+        favs = favs.filter(u => u !== url);
+    } else {
+        favs.push(url);
+    }
+    localStorage.setItem('fav_services', JSON.stringify(favs));
+    renderServicesCards();
+    renderTable();
+}
+
 function renderServicesCards() {
     const container = document.getElementById('services-cards-container');
     if (!container) return;
 
     const q = (document.getElementById('search-services') ? document.getElementById('search-services').value : '').trim().toLowerCase();
+    const favsList = getFavoriteServices();
 
     // 1. Gather all services from all devices
     let items = [];
@@ -1318,8 +1395,17 @@ function renderServicesCards() {
         });
     });
 
-    // Counts per category
+    // Sort: favorites first, then alphabetically
+    items.sort((a, b) => {
+        const isFavA = favsList.includes(a.service.url) ? 1 : 0;
+        const isFavB = favsList.includes(b.service.url) ? 1 : 0;
+        if (isFavA !== isFavB) return isFavB - isFavA;
+        return a.meta.name.localeCompare(b.meta.name);
+    });
+
+    // Counts per category and favorites
     const totalServices = items.length;
+    const cntFavs = items.filter(it => favsList.includes(it.service.url)).length;
     const cntDomotica = items.filter(it => it.meta.cat === 'domotica').length;
     const cntMultimedia = items.filter(it => it.meta.cat === 'multimedia').length;
     const cntRed = items.filter(it => it.meta.cat === 'red').length;
@@ -1327,14 +1413,17 @@ function renderServicesCards() {
 
     const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setEl('svc-count-all', totalServices);
+    setEl('svc-count-favorites', cntFavs);
     setEl('svc-count-domotica', cntDomotica);
     setEl('svc-count-multimedia', cntMultimedia);
     setEl('svc-count-red', cntRed);
     setEl('svc-count-infra', cntInfra);
 
-    // 2. Filter by category
+    // 2. Filter by category or favorites
     let filtered = items;
-    if (serviceCategoryFilter !== 'all') {
+    if (serviceCategoryFilter === 'favorites') {
+        filtered = filtered.filter(it => favsList.includes(it.service.url));
+    } else if (serviceCategoryFilter !== 'all') {
         filtered = filtered.filter(it => it.meta.cat === serviceCategoryFilter);
     }
 
@@ -1354,32 +1443,52 @@ function renderServicesCards() {
 
     // 4. Render cards
     if (filtered.length === 0) {
-        container.innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; padding: 70px 20px; color: var(--muted); background: var(--card); border-radius: 12px; border: 1px solid var(--border);">
-                <div style="font-size: 2.2rem; margin-bottom: 10px;">🔍</div>
-                <div style="font-size: 1.05rem; font-weight: 600; color: #f8fafc;">No web services found</div>
-                <div style="font-size: 0.85rem; margin-top: 4px;">Try changing the category filter or search query.</div>
-            </div>
-        `;
+        if (serviceCategoryFilter === 'favorites') {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 70px 20px; color: var(--muted); background: var(--card); border-radius: 12px; border: 1px solid var(--border);">
+                    <div style="font-size: 2.4rem; margin-bottom: 12px;">⭐</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: #f8fafc;">No favorite services added yet</div>
+                    <div style="font-size: 0.85rem; margin-top: 6px; color: #94a3b8;">Click the star (☆) on any service card to bookmark your favorites here.</div>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 70px 20px; color: var(--muted); background: var(--card); border-radius: 12px; border: 1px solid var(--border);">
+                    <div style="font-size: 2.2rem; margin-bottom: 10px;">🔍</div>
+                    <div style="font-size: 1.05rem; font-weight: 600; color: #f8fafc;">No web services found</div>
+                    <div style="font-size: 0.85rem; margin-top: 4px;">Try changing the category filter or search query.</div>
+                </div>
+            `;
+        }
         return;
     }
 
     container.innerHTML = filtered.map(it => {
         const { service, device, meta } = it;
         const cleanUrl = service.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const isFav = favsList.includes(service.url);
+        const topBorder = isFav ? '#f59e0b' : meta.border;
 
         return `
-            <div class="service-card" style="border-top: 3px solid ${meta.border};">
+            <div class="service-card ${isFav ? 'is-favorite' : ''}" style="border-top: 3px solid ${topBorder};">
                 <div class="service-card-header">
                     <div class="service-icon-box" style="background: ${meta.bg}; color: ${meta.border}; border: 1px solid ${meta.border};">
                         ${meta.icon}
                     </div>
                     <div style="flex: 1; min-width: 0;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <span class="service-tag">${meta.tag}</span>
-                            <div class="status-indicator-live" title="Service verified and responding on local network">
-                                <span class="status-dot-pulse"></span>
-                                <span>ONLINE</span>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                <span class="service-tag">${meta.tag}</span>
+                                ${isFav ? '<span class="badge-fav">⭐ Favorite</span>' : ''}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="status-indicator-live" title="Service verified and responding on local network">
+                                    <span class="status-dot-pulse"></span>
+                                    <span>ONLINE</span>
+                                </div>
+                                <button class="btn-star ${isFav ? 'active' : ''}" onclick="toggleServiceFavorite(event, '${service.url}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+                                    ${isFav ? '⭐' : '☆'}
+                                </button>
                             </div>
                         </div>
                         <h4 class="service-title" title="${meta.name}">${meta.name}</h4>
@@ -1768,22 +1877,38 @@ function renderTable() {
 
         let webDropdownHtml = '';
         if (d.web_links && d.web_links.length > 0) {
+            const favsList = getFavoriteServices();
+            const hasFav = d.web_links.some(l => favsList.includes(l.url));
+            const sortedLinks = [...d.web_links].sort((a, b) => {
+                const fa = favsList.includes(a.url) ? 1 : 0;
+                const fb = favsList.includes(b.url) ? 1 : 0;
+                return fb - fa;
+            });
+
             if (d.web_links.length === 1) {
-                webDropdownHtml = `<a href="${d.web_links[0].url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:#38bdf8;color:#38bdf8;text-decoration:none;font-weight:600;" title="${d.web_links[0].label}">🌐 Web ↗</a>`;
+                const l = d.web_links[0];
+                const isFav = favsList.includes(l.url);
+                webDropdownHtml = `<a href="${l.url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:${isFav ? '#f59e0b' : '#38bdf8'};color:${isFav ? '#f59e0b' : '#38bdf8'};text-decoration:none;font-weight:600;" title="${l.label}">${isFav ? '⭐ ' : '🌐 '}Web ↗</a>`;
             } else {
                 const ipSafe = (d.ip || '').replace(/[^a-zA-Z0-9]/g, '-');
                 webDropdownHtml = `
                     <div style="position:relative; display:inline-block;">
-                        <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:#38bdf8;color:#38bdf8;font-weight:600;" onclick="toggleRowWebMenu(event, '${ipSafe}')" title="Open Web Interface (${d.web_links.length} services)">
-                            🌐 Web (${d.web_links.length}) ▾
+                        <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:${hasFav ? '#f59e0b' : '#38bdf8'};color:${hasFav ? '#f59e0b' : '#38bdf8'};font-weight:600;" onclick="toggleRowWebMenu(event, '${ipSafe}')" title="Open Web Interface (${d.web_links.length} services${hasFav ? ', includes favorites' : ''})">
+                            ${hasFav ? '⭐ ' : '🌐 '}Web (${d.web_links.length}) ▾
                         </button>
                         <div id="row-web-${ipSafe}" class="row-web-menu dropdown-menu-custom" style="display:none;">
-                            ${d.web_links.map(l => `
-                                <a href="${l.url}" target="_blank" rel="noopener" class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:0.78rem; color:#f8fafc; text-decoration:none; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06);">
-                                    <span style="font-weight:500;">${l.label}</span>
+                            ${sortedLinks.map(l => {
+                                const isFav = favsList.includes(l.url);
+                                return `
+                                <a href="${l.url}" target="_blank" rel="noopener" class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:0.78rem; color:${isFav ? '#fcd34d' : '#f8fafc'}; text-decoration:none; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06); font-weight:${isFav ? '700' : '500'};">
+                                    <span style="display:inline-flex; align-items:center; gap:6px;">
+                                        ${isFav ? '<span style="color:#f59e0b;">⭐</span>' : ''}
+                                        <span>${l.label}</span>
+                                    </span>
                                     <span style="opacity:0.6; font-size:0.72rem; margin-left:8px;">↗</span>
                                 </a>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 `;
