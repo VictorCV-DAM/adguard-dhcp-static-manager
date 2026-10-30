@@ -1592,7 +1592,11 @@ def api_state():
                 active_ips.add(x.strip())
 
     now = time.time()
-    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 180)]
+    force_refresh = bool(request.args.get('refresh') or request.args.get('force'))
+    if force_refresh:
+        _SERVICE_SCAN_CACHE.clear()
+
+    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (force_refresh or a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 180)]
     if ips_to_scan:
         with ThreadPoolExecutor(max_workers=min(25, max(1, len(ips_to_scan) * 5))) as pool:
             futures = {pool.submit(scan_device_verified_services, a_ip): a_ip for a_ip in ips_to_scan}

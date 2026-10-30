@@ -266,6 +266,14 @@
             from { transform: scale(0.92); opacity: 0; }
             to { transform: scale(1); opacity: 1; }
         }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: spin 0.75s linear infinite !important;
+            display: inline-block;
+        }
         .popup-icon {
             font-size: 2.4rem;
             margin-bottom: 10px;
@@ -468,7 +476,14 @@
     <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
             <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Search by name, IP, port (e.g. 8086, :80, 8123), service, MAC..." oninput="renderTable()">
-            <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()">✕ Reset Filters</button>
+            <div style="display:inline-flex; align-items:center; gap:8px;">
+                <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()">✕ Reset Filters</button>
+                <button id="btn-refresh" class="btn btn-outline" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="manualRefresh()" title="Immediately refresh devices and port scans">
+                    <span id="refresh-icon" style="font-size:0.95rem; line-height:1;">🔄</span>
+                    <span id="refresh-text">Refresh</span>
+                </button>
+                <span id="last-updated-text" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">Updated just now</span>
+            </div>
         </div>
         <div class="filter-pills" id="multi-filters" style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
             <!-- Status Group -->
@@ -885,15 +900,70 @@ async function saveConfig() {
     loadState();
 }
 
-async function loadState() {
-    const res = await fetch('/api/state');
-    const data = await res.json();
-    document.getElementById('lbl-duration').textContent = `${data.lease_duration} s (${Math.round(data.lease_duration/60)} min)`;
-    document.getElementById('lbl-ghost').textContent = data.ghost_count;
-    document.getElementById('lbl-expired').textContent = data.expired_count;
-    allDevices = data.devices || [];
-    renderGlobalNetworkMenu(data.network_links || []);
-    renderTable();
+let lastRefreshTime = new Date();
+let isRefreshing = false;
+
+async function manualRefresh() {
+    if (isRefreshing) return;
+    await loadState(true);
+}
+
+async function loadState(isManual = false) {
+    if (isRefreshing) return;
+    isRefreshing = true;
+
+    const icon = document.getElementById('refresh-icon');
+    const text = document.getElementById('refresh-text');
+    if (icon) icon.classList.add('spinning');
+    if (isManual && text) text.textContent = 'Refreshing...';
+
+    try {
+        const url = isManual ? '/api/state?refresh=1' : '/api/state';
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        const lblDur = document.getElementById('lbl-duration');
+        if (lblDur) lblDur.textContent = `${data.lease_duration} s (${Math.round(data.lease_duration/60)} min)`;
+        const lblGhost = document.getElementById('lbl-ghost');
+        if (lblGhost) lblGhost.textContent = data.ghost_count;
+        const lblExp = document.getElementById('lbl-expired');
+        if (lblExp) lblExp.textContent = data.expired_count;
+
+        allDevices = data.devices || [];
+        renderGlobalNetworkMenu(data.network_links || []);
+        renderTable();
+
+        lastRefreshTime = new Date();
+        updateRefreshTimestamp();
+
+        if (isManual) {
+            showMessage('Device list and network services refreshed');
+        }
+    } catch (e) {
+        console.error('Error loading state:', e);
+        if (isManual) {
+            showMessage('Failed to connect to server');
+        }
+    } finally {
+        isRefreshing = false;
+        if (icon) icon.classList.remove('spinning');
+        if (text) text.textContent = 'Refresh';
+    }
+}
+
+function updateRefreshTimestamp() {
+    const el = document.getElementById('last-updated-text');
+    if (!el) return;
+    const now = new Date();
+    const diffSec = Math.floor((now - lastRefreshTime) / 1000);
+    if (diffSec < 5) {
+        el.textContent = 'Updated just now';
+    } else if (diffSec < 60) {
+        el.textContent = `Updated ${diffSec}s ago`;
+    } else {
+        const min = Math.floor(diffSec / 60);
+        el.textContent = `Updated ${min}m ago`;
+    }
 }
 
 function renderGlobalNetworkMenu(links) {
@@ -1361,6 +1431,17 @@ async function setDuration(seconds) {
 
 loadConfig();
 loadState();
+
+// Update elapsed time indicator every 5 seconds
+setInterval(updateRefreshTimestamp, 5000);
+
+// Background auto-refresh every 30 seconds when no modal is open
+setInterval(() => {
+    const hasModal = document.querySelector('.modal-overlay[style*="display: flex"], .modal-overlay[style*="display: block"]');
+    if (!hasModal && !isRefreshing) {
+        loadState(false);
+    }
+}, 30000);
 </script>
 </body>
 </html>
