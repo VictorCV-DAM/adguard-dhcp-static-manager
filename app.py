@@ -632,17 +632,18 @@ def probe_http_service(ip, port):
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
             with urllib.request.urlopen(req, timeout=0.45, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
                 code = resp.getcode()
-                content = resp.read(2048).decode('utf-8', errors='ignore')
+                content = resp.read(4096).decode('utf-8', errors='ignore')
                 title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
                 title = title_m.group(1).strip() if title_m else ""
                 server = resp.headers.get('Server', '')
-                return {'port': port, 'proto': proto, 'url': url, 'code': code, 'title': title, 'server': server}
+                return {'port': port, 'proto': proto, 'url': url, 'code': code, 'title': title, 'server': server, 'body': content}
         except urllib.error.HTTPError as e:
-            if e.code in (401, 403, 301, 302, 307, 308) or (e.code == 404 and e.headers.get('Server')):
-                content = e.read(1024).decode('utf-8', errors='ignore') if e.fp else ""
+            # Only allow auth challenges or genuine web redirects (exclude 404 to skip headless API endpoints)
+            if e.code in (401, 403, 301, 302, 307, 308):
+                content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ""
                 title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
                 title = title_m.group(1).strip() if title_m else ""
-                return {'port': port, 'proto': proto, 'url': url, 'code': e.code, 'title': title, 'server': e.headers.get('Server', '')}
+                return {'port': port, 'proto': proto, 'url': url, 'code': e.code, 'title': title, 'server': e.headers.get('Server', ''), 'body': content}
         except Exception:
             continue
     return None
@@ -701,25 +702,31 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
         proto = item['proto']
         url = item['url']
         title = item.get('title', '').strip()
+        body = item.get('body', '')
         t_low = title.lower()
+        b_low = body.lower()
 
-        # Specific known services
-        if port == 32400 or 'plex' in t_low:
+        # Intelligent SPA detection and known services recognition
+        if 'immich' in b_low or 'immich' in t_low or port == 2283:
+            label = f"Immich (:{port})"
+        elif port == 32400 or 'plex' in b_low or 'plex' in t_low:
             url = f"http://{ip}:32400/web"
             label = "Plex Media Server (:32400)"
-        elif 'quota monitor' in t_low or (port == 5050 and 'quota' in t_low):
+        elif 'quota monitor' in t_low or 'quota monitor' in b_low or (port == 5050 and 'quota' in b_low):
             label = "Antigravity Quota Monitor (:5050)"
-        elif 'nginx proxy manager' in t_low or port == 81:
+        elif port == 81 or 'nginx proxy manager' in t_low:
             label = "Nginx Proxy Manager (:81)"
-        elif 'home assistant observer' in t_low or port == 4357:
+        elif port == 8082 and ('nginx proxy manager' in b_low or 'congratulations' in b_low or 'default site' in t_low):
+            label = "NPM Test / Default Site (:8082)"
+        elif 'home assistant observer' in t_low or 'observer' in b_low or port == 4357:
             label = "HA Observer (:4357)"
         elif 'home assistant' in t_low or port == 8123:
             label = "Home Assistant (:8123)"
-        elif 'broadlink' in t_low or port == 8099:
+        elif 'broadlink' in t_low or 'broadlink' in b_low or port == 8099:
             label = "Broadlink Manager v2 (:8099)"
-        elif 'ewelink' in t_low or port == 8325:
+        elif 'ewelink' in t_low or 'ewelink' in b_low or port == 8325:
             label = "eWeLink Smart Home (:8325)"
-        elif 'go2rtc' in t_low or port == 1984:
+        elif 'go2rtc' in t_low or 'go2rtc' in b_low or port == 1984:
             label = "go2rtc WebRTC (:1984)"
         elif ip == '192.168.1.249' and port == 8080:
             label = "AdGuard Home (:8080)"
@@ -738,11 +745,19 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = f"{lbl} ({proto.upper()})"
         elif is_router_cfg:
             label = f"{router_name} ({proto.upper()})"
-        elif 'proxmox' in t_low or port == 8006:
+        elif 'proxmox' in b_low or 'proxmox' in t_low or port == 8006:
             label = "Proxmox VE (:8006)"
-        elif 'portainer' in t_low or port in (9000, 9443):
+        elif 'portainer' in b_low or 'portainer' in t_low or port in (9000, 9443):
             label = f"Portainer ({proto.upper()} :{port})"
-        elif 'grafana' in t_low or (port == 3000 and 'grafana' in t_low):
+        elif 'jellyfin' in b_low or 'jellyfin' in t_low or port == 8096:
+            label = f"Jellyfin (:{port})"
+        elif 'vaultwarden' in b_low or 'bitwarden' in b_low:
+            label = f"Vaultwarden (:{port})"
+        elif 'syncthing' in b_low or port == 8384:
+            label = f"Syncthing (:{port})"
+        elif 'uptime kuma' in b_low or port == 3001:
+            label = f"Uptime Kuma (:{port})"
+        elif 'grafana' in b_low or (port == 3000 and 'grafana' in t_low):
             label = "Grafana (:3000)"
         elif title and len(title) < 40 and not any(k in t_low for k in ['http 40', '404', 'error', 'default site', 'unauthorized']):
             label = f"{title} (:{port})"

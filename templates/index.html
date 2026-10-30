@@ -500,6 +500,15 @@
                     <button class="pill-btn" data-group="type" data-val="dynamic" onclick="setFilter('type', 'dynamic')">⚡ Dynamic <span class="pill-count" id="count-type-dynamic">0</span></button>
                 </div>
             </div>
+
+            <!-- Web Services Group -->
+            <div style="display:inline-flex; align-items:center; gap:5px;">
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Services:</span>
+                <div class="filter-group">
+                    <button class="pill-btn active" data-group="services" data-val="all" onclick="setFilter('services', 'all')">All <span class="pill-count" id="count-services-all">0</span></button>
+                    <button class="pill-btn" data-group="services" data-val="has_services" onclick="setFilter('services', 'has_services')">🌐 With Active Services <span class="pill-count" id="count-services-active">0</span></button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -517,9 +526,10 @@ let routersConfig = [];
 let sortState = { colId: 'ip', asc: true };
 let dragSrcColId = null;
 let tableFilters = {
-    status: 'all',  // 'all', 'online', 'offline'
-    medium: 'all',  // 'all', 'wifi', 'cable'
-    type: 'all'     // 'all', 'static', 'dynamic'
+    status: 'all',    // 'all', 'online', 'offline'
+    medium: 'all',    // 'all', 'wifi', 'cable'
+    type: 'all',      // 'all', 'static', 'dynamic'
+    services: 'all'   // 'all', 'has_services'
 };
 
 function setFilter(group, value) {
@@ -528,7 +538,7 @@ function setFilter(group, value) {
         btn.classList.toggle('active', btn.dataset.val === value);
     });
 
-    const isFiltered = (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all');
+    const isFiltered = (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all');
     const resetBtn = document.getElementById('btn-reset-filters');
     if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-flex' : 'none';
 
@@ -536,7 +546,7 @@ function setFilter(group, value) {
 }
 
 function resetAllFilters() {
-    tableFilters = { status: 'all', medium: 'all', type: 'all' };
+    tableFilters = { status: 'all', medium: 'all', type: 'all', services: 'all' };
     document.querySelectorAll('.pill-btn[data-group]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.val === 'all');
     });
@@ -1033,6 +1043,8 @@ function renderTable() {
     const cntTypeStatic = allDevices.filter(d => d.static).length;
     const cntTypeDynamic = allDevices.filter(d => !d.static).length;
 
+    const cntServicesActive = allDevices.filter(d => d.web_links && d.web_links.length > 0).length;
+
     const setCounter = (id, val) => {
         const el = document.getElementById(id);
         if (el) el.textContent = val;
@@ -1049,6 +1061,9 @@ function renderTable() {
     setCounter('count-type-all', totalCount);
     setCounter('count-type-static', cntTypeStatic);
     setCounter('count-type-dynamic', cntTypeDynamic);
+
+    setCounter('count-services-all', totalCount);
+    setCounter('count-services-active', cntServicesActive);
 
     const thead = document.getElementById('thead');
     thead.innerHTML = '';
@@ -1118,7 +1133,10 @@ function renderTable() {
         if (tableFilters.type === 'static' && !d.static) return false;
         if (tableFilters.type === 'dynamic' && d.static) return false;
 
-        // Filter 4: Text search query
+        // Filter 4: Web Services (Active)
+        if (tableFilters.services === 'has_services' && (!d.web_links || d.web_links.length === 0)) return false;
+
+        // Filter 5: Text search query
         if (!q) return true;
         const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')}`.toLowerCase();
         return text.includes(q);
