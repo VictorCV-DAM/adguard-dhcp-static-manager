@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdGuard DHCP — Instant Static IP Manager</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --success: #22c55e;
+            --warn: #f59e0b;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .container { max-width: 1380px; margin: 0 auto; }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .header-logo {
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
+            filter: drop-shadow(0 2px 8px rgba(56, 189, 248, 0.35));
+        }
+        h1 { margin: 0 0 4px 0; font-size: 1.45rem; }
+        .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .card h3 { margin-top: 0; font-size: 1.05rem; margin-bottom: 12px; }
+        .btn {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-warn { background: var(--warn); color: #0f172a; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-success { background: var(--success); color: #0f172a; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .form-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-size: 0.88rem;
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .search-bar { flex: 1; min-width: 240px; }
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            background: var(--card);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.86rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        th {
+            background: #0f172a;
+            color: var(--muted);
+            font-weight: 600;
+            position: relative;
+            user-select: none;
+            cursor: pointer;
+        }
+        th:hover { color: var(--text); background: #162036; }
+        th.dragging { opacity: 0.45; }
+        .th-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            padding-right: 8px;
+        }
+        .sort-ind { color: var(--accent); font-size: 0.75rem; }
+        .col-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            background: transparent;
+        }
+        .col-resizer:hover { background: var(--accent); }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.74rem;
+            font-weight: 600;
+        }
+        .badge-static { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .badge-dyn { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+        .badge-warn { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-tplink { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        .badge-halo { background: rgba(14, 165, 233, 0.2); color: #38bdf8; }
+        .badge-lan { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-wifi { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+        .badge-cable { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-infra { background: rgba(234, 179, 8, 0.2); color: #fde047; }
+        .badge-offline { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+        .filter-pills {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .pill-btn {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 7px 13px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .pill-btn:hover {
+            border-color: #38bdf8;
+            color: var(--text);
+        }
+        .pill-btn.active {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        .pill-count {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 7px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+        }
+        .pill-btn.active .pill-count {
+            background: rgba(56, 189, 248, 0.35);
+            color: #fff;
+        }
+        .pred-cell { display: flex; flex-direction: column; line-height: 1.25; }
+        .pred-sub { font-size: 0.73rem; color: var(--muted); }
+        #popup-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.75);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+        .popup-modal {
+            background: #1e293b;
+            border: 1px solid #38bdf8;
+            border-radius: 14px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+            max-width: 480px;
+            width: 100%;
+            padding: 24px;
+            text-align: center;
+            animation: popIn 0.16s ease-out;
+        }
+        .popup-modal.popup-warn { border-color: var(--warning); }
+        .popup-modal.popup-error { border-color: var(--danger); }
+        .popup-modal.popup-success { border-color: var(--success); }
+        @keyframes popIn {
+            from { transform: scale(0.92); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .popup-icon {
+            font-size: 2.4rem;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+        .popup-title {
+            font-size: 1.12rem;
+            font-weight: 700;
+            margin: 0 0 10px 0;
+            color: var(--text);
+        }
+        .popup-body {
+            font-size: 0.94rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            text-align: left;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        .popup-body div + div {
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px dashed rgba(148, 163, 184, 0.2);
+        }
+        .popup-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        #settings-panel, #columns-panel {
+            display: none;
+            margin-bottom: 20px;
+        }
+        .router-item {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            align-items: end;
+        }
+        .col-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="header-left">
+            <svg class="header-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+                <defs>
+                    <linearGradient id="shieldBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#38bdf8"/>
+                        <stop offset="50%" stop-color="#0284c7"/>
+                        <stop offset="100%" stop-color="#1d4ed8"/>
+                    </linearGradient>
+                </defs>
+                <path d="M32 4 L56 14 V30 C56 46.5 45.8 56.8 32 61 C18.2 56.8 8 46.5 8 30 V14 Z"
+                      fill="url(#shieldBlue)" stroke="#7dd3fc" stroke-width="2"/>
+                <path d="M32 9 L51 17.2 V30 C51 43.5 42.6 52.1 32 55.8 C21.4 52.1 13 43.5 13 30 V17.2 Z"
+                      fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.5"/>
+                <path d="M22 32.5 L29 39.5 L43 24.5"
+                      fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div>
+                <h1>AdGuard Home — Instant Static IP Manager</h1>
+                <p class="subtitle">Reassign static IPs by purging stale dynamic leases immediately without lowering your 12-hour IoT lease duration.</p>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columns</button>
+            <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Settings (AdGuard / Routers)</button>
+        </div>
+    </div>
+
+    <!-- CENTERED MODAL POPUP -->
+    <div id="popup-overlay" onclick="if(event.target === this) closePopup()">
+        <div id="popup-modal" class="popup-modal">
+            <div id="popup-icon" class="popup-icon">ℹ️</div>
+            <h3 id="popup-title" class="popup-title">Information</h3>
+            <div id="popup-body" class="popup-body"></div>
+            <div id="popup-actions" class="popup-actions">
+                <button class="btn btn-primary" onclick="closePopup()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLUMN CUSTOMIZATION PANEL -->
+    <div id="columns-panel" class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3 style="margin:0;">📊 Customize Columns (Order, Visibility & Width)</h3>
+            <button class="btn btn-outline" style="padding:4px 10px; font-size:0.78rem;" onclick="resetColumns()">Reset Defaults</button>
+        </div>
+        <p style="font-size:0.82rem; color:var(--muted); margin-top:0;">
+            Click any column header to sort rows (▲/▼), drag headers to reorder columns, or drag the right edge of any header to resize.
+        </p>
+        <div id="col-manager-list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap:8px;"></div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div id="settings-panel" class="card">
+        <h3>⚙️ AdGuard Home & Routers / Access Points Configuration</h3>
+        <div class="card" style="background:#0f172a; margin-bottom:14px;">
+            <strong style="display:block; margin-bottom:10px;">AdGuard Home Server</strong>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
+                <div class="form-group">
+                    <label>AdGuard Home URL</label>
+                    <input type="text" id="cfg-ag-url" placeholder="http://127.0.0.1:8080">
+                </div>
+                <div class="form-group">
+                    <label>AdGuard Home Username</label>
+                    <input type="text" id="cfg-ag-user" placeholder="admin">
+                </div>
+                <div class="form-group">
+                    <label>AdGuard Home Password</label>
+                    <input type="password" id="cfg-ag-pass" placeholder="AdGuard Home password">
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <strong>Configured Routers / Access Points</strong>
+            <button class="btn btn-outline" onclick="addRouterRow()">➕ Add New Router / AP</button>
+        </div>
+        <div id="routers-list"></div>
+
+        <div style="display:flex; gap:10px; margin-top:12px;">
+            <button class="btn btn-success" onclick="saveConfig()">💾 Save & Test Configuration</button>
+            <button class="btn btn-outline" onclick="toggleSettings()">Close</button>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Assign / Change Static IP</h3>
+            <div class="form-row">
+                <input type="text" id="in-hostname" placeholder="Hostname (e.g. iot-device-01)">
+                <input type="text" id="in-mac" placeholder="MAC Address (e.g. aa:bb:cc:dd:ee:ff)">
+                <input type="text" id="in-ip" placeholder="New Static IP (e.g. 192.168.0.50)">
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn" onclick="assignStatic(false)">Save Static IP & Purge Old Lease</button>
+                <button class="btn btn-success" onclick="assignStatic(true)" title="Purges the old lease in AdGuard and cycles the configured AP Wi-Fi link">⚡ Save + Force AP Reconnect</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>DHCP Server Status</h3>
+            <p style="margin: 6px 0; font-size: 0.9rem;">
+                Current lease duration: <strong id="lbl-duration">...</strong>
+            </p>
+            <p style="margin: 6px 0 12px 0; font-size: 0.85rem; color: var(--muted);">
+                Ghost entries (<code>00:00:00:00:00:00</code>): <strong id="lbl-ghost">0</strong> |
+                Expired: <strong id="lbl-expired">0</strong>
+            </p>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+                <button class="btn btn-outline" onclick="setDuration(43200)">IoT Stable (12 hours)</button>
+                <button class="btn btn-outline" onclick="setDuration(3600)">1 hour</button>
+                <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
+            </div>
+            <button class="btn btn-warn" onclick="cleanJunk()">🧹 Purge Ghost & Expired Leases</button>
+        </div>
+    </div>
+
+    <div class="toolbar" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <input type="text" id="search" class="search-bar" style="flex:1; min-width:260px;" placeholder="Filter by hostname, class, medium (wifi/cable), router, IP, or MAC..." oninput="renderTable()">
+        <div class="filter-pills" id="medium-filters">
+            <button class="pill-btn active" data-filter="all" onclick="setMediumFilter('all')">All <span class="pill-count" id="count-all">0</span></button>
+            <button class="pill-btn" data-filter="wifi" onclick="setMediumFilter('wifi')">📶 Wi-Fi <span class="pill-count" id="count-wifi">0</span></button>
+            <button class="pill-btn" data-filter="cable" onclick="setMediumFilter('cable')">🔌 Cable <span class="pill-count" id="count-cable">0</span></button>
+            <button class="pill-btn" data-filter="offline" onclick="setMediumFilter('offline')">⚪ Inactive <span class="pill-count" id="count-offline">0</span></button>
+        </div>
+    </div>
+
+    <div class="table-wrap">
+        <table id="devices-table">
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+let allDevices = [];
+let routersConfig = [];
+let sortState = { colId: 'ip', asc: true };
+let dragSrcColId = null;
+let activeMediumFilter = 'all';
+
+function setMediumFilter(filter) {
+    activeMediumFilter = filter;
+    document.querySelectorAll('#medium-filters .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    renderTable();
+}
+
+const DEFAULT_COLUMNS = [
+    { id: 'hostname', label: 'Device', visible: true, width: 180 },
+    { id: 'prediction', label: 'Predicted Class / Vendor', visible: true, width: 210 },
+    { id: 'medium', label: 'Medium', visible: true, width: 130 },
+    { id: 'router', label: 'Router / Node', visible: true, width: 175 },
+    { id: 'ip', label: 'AdGuard IP', visible: true, width: 130 },
+    { id: 'arp', label: 'Active IP (ARP)', visible: true, width: 155 },
+    { id: 'mac', label: 'MAC', visible: true, width: 145 },
+    { id: 'type', label: 'Type', visible: true, width: 110 },
+    { id: 'actions', label: 'Actions', visible: true, width: 210 }
+];
+
+let columnsConfig = loadColumnsConfig();
+
+function loadColumnsConfig() {
+    try {
+        const raw = localStorage.getItem('dhcp_panel_columns_en_v2');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length === DEFAULT_COLUMNS.length) {
+                return parsed;
+            }
+        }
+        const oldRaw = localStorage.getItem('dhcp_panel_columns_en_v1');
+        if (oldRaw) {
+            const oldParsed = JSON.parse(oldRaw);
+            if (Array.isArray(oldParsed)) {
+                if (!oldParsed.some(c => c.id === 'medium')) {
+                    const insertIdx = oldParsed.findIndex(c => c.id === 'router');
+                    const newCol = { id: 'medium', label: 'Medium', visible: true, width: 130 };
+                    if (insertIdx >= 0) oldParsed.splice(insertIdx, 0, newCol);
+                    else oldParsed.push(newCol);
+                }
+                localStorage.setItem('dhcp_panel_columns_en_v2', JSON.stringify(oldParsed));
+                return oldParsed;
+            }
+        }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(DEFAULT_COLUMNS));
+}
+
+function saveColumnsConfig() {
+    localStorage.setItem('dhcp_panel_columns_en_v2', JSON.stringify(columnsConfig));
+}
+
+function resetColumns() {
+    columnsConfig = JSON.parse(JSON.stringify(DEFAULT_COLUMNS));
+    saveColumnsConfig();
+    renderColumnManager();
+    renderTable();
+}
+
+function toggleColumnsPanel() {
+    const p = document.getElementById('columns-panel');
+    p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+    renderColumnManager();
+}
+
+function toggleSettings() {
+    const p = document.getElementById('settings-panel');
+    p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+}
+
+function renderColumnManager() {
+    const container = document.getElementById('col-manager-list');
+    container.innerHTML = '';
+    columnsConfig.forEach((col, idx) => {
+        const div = document.createElement('div');
+        div.className = 'col-item';
+        div.innerHTML = `
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="toggleColVisible('${col.id}', this.checked)">
+                <span>${col.label}</span>
+            </label>
+            <div style="display:flex; gap:4px;">
+                <button class="btn btn-outline" style="padding:2px 6px; font-size:0.72rem;" onclick="moveCol(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>◀</button>
+                <button class="btn btn-outline" style="padding:2px 6px; font-size:0.72rem;" onclick="moveCol(${idx}, 1)" ${idx === columnsConfig.length - 1 ? 'disabled' : ''}>▶</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function toggleColVisible(colId, visible) {
+    const c = columnsConfig.find(x => x.id === colId);
+    if (c) {
+        c.visible = visible;
+        saveColumnsConfig();
+        renderTable();
+    }
+}
+
+function moveCol(idx, delta) {
+    const target = idx + delta;
+    if (target < 0 || target >= columnsConfig.length) return;
+    const tmp = columnsConfig[idx];
+    columnsConfig[idx] = columnsConfig[target];
+    columnsConfig[target] = tmp;
+    saveColumnsConfig();
+    renderColumnManager();
+    renderTable();
+}
+
+function closePopup() {
+    document.getElementById('popup-overlay').style.display = 'none';
+}
+
+window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePopup();
+});
+
+function showMessage(msg, mode = 'auto') {
+    const overlay = document.getElementById('popup-overlay');
+    const modal = document.getElementById('popup-modal');
+    const iconEl = document.getElementById('popup-icon');
+    const titleEl = document.getElementById('popup-title');
+    const bodyEl = document.getElementById('popup-body');
+    const actionsEl = document.getElementById('popup-actions');
+
+    const lower = (msg || '').toLowerCase();
+    let statusType = mode;
+    if (statusType === 'auto') {
+        if (lower.endsWith('...') && (lower.startsWith('pinging') || lower.startsWith('applying'))) {
+            statusType = 'loading';
+        } else if (lower.includes('error') || lower.includes('required')) {
+            statusType = 'error';
+        } else if (lower.includes('no ping') || lower.includes('waiting')) {
+            statusType = 'warn';
+        } else {
+            statusType = 'success';
+        }
+    }
+
+    modal.className = 'popup-modal';
+    if (statusType === 'loading') {
+        iconEl.textContent = '⏳';
+        titleEl.textContent = 'Processing request...';
+    } else if (statusType === 'error') {
+        modal.classList.add('popup-error');
+        iconEl.textContent = '❌';
+        titleEl.textContent = 'Operation Error';
+    } else if (statusType === 'warn') {
+        modal.classList.add('popup-warn');
+        iconEl.textContent = '⚠️';
+        titleEl.textContent = 'Network Notice';
+    } else {
+        modal.classList.add('popup-success');
+        iconEl.textContent = '✅';
+        titleEl.textContent = 'Operation Completed';
+    }
+
+    const parts = (msg || '').split(' | ').map(s => s.trim()).filter(Boolean);
+    bodyEl.innerHTML = parts.map(p => `<div>• ${p}</div>`).join('');
+
+    actionsEl.innerHTML = statusType === 'loading'
+        ? `<button class="btn btn-outline" onclick="closePopup()">Hide</button>`
+        : `<button class="btn btn-primary" id="popup-ok-btn" onclick="closePopup()">OK</button>`;
+
+    overlay.style.display = 'flex';
+    const okBtn = document.getElementById('popup-ok-btn');
+    if (okBtn) okBtn.focus();
+}
+
+function showConfirmPopup(msg, onConfirm) {
+    const overlay = document.getElementById('popup-overlay');
+    const modal = document.getElementById('popup-modal');
+    const iconEl = document.getElementById('popup-icon');
+    const titleEl = document.getElementById('popup-title');
+    const bodyEl = document.getElementById('popup-body');
+    const actionsEl = document.getElementById('popup-actions');
+
+    modal.className = 'popup-modal popup-warn';
+    iconEl.textContent = '🗑️';
+    titleEl.textContent = 'Confirm Action';
+    bodyEl.innerHTML = `<div>${msg}</div>`;
+    actionsEl.innerHTML = `
+        <button class="btn btn-outline" onclick="closePopup()">Cancel</button>
+        <button class="btn btn-danger" id="popup-confirm-btn">Yes, Remove</button>
+    `;
+    overlay.style.display = 'flex';
+    document.getElementById('popup-confirm-btn').onclick = () => {
+        closePopup();
+        onConfirm();
+    };
+}
+
+function renderRoutersList() {
+    const list = document.getElementById('routers-list');
+    list.innerHTML = '';
+    routersConfig.forEach((r, idx) => {
+        const div = document.createElement('div');
+        div.className = 'router-item';
+        div.innerHTML = `
+            <div class="form-group">
+                <label>Router / AP Name</label>
+                <input type="text" value="${r.name || ''}" oninput="routersConfig[${idx}].name = this.value" placeholder="e.g. Downstairs TP-Link">
+            </div>
+            <div class="form-group">
+                <label>Driver / Type</label>
+                <select onchange="routersConfig[${idx}].type = this.value">
+                    <option value="tplink_wr841n" ${r.type === 'tplink_wr841n' ? 'selected' : ''}>TP-Link CGI (WR841N / Archer)</option>
+                    <option value="mercusys_halo" ${r.type === 'mercusys_halo' ? 'selected' : ''}>Mercusys Halo / Mesh</option>
+                    <option value="mikrotik_rest" ${r.type === 'mikrotik_rest' ? 'selected' : ''}>MikroTik RouterOS</option>
+                    <option value="generic_ap" ${r.type === 'generic_ap' ? 'selected' : ''}>Generic Access Point</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>IP Address(es) (comma-separated)</label>
+                <input type="text" value="${r.ip || ''}" oninput="routersConfig[${idx}].ip = this.value" placeholder="192.168.0.2">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" value="${r.user || 'admin'}" oninput="routersConfig[${idx}].user = this.value" placeholder="admin">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" value="${r.password || ''}" oninput="routersConfig[${idx}].password = this.value" placeholder="AP Password">
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <label style="font-size:0.8rem; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="checkbox" ${r.enabled !== false ? 'checked' : ''} onchange="routersConfig[${idx}].enabled = this.checked"> Enabled
+                </label>
+                <button class="btn btn-danger" style="padding:6px 10px; font-size:0.78rem;" onclick="removeRouterRow(${idx})">Remove</button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function addRouterRow() {
+    routersConfig.push({
+        id: 'router-' + Date.now(),
+        name: 'New Router / AP',
+        type: 'tplink_wr841n',
+        ip: '192.168.0.10',
+        user: 'admin',
+        password: '',
+        enabled: true
+    });
+    renderRoutersList();
+}
+
+function removeRouterRow(idx) {
+    routersConfig.splice(idx, 1);
+    renderRoutersList();
+}
+
+async function loadConfig() {
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    const c = data.config || {};
+    document.getElementById('cfg-ag-url').value = c.adguard_url || '';
+    document.getElementById('cfg-ag-user').value = c.adguard_user || '';
+    document.getElementById('cfg-ag-pass').value = c.adguard_pass || '';
+    routersConfig = Array.isArray(c.routers) ? c.routers : [];
+    renderRoutersList();
+}
+
+async function saveConfig() {
+    const payload = {
+        adguard_url: document.getElementById('cfg-ag-url').value.trim(),
+        adguard_user: document.getElementById('cfg-ag-user').value.trim(),
+        adguard_pass: document.getElementById('cfg-ag-pass').value.trim(),
+        routers: routersConfig
+    };
+    const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    showMessage(data.message);
+    loadState();
+}
+
+async function loadState() {
+    const res = await fetch('/api/state');
+    const data = await res.json();
+    document.getElementById('lbl-duration').textContent = `${data.lease_duration} s (${Math.round(data.lease_duration/60)} min)`;
+    document.getElementById('lbl-ghost').textContent = data.ghost_count;
+    document.getElementById('lbl-expired').textContent = data.expired_count;
+    allDevices = data.devices || [];
+    renderTable();
+}
+
+function ipToNum(ip) {
+    if (!ip) return 0;
+    const p = ip.split('.').map(x => parseInt(x, 10) || 0);
+    return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
+}
+
+function getSortValue(d, colId) {
+    switch (colId) {
+        case 'hostname': return (d.hostname || '').toLowerCase();
+        case 'prediction': return `${d.dev_class || ''} ${d.dev_vendor || ''}`.toLowerCase();
+        case 'medium': return (d.conn_medium_label || '').toLowerCase();
+        case 'mac': return (d.mac || '').toLowerCase();
+        case 'ip': return ipToNum(d.ip);
+        case 'arp': return ipToNum((d.live_ips && d.live_ips[0]) || '');
+        case 'router': return (d.router_node || '').toLowerCase();
+        case 'type': return d.static ? 0 : 1;
+        default: return '';
+    }
+}
+
+function onHeaderClick(colId, ev) {
+    if (ev.target.classList.contains('col-resizer') || colId === 'actions') return;
+    if (sortState.colId === colId) {
+        sortState.asc = !sortState.asc;
+    } else {
+        sortState.colId = colId;
+        sortState.asc = true;
+    }
+    renderTable();
+}
+
+function initResize(ev, colId) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    const startX = ev.pageX;
+    const colObj = columnsConfig.find(c => c.id === colId);
+    if (!colObj) return;
+    const startW = colObj.width || 140;
+
+    function onMove(e) {
+        const diff = e.pageX - startX;
+        colObj.width = Math.max(75, startW + diff);
+        const th = document.querySelector(`th[data-col="${colId}"]`);
+        if (th) th.style.width = colObj.width + 'px';
+    }
+    function onUp() {
+        saveColumnsConfig();
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+}
+
+function renderTable() {
+    const q = (document.getElementById('search').value || '').toLowerCase();
+    const visibleCols = columnsConfig.filter(c => c.visible);
+
+    // Update dynamic filter pill counters
+    const countAll = allDevices.length;
+    const countWifi = allDevices.filter(d => d.conn_medium === 'wifi').length;
+    const countCable = allDevices.filter(d => d.conn_medium === 'cable').length;
+    const countOffline = allDevices.filter(d => d.conn_medium === 'offline').length;
+    const elAll = document.getElementById('count-all');
+    if (elAll) elAll.textContent = countAll;
+    const elWifi = document.getElementById('count-wifi');
+    if (elWifi) elWifi.textContent = countWifi;
+    const elCable = document.getElementById('count-cable');
+    if (elCable) elCable.textContent = countCable;
+    const elOffline = document.getElementById('count-offline');
+    if (elOffline) elOffline.textContent = countOffline;
+
+    const thead = document.getElementById('thead');
+    thead.innerHTML = '';
+    const trHead = document.createElement('tr');
+
+    visibleCols.forEach(col => {
+        const th = document.createElement('th');
+        th.dataset.col = col.id;
+        th.style.width = (col.width || 140) + 'px';
+        th.draggable = true;
+
+        let sortIndicator = '';
+        if (sortState.colId === col.id) {
+            sortIndicator = sortState.asc ? '▲' : '▼';
+        }
+
+        th.innerHTML = `
+            <div class="th-content" onclick="onHeaderClick('${col.id}', event)">
+                <span>${col.label}</span>
+                <span class="sort-ind">${sortIndicator}</span>
+            </div>
+            <div class="col-resizer" onmousedown="initResize(event, '${col.id}')"></div>
+        `;
+
+        th.addEventListener('dragstart', e => {
+            if (e.target.classList.contains('col-resizer')) { e.preventDefault(); return; }
+            dragSrcColId = col.id;
+            th.classList.add('dragging');
+        });
+        th.addEventListener('dragend', () => th.classList.remove('dragging'));
+        th.addEventListener('dragover', e => e.preventDefault());
+        th.addEventListener('drop', e => {
+            e.preventDefault();
+            if (!dragSrcColId || dragSrcColId === col.id) return;
+            const fromIdx = columnsConfig.findIndex(c => c.id === dragSrcColId);
+            const toIdx = columnsConfig.findIndex(c => c.id === col.id);
+            if (fromIdx >= 0 && toIdx >= 0) {
+                const [moved] = columnsConfig.splice(fromIdx, 1);
+                columnsConfig.splice(toIdx, 0, moved);
+                saveColumnsConfig();
+                renderColumnManager();
+                renderTable();
+            }
+        });
+
+        trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+
+    const filtered = allDevices.filter(d => {
+        if (activeMediumFilter !== 'all' && d.conn_medium !== activeMediumFilter) {
+            return false;
+        }
+        if (!q) return true;
+        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')}`.toLowerCase();
+        return text.includes(q);
+    });
+
+    filtered.sort((a, b) => {
+        const va = getSortValue(a, sortState.colId);
+        const vb = getSortValue(b, sortState.colId);
+        if (va < vb) return sortState.asc ? -1 : 1;
+        if (va > vb) return sortState.asc ? 1 : -1;
+        return 0;
+    });
+
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+
+    for (const d of filtered) {
+        const tr = document.createElement('tr');
+
+        let arpHtml = (d.live_ips && d.live_ips.length) ? `<code>${d.live_ips.join(', ')}</code>` : `<span style="color:var(--muted)">Offline</span>`;
+        if (d.mismatch_ip) {
+            arpHtml += ` <span class="badge badge-warn" title="Still using its previous IP until it reconnects">On ${d.mismatch_ip}</span>`;
+        }
+
+        let routerBadgeClass = 'badge-offline';
+        let routerIcon = '⚪ ';
+        if (d.router_type === 'tplink') { routerBadgeClass = 'badge-tplink'; routerIcon = '📡 '; }
+        else if (d.router_type === 'halo') { routerBadgeClass = 'badge-halo'; routerIcon = '📶 '; }
+        else if (d.router_type === 'wifi') { routerBadgeClass = 'badge-wifi'; routerIcon = '📶 '; }
+        else if (d.router_type === 'lan') { routerBadgeClass = 'badge-lan'; routerIcon = '🔌 '; }
+        else if (d.router_type === 'infra') { routerBadgeClass = 'badge-infra'; routerIcon = '🖧 '; }
+        const routerHtml = `<span class="badge ${routerBadgeClass}" title="${(d.router_tooltip || '').replace(/"/g, '&quot;')}">${routerIcon}${d.router_node || 'Offline'}</span>`;
+
+        let mediumBadgeClass = 'badge-offline';
+        let mediumIcon = '⚪ ';
+        if (d.conn_medium === 'wifi') {
+            mediumBadgeClass = 'badge-wifi';
+            mediumIcon = '📶 ';
+        } else if (d.conn_medium === 'cable') {
+            mediumBadgeClass = 'badge-cable';
+            mediumIcon = '🔌 ';
+        }
+        const mediumHtml = `<span class="badge ${mediumBadgeClass}" title="${d.conn_medium_label || ''}">${mediumIcon}${d.conn_medium_label || 'Offline'}</span>`;
+
+        const typeBadge = d.static
+            ? `<span class="badge badge-static">Static</span>`
+            : `<span class="badge badge-dyn">${d.expired ? 'Dynamic (Expired)' : 'Dynamic'}</span>`;
+
+        const predHtml = `
+            <div class="pred-cell" title="${d.dev_class} — ${d.dev_vendor}">
+                <span>${d.dev_icon || '🔹'} <strong>${d.dev_class || 'Device'}</strong></span>
+                <span class="pred-sub">${d.dev_vendor || ''}</span>
+            </div>
+        `;
+
+        const cellMap = {
+            hostname: `<strong>${d.hostname}</strong>`,
+            prediction: predHtml,
+            medium: mediumHtml,
+            mac: `<code>${d.mac}</code>`,
+            ip: `<code>${d.ip}</code>`,
+            arp: arpHtml,
+            router: routerHtml,
+            type: typeBadge,
+            actions: `
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${d.hostname}', '${d.mac}', '${d.ip}')">Edit / Set</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="pingDevice('${d.ip}')">Ping</button>
+                    <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Delete</button>
+                </div>
+            `
+        };
+
+        visibleCols.forEach(col => {
+            const td = document.createElement('td');
+            td.innerHTML = cellMap[col.id] || '';
+            tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+    }
+}
+
+function fillForm(hostname, mac, ip) {
+    document.getElementById('in-hostname').value = hostname === '(Unnamed)' ? '' : hostname;
+    document.getElementById('in-mac').value = mac;
+    document.getElementById('in-ip').value = ip;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function assignStatic(forceReconnect) {
+    const hostname = document.getElementById('in-hostname').value.trim();
+    const mac = document.getElementById('in-mac').value.trim();
+    const ip = document.getElementById('in-ip').value.trim();
+    showMessage(forceReconnect ? 'Applying static IP and reconnecting AP...' : 'Applying static IP...');
+    const res = await fetch('/api/assign-static', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ hostname, mac, ip, force_reconnect: forceReconnect })
+    });
+    const data = await res.json();
+    showMessage(data.message || 'Saved');
+    loadState();
+}
+
+async function pingDevice(ip) {
+    showMessage(`Pinging ${ip}...`);
+    const res = await fetch('/api/ping', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ip })
+    });
+    const data = await res.json();
+    showMessage(data.message);
+    loadState();
+}
+
+function deleteLease(mac, ip, hostname) {
+    const hostHtml = hostname ? `<strong>${hostname}</strong>` : 'this device';
+    const msg = `
+        <p style="margin-top:0;">Are you sure you want to delete the DHCP lease for ${hostHtml}?</p>
+        <div style="background:rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; margin:12px 0; font-size:0.88rem;">
+            <div><strong>IP:</strong> <code>${ip}</code></div>
+            <div><strong>MAC:</strong> <code>${mac}</code></div>
+        </div>
+        <p style="margin-bottom:0; font-size:0.8rem; color:var(--muted);">This will remove the entry from AdGuard Home and release the IP address.</p>
+    `;
+    showConfirmPopup(msg, async () => {
+        showMessage(`Removing lease ${ip}...`, 'loading');
+        const res = await fetch('/api/delete-lease', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mac, ip })
+        });
+        const data = await res.json();
+        showMessage(data.message);
+        loadState();
+    });
+}
+
+function cleanJunk() {
+    const msg = `
+        <p style="margin-top:0;">Are you sure you want to purge all ghost and expired leases?</p>
+        <p style="margin-bottom:0; font-size:0.8rem; color:var(--muted);">AdGuard Home will stop and restart for 1-2 seconds to clean the database.</p>
+    `;
+    showConfirmPopup(msg, async () => {
+        showMessage('Purging ghost and expired leases...', 'loading');
+        const res = await fetch('/api/clean-junk', { method: 'POST' });
+        const data = await res.json();
+        showMessage(data.message);
+        loadState();
+    });
+}
+
+async function setDuration(seconds) {
+    const res = await fetch('/api/set-duration', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ seconds })
+    });
+    const data = await res.json();
+    showMessage(data.message);
+    loadState();
+}
+
+loadConfig();
+loadState();
+</script>
+</body>
+</html>

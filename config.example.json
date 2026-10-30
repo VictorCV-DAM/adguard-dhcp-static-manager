@@ -1,0 +1,28 @@
+{
+  "leases_path": "/opt/adguardhome/work/data/leases.json",
+  "yaml_path": "/opt/adguardhome/conf/AdGuardHome.yaml",
+  "docker_container": "adguardhome",
+  "adguard_url": "http://127.0.0.1:8080",
+  "adguard_user": "admin",
+  "adguard_pass": "",
+  "routers": [
+    {
+      "id": "primary-ap",
+      "name": "Primary TP-Link AP",
+      "type": "tplink_wr841n",
+      "ip": "192.168.0.2",
+      "user": "admin",
+      "password": "",
+      "enabled": true
+    },
+    {
+      "id": "mesh-ap",
+      "name": "Mesh Wi-Fi System",
+      "type": "mercusys_halo",
+      "ip": "192.168.0.3",
+      "user": "admin",
+      "password": "",
+      "enabled": true
+    }
+  ]
+}
