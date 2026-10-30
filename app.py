@@ -616,12 +616,14 @@ def get_device_web_links(ip, hostname, dev_class, dev_cat, routers=None, halo_no
         lbl = halo_node_info.get(ip, {}).get('label', f'Halo Node ({ip})')
         links.append({'label': f'{lbl} Web', 'url': f'http://{ip}'})
         links.append({'label': 'Halo Web (HTTPS)', 'url': f'https://{ip}'})
-    elif ip == '192.168.1.249' or 'pi-server' in h_lower:
+    elif ip == '192.168.1.249':
         links.append({'label': 'AdGuard Home (:8080)', 'url': f'http://{ip}:8080'})
         links.append({'label': 'DHCP Panel (:5001)', 'url': f'http://{ip}:5001'})
         links.append({'label': 'Wi-Fi Panel (:5000)', 'url': f'http://{ip}:5000'})
     elif ip == '192.168.1.219' or 'ha-vm' in h_lower or 'homeassistant' in h_lower:
         links.append({'label': 'Home Assistant (:8123)', 'url': f'http://{ip}:8123'})
+        links.append({'label': 'Nginx Proxy Manager (:81)', 'url': f'http://{ip}:81'})
+        links.append({'label': 'Web Proxy HTTPS (:443)', 'url': f'https://{ip}'})
     else:
         is_router_cfg = False
         for r in routers:
@@ -1414,6 +1416,35 @@ def api_state():
             })
             seen_ips.add(aip)
 
+    # Include Raspberry Pi local host if not already in devices
+    if '192.168.1.249' not in seen_ips:
+        devices.append({
+            'hostname': 'pi-server (Local Host)',
+            'mac': 'b8:27:eb:a0:ff:6e',
+            'ip': '192.168.1.249',
+            'static': True,
+            'manual_static': True,
+            'expires': '',
+            'expired': False,
+            'live_ips': ['192.168.1.249'],
+            'mismatch_ip': None,
+            'router_node': 'Gateway / LAN',
+            'router_tooltip': 'Local host running AdGuard Home and DHCP Manager',
+            'router_type': 'lan',
+            'conn_medium': 'cable',
+            'conn_medium_label': 'Wired Ethernet',
+            'dev_class': 'Server / Raspberry Pi',
+            'dev_vendor': 'Raspberry Pi Foundation',
+            'dev_icon': '🍓',
+            'dev_cat': 'server',
+            'web_links': [
+                {'label': 'AdGuard Home (:8080)', 'url': 'http://192.168.1.249:8080'},
+                {'label': 'DHCP Panel (:5001)', 'url': 'http://192.168.1.249:5001'},
+                {'label': 'Wi-Fi Panel (:5000)', 'url': 'http://192.168.1.249:5000'}
+            ]
+        })
+        seen_ips.add('192.168.1.249')
+
     devices.sort(key=lambda d: (not d['static'], ip_sort_key(d['ip'])))
 
     # Global network infrastructure links for the top quick-access dropdown
@@ -1455,6 +1486,12 @@ def api_state():
             'ip': '192.168.1.219:8123',
             'url': 'http://192.168.1.219:8123',
             'icon': '🏠'
+        })
+        global_network_links.append({
+            'name': 'Nginx Proxy Manager',
+            'ip': '192.168.1.219:81',
+            'url': 'http://192.168.1.219:81',
+            'icon': '🔀'
         })
 
     return jsonify({
