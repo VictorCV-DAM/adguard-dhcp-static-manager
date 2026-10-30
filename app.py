@@ -70,6 +70,7 @@ OUI_DATABASE = {
     "ac:84:c6": ("TP-Link Technologies", "Router / Access Point", "🖧"),
     "e0:d3:62": ("TP-Link Technologies", "Router / Access Point", "🖧"),
     "30:16:9d": ("Mercusys / TP-Link", "Mesh Wi-Fi Node", "🖧"),
+    "00:14:5c": ("Eminent / Intronics (EM4590)", "Repeater / Access Point", "📶"),
     "dc:4f:22": ("Espressif Systems (ESP8266)", "Microcontroller / IoT", "🎛️"),
     "60:01:94": ("Espressif Systems (ESP8266)", "Microcontroller / IoT", "🎛️"),
     "7c:87:ce": ("Espressif Systems (ESP32/8266)", "Microcontroller / IoT", "🎛️"),
@@ -938,7 +939,18 @@ def discover_network_routers(current_routers=None):
     for ip, success, status, final_url, text, headers in results:
         if not success and status == 0:
             continue
-        server = headers.get("server", "").lower()
+        auth_header = ""
+        server = ""
+        for hk, hv in headers.items():
+            hk_l = hk.lower()
+            if hk_l == "www-authenticate":
+                auth_header = str(hv).lower()
+            elif hk_l == "server":
+                server = str(hv).lower()
+
+        m_title = re.search(r'<title[^>]*>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
+        title = m_title.group(1).strip() if m_title else ""
+        title_lower = title.lower()
 
         # 1. Mercusys Halo Mesh
         if "webpages/index.html" in final_url or "ozkersubs" in text or "su.url.ozkersubs" in text or "mercusys" in text.lower() or "halo" in text.lower():
@@ -990,17 +1002,36 @@ def discover_network_routers(current_routers=None):
                 "name": "OpenWrt / LuCI AP",
                 "user": "root"
             })
-        # 5. Generic router web interface
-        elif "<title>" in text.lower():
-            m_title = re.search(r'<title[^>]*>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
-            title = m_title.group(1).strip() if m_title else ""
-            if title and any(k in title.lower() for k in ["router", "ap", "access point", "modem", "gateway", "fibra", "wifi", "livebox"]):
-                discovered.append({
-                    "ip": ip,
-                    "type": "generic_ap",
-                    "name": title,
-                    "user": "admin"
-                })
+        # 5. Wi-Fi Repeater (e.g. Eminent EM4590, Realtek RTL8196/RTL8192, Boa server with Wifi-Repeater realm)
+        elif "wifi-repeater" in auth_header or "repeater" in auth_header or "em4590" in auth_header or "realtek" in text.lower() or ("boa" in server and ("repeater" in auth_header or "router" in auth_header or "wireless" in auth_header or "wireless" in title_lower)):
+            mac_candidate = ""
+            for m_k, ips_k in arp_table.items():
+                if ip in ips_k:
+                    mac_candidate = m_k.lower()
+                    break
+            is_eminent = "wifi-repeater" in auth_header or "em4590" in auth_header or mac_candidate.startswith("00:14:5c")
+            disp_name = "Wi-Fi Repeater EM4590 (Eminent)" if is_eminent else "Wi-Fi Repeater / AP"
+            discovered.append({
+                "ip": ip,
+                "type": "generic_ap",
+                "name": disp_name,
+                "user": "admin"
+            })
+        # 6. Generic router web interface or HTTP auth
+        elif title and any(k in title_lower for k in ["router", "ap", "access point", "modem", "gateway", "fibra", "wifi", "livebox"]):
+            discovered.append({
+                "ip": ip,
+                "type": "generic_ap",
+                "name": title,
+                "user": "admin"
+            })
+        elif auth_header and any(k in auth_header for k in ["router", "gateway", "access point", "ap"]):
+            discovered.append({
+                "ip": ip,
+                "type": "generic_ap",
+                "name": f"Access Point / Router ({ip})",
+                "user": "admin"
+            })
 
     # Grouping & merging logic
     halo_ips = []
@@ -1186,8 +1217,8 @@ def api_state():
             router_type = 'infra'
             conn_medium = 'cable'
             conn_medium_label = 'Wired Ethernet'
-        elif ip in infra_ips or 'mercusys-halo' in hostname.lower() or 'tplink' in hostname.lower():
-            router_node = 'Router / AP Node'
+        elif ip in infra_ips or 'mercusys-halo' in hostname.lower() or 'tplink' in hostname.lower() or 'repeater' in hostname.lower() or 'repetidor' in hostname.lower() or 'em4590' in hostname.lower() or dev_class in ["Router / Access Point", "Repeater / Access Point"]:
+            router_node = 'AP / Wi-Fi Repeater' if ('repeater' in hostname.lower() or 'repetidor' in dev_class.lower() or 'em4590' in hostname.lower()) else 'Router / AP Node'
             router_tooltip = f'Network infrastructure device ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
@@ -1243,6 +1274,99 @@ def api_state():
             'dev_icon': dev_icon,
             'dev_cat': dev_cat
         })
+
+    seen_ips = {d['ip'] for d in devices if d.get('ip')}
+
+    # Active devices detected via ARP without an AdGuard DHCP lease (e.g. manual static IPs / infrastructure)
+    for arp_mac, arp_ips in arp.items():
+        m = (arp_mac or '').lower()
+        if m in ('', '00:00:00:00:00:00'):
+            continue
+        for aip in arp_ips:
+            if not aip or ':' in aip or aip in seen_ips:
+                continue
+            if aip in ('127.0.0.1', '192.168.1.249'):
+                continue
+
+            hostname = ""
+            for r in routers:
+                r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
+                if aip in r_ips:
+                    hostname = r.get('name') or ''
+                    break
+
+            if not hostname:
+                if aip == '192.168.1.1':
+                    hostname = 'gateway-router'
+                elif m.startswith('00:14:5c') or aip == '192.168.1.9':
+                    hostname = 'wifi-repeater-em4590'
+                else:
+                    hostname = f"device-{aip.replace('.', '-')}"
+
+            halo_info = halo_client_map.get(m)
+            dev_class, dev_vendor, dev_icon, dev_cat = predict_device_info(hostname, m, halo_info)
+            is_wireless = is_wireless_only_device(dev_class, dev_cat, hostname, m)
+
+            router_tooltip = ""
+            if aip in halo_node_info:
+                router_node = halo_node_info[aip]["label"]
+                router_tooltip = halo_node_info[aip]["tooltip"]
+                router_type = 'infra'
+                conn_medium = 'cable'
+                conn_medium_label = 'Wired Ethernet'
+            elif aip in infra_ips or 'mercusys-halo' in hostname.lower() or 'tplink' in hostname.lower() or 'repeater' in hostname.lower() or 'repetidor' in hostname.lower() or 'em4590' in hostname.lower() or dev_class in ["Router / Access Point", "Repeater / Access Point"]:
+                router_node = 'AP / Wi-Fi Repeater' if ('repeater' in hostname.lower() or 'repetidor' in dev_class.lower() or 'em4590' in hostname.lower()) else 'Router / AP Node'
+                router_tooltip = f'Network infrastructure device ({aip})'
+                router_type = 'infra'
+                conn_medium = 'cable'
+                conn_medium_label = 'Wired Ethernet'
+            elif m in router_mac_map:
+                router_node = router_mac_map[m]["label"]
+                router_tooltip = router_mac_map[m]["tooltip"]
+                router_type = router_mac_map[m]["type"]
+                conn_medium = 'wifi'
+                conn_medium_label = 'Wi-Fi 2.4 GHz'
+            elif halo_info:
+                router_node = halo_info["node_label"]
+                router_tooltip = halo_info["tooltip"]
+                router_type = 'halo'
+                conn_medium = halo_info.get("medium", "wifi")
+                conn_medium_label = halo_info.get("medium_label", "Wi-Fi")
+            else:
+                if is_wireless:
+                    router_node = 'Wi-Fi AP / Repeater'
+                    router_tooltip = 'Active wireless network device (Wi-Fi / Repeater)'
+                    router_type = 'wifi'
+                    conn_medium = 'wifi'
+                    conn_medium_label = 'Wi-Fi'
+                else:
+                    router_node = fallback_lan_name
+                    router_tooltip = 'Connected via wired Ethernet / Switch'
+                    router_type = 'lan'
+                    conn_medium = 'cable'
+                    conn_medium_label = 'Wired Ethernet'
+
+            devices.append({
+                'hostname': hostname,
+                'mac': m,
+                'ip': aip,
+                'static': True,
+                'manual_static': True,
+                'expires': '',
+                'expired': False,
+                'live_ips': [aip],
+                'mismatch_ip': None,
+                'router_node': router_node,
+                'router_tooltip': router_tooltip,
+                'router_type': router_type,
+                'conn_medium': conn_medium,
+                'conn_medium_label': conn_medium_label,
+                'dev_class': dev_class,
+                'dev_vendor': dev_vendor,
+                'dev_icon': dev_icon,
+                'dev_cat': dev_cat
+            })
+            seen_ips.add(aip)
 
     devices.sort(key=lambda d: (not d['static'], ip_sort_key(d['ip'])))
 
@@ -1351,7 +1475,13 @@ def api_delete_lease():
     finally:
         run_sudo(['docker', 'start', container])
 
-    return jsonify({'status': 'success', 'message': f'Lease {ip} ({mac}) removed successfully.'})
+    if ip:
+        try:
+            run_sudo(['ip', 'neigh', 'del', ip, 'dev', 'eth0'])
+        except Exception:
+            pass
+
+    return jsonify({'status': 'success', 'message': f'Lease / record {ip} ({mac}) removed successfully.'})
 
 
 @app.route('/api/clean-junk', methods=['POST'])

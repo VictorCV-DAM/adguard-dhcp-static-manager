@@ -1046,7 +1046,7 @@ function renderTable() {
         const mediumHtml = `<span class="badge ${mediumBadgeClass}" title="${d.conn_medium_label || ''}">${mediumIcon}${d.conn_medium_label || 'Offline'}</span>`;
 
         const typeBadge = d.static
-            ? `<span class="badge badge-static">Static</span>`
+            ? `<span class="badge badge-static" title="${d.manual_static ? 'Static IP manually configured on device (outside DHCP)' : 'Static reservation in AdGuard'}">${d.manual_static ? 'Static (Manual)' : 'Static'}</span>`
             : `<span class="badge badge-dyn">${d.expired ? 'Dynamic (Expired)' : 'Dynamic'}</span>`;
 
         const predHtml = `
