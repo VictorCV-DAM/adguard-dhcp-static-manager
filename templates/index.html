@@ -1209,19 +1209,22 @@
                 </div>
 
                 <div class="topo-controls">
+                    <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Toggle between Floating Zigzag Constellation (Plexus), Electric Synapse Pulses, or Full Hybrid">
+                        🕸️ Style: <span id="topo-style-txt">Floating Zigzag</span>
+                    </button>
+                    <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" title="Fire an immediate synaptic discharge from the Main Router across the entire mesh" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);">
+                        ⚡ Pulse
+                    </button>
                     <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Show or hide offline devices in the mesh">
                         👁️ Offline
                     </button>
                     <button id="topo-btn-label" class="topo-ctrl-btn" onclick="cycleTopoLabelMode()" title="Change label text next to each node">
                         🏷️ <span id="topo-lbl-mode-txt">Name</span>
                     </button>
-                    <button id="topo-btn-fx" class="topo-ctrl-btn active" onclick="toggleTopoEffects()" title="Toggle neural zigzag synapses, pulses, and living harmonic motion">
-                        ⚡ Neural Network
+                    <button id="topo-btn-fx" class="topo-ctrl-btn active" onclick="toggleTopoEffects()" title="Toggle floating motion and network effects">
+                        ✨ Animation
                     </button>
-                    <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" title="Fire an immediate synaptic zigzag discharge from the Main Router across the entire mesh" style="border-color:rgba(56,189,248,0.45); color:#7dd3fc;">
-                        ⚡ Neural Pulse
-                    </button>
-                    <button class="topo-ctrl-btn" onclick="resetTopoLayout()" title="Recalculate circular layout and center map">
+                    <button class="topo-ctrl-btn" onclick="resetTopoLayout()" title="Recalculate ultra-spacious layout and center map">
                         🎯 Center
                     </button>
                     <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" title="Show or hide card list below the map">
@@ -2992,23 +2995,24 @@ function confirmAssignFromMap() {
     fillForm(dev.hostname || '', dev.mac, ipMapTargetIp);
 }
 
-// --- NETWORK TOPOLOGY (SPACIOUS RADIAL VISUALIZER + NEURAL ZIGZAG SYNAPSES) ---
+// --- NETWORK TOPOLOGY (ULTRA-SPACIOUS + FLOATING ZIGZAG CONSTELLATION PLEXUS & SYNAPSES) ---
 let topoState = {
     initialized: false,
     showOffline: true,
-    labelMode: 'name', // 'name' | 'name_ip' | 'mac'
+    labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
+    visualStyle: 'plexus', // 'plexus' (Floating Zigzag Constellation) | 'synapse' (Electric Pulses) | 'hybrid' (Full Hybrid)
     effectsOn: true,
     showCards: false,
     searchQuery: '',
     panX: 0,
     panY: 0,
-    scale: 0.75,
+    scale: 0.55,
     targetPanX: 0,
     targetPanY: 0,
-    targetScale: 0.75,
+    targetScale: 0.55,
     smoothCamera: false,
-    nodes: [],      // { id, type: 'core'|'hub'|'client', label, sub, x, y, baseX, baseY, r, color, online, static, blocked, dev, hubId, angle, phase, flash }
-    links: [],      // { from, to, type: 'trunk'|'spoke', online, color, medium, seed }
+    nodes: [],      // { id, type: 'core'|'hub'|'client', label, sub, x, y, baseX, baseY, r, color, online, static, blocked, dev, hubId, angle, phase, driftR, flash }
+    links: [],      // { from, to, type: 'trunk'|'spoke', online, color, medium, seed, joints: [{t, perp, phaseX, phaseY, drift, x, y}] }
     particles: [],  // { linkIdx, t, speed, color, size }
     synapses: [],   // { linkIdx, t, len, speed, amp, colorCore, colorGlow, width, cascade }
     shockwaves: [], // { x, y, r, maxR, color, alpha }
@@ -3023,6 +3027,22 @@ let topoState = {
     lastSpontaneous: 0,
     customPositions: {}
 };
+
+function cycleTopoVisualStyle() {
+    const order = ['plexus', 'synapse', 'hybrid'];
+    const names = {
+        plexus: 'Floating Zigzag',
+        synapse: 'Electric Pulses',
+        hybrid: 'Full Hybrid'
+    };
+    const nextIdx = (order.indexOf(topoState.visualStyle) + 1) % order.length;
+    topoState.visualStyle = order[nextIdx];
+    const txtEl = document.getElementById('topo-style-txt');
+    if (txtEl) txtEl.textContent = names[topoState.visualStyle];
+    if (topoState.visualStyle !== 'plexus') {
+        triggerNeuralCascade();
+    }
+}
 
 function toggleTopoOffline() {
     topoState.showOffline = !topoState.showOffline;
@@ -3081,8 +3101,8 @@ function focusFirstTopoMatch() {
     if (!topoState.searchQuery) return;
     const m = topoState.nodes.find(n => nodeMatchesSearch(n));
     if (m) {
-        centerOnPoint(m.x, m.y, 1.15, true);
-        spawnNodeShockwave(m.x, m.y, '#fbbf24', 90);
+        centerOnPoint(m.x, m.y, 1.05, true);
+        spawnNodeShockwave(m.x, m.y, '#fbbf24', 110);
     }
 }
 
@@ -3130,24 +3150,25 @@ function fitTopoToScreen(smooth = true) {
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     topoState.nodes.forEach(n => {
-        const pad = n.type === 'client' ? 140 : 90;
-        if (n.x - pad < minX) minX = n.x - pad;
-        if (n.x + pad > maxX) maxX = n.x + pad;
-        if (n.y - 70 < minY) minY = n.y - 70;
-        if (n.y + 70 > maxY) maxY = n.y + 70;
+        const padX = n.type === 'client' ? 190 : 120;
+        const padY = n.type === 'client' ? 95 : 100;
+        if (n.baseX - padX < minX) minX = n.baseX - padX;
+        if (n.baseX + padX > maxX) maxX = n.baseX + padX;
+        if (n.baseY - padY < minY) minY = n.baseY - padY;
+        if (n.baseY + padY > maxY) maxY = n.baseY + padY;
     });
-    const bw = Math.max(300, maxX - minX);
-    const bh = Math.max(300, maxY - minY);
-    const scaleX = (cw - 90) / bw;
-    const scaleY = (ch - 120) / bh;
-    const sc = Math.max(0.24, Math.min(1.15, Math.min(scaleX, scaleY)));
+    const bw = Math.max(400, maxX - minX);
+    const bh = Math.max(400, maxY - minY);
+    const scaleX = (cw - 80) / bw;
+    const scaleY = (ch - 110) / bh;
+    const sc = Math.max(0.14, Math.min(1.1, Math.min(scaleX, scaleY)));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     centerOnPoint(cx, cy, sc, smooth);
 }
 
-function spawnNodeShockwave(x, y, color = '#00e5ff', maxR = 140) {
-    topoState.shockwaves.push({ x, y, r: 12, maxR, color, alpha: 0.95 });
+function spawnNodeShockwave(x, y, color = '#00e5ff', maxR = 160) {
+    topoState.shockwaves.push({ x, y, r: 14, maxR, color, alpha: 0.95 });
 }
 
 function triggerNeuralCascade(originNode = null) {
@@ -3156,7 +3177,7 @@ function triggerNeuralCascade(originNode = null) {
     if (!source) return;
 
     source.flash = 1.0;
-    spawnNodeShockwave(source.x, source.y, source.type === 'core' ? '#00e5ff' : source.color, source.type === 'core' ? 220 : 140);
+    spawnNodeShockwave(source.x, source.y, source.type === 'core' ? '#00e5ff' : source.color, source.type === 'core' ? 280 : 170);
 
     topoState.links.forEach((lk, idx) => {
         if (source.type === 'core' && lk.type === 'trunk') {
@@ -3164,11 +3185,11 @@ function triggerNeuralCascade(originNode = null) {
                 linkIdx: idx,
                 t: 0,
                 len: 0.36,
-                speed: 0.022 + Math.random() * 0.006,
-                amp: 11,
+                speed: 0.02 + Math.random() * 0.006,
+                amp: 12,
                 colorCore: '#ffffff',
                 colorGlow: '#00f5d4',
-                width: 2.4,
+                width: 2.5,
                 cascade: true
             });
         } else if (source.type === 'hub' && lk.from.id === source.id && lk.online) {
@@ -3176,13 +3197,134 @@ function triggerNeuralCascade(originNode = null) {
                 linkIdx: idx,
                 t: 0,
                 len: 0.42,
-                speed: 0.024 + Math.random() * 0.01,
-                amp: 7.5,
+                speed: 0.022 + Math.random() * 0.01,
+                amp: 8,
                 colorCore: '#e0f2fe',
                 colorGlow: lk.to.static ? '#10b981' : '#38bdf8',
-                width: 1.7,
+                width: 1.8,
                 cascade: false
             });
+        }
+    });
+}
+
+function createLinkZigzagJoints(isTrunk, seed, linkLen) {
+    const count = isTrunk ? 4 : 3;
+    const joints = [];
+    const baseAmp = isTrunk ? Math.min(58, Math.max(28, linkLen * 0.055)) : Math.min(38, Math.max(16, linkLen * 0.075));
+    for (let i = 1; i <= count; i++) {
+        const t = i / (count + 1);
+        const sign = (i % 2 === 1) ? 1 : -1;
+        const env = Math.sin(t * Math.PI);
+        const perp = sign * baseAmp * (0.65 + 0.35 * Math.sin(seed * 3.1 + i * 1.9)) * env;
+        joints.push({
+            t,
+            perp,
+            phaseX: seed * 2.3 + i * 1.73,
+            phaseY: seed * 1.9 + i * 2.41,
+            drift: isTrunk ? 18 : 13,
+            x: 0,
+            y: 0
+        });
+    }
+    return joints;
+}
+
+function relaxTopoPositions(nodes) {
+    const core = nodes.find(n => n.type === 'core');
+    const hubs = nodes.filter(n => n.type === 'hub');
+    const clients = nodes.filter(n => n.type === 'client');
+    const hubMap = {};
+    hubs.forEach(h => { hubMap[h.id] = h; });
+
+    for (let iter = 0; iter < 35; iter++) {
+        for (let i = 0; i < hubs.length; i++) {
+            for (let j = i + 1; j < hubs.length; j++) {
+                const a = hubs[i], b = hubs[j];
+                if (topoState.customPositions[a.id] && topoState.customPositions[b.id]) continue;
+                const dx = b.baseX - a.baseX;
+                const dy = b.baseY - a.baseY;
+                const dist = Math.hypot(dx, dy) || 1;
+                const minDist = 660;
+                if (dist < minDist) {
+                    const push = (minDist - dist) * 0.35;
+                    const ux = dx / dist, uy = dy / dist;
+                    if (!topoState.customPositions[a.id]) { a.baseX -= ux * push; a.baseY -= uy * push; }
+                    if (!topoState.customPositions[b.id]) { b.baseX += ux * push; b.baseY += uy * push; }
+                }
+            }
+        }
+    }
+
+    clients.forEach(c => {
+        if (topoState.customPositions[c.id]) return;
+        const h = hubMap[c.hubId];
+        if (h) {
+            c.baseX = h.baseX + c.relX;
+            c.baseY = h.baseY + c.relY;
+        }
+    });
+
+    const minSepX = 215;
+    const minSepY = 78;
+    for (let iter = 0; iter < 55; iter++) {
+        for (let i = 0; i < clients.length; i++) {
+            const a = clients[i];
+            for (let j = i + 1; j < clients.length; j++) {
+                const b = clients[j];
+                const dx = b.baseX - a.baseX;
+                const dy = b.baseY - a.baseY;
+                if (Math.abs(dx) >= minSepX || Math.abs(dy) >= minSepY) continue;
+
+                const nx = dx / minSepX;
+                const ny = dy / minSepY;
+                const normDist = Math.hypot(nx, ny) || 0.01;
+                if (normDist < 1.0) {
+                    const overlap = (1.0 - normDist);
+                    const gx = (dx === 0 ? (i % 2 === 0 ? 1 : -1) : dx / Math.abs(dx)) * overlap * minSepX * 0.28;
+                    const gy = (dy === 0 ? (j % 2 === 0 ? 1 : -1) : dy / Math.abs(dy)) * overlap * minSepY * 0.34;
+                    if (!topoState.customPositions[a.id]) { a.baseX -= gx; a.baseY -= gy; }
+                    if (!topoState.customPositions[b.id]) { b.baseX += gx; b.baseY += gy; }
+                }
+            }
+        }
+
+        for (let i = 0; i < clients.length; i++) {
+            const c = clients[i];
+            if (topoState.customPositions[c.id]) continue;
+
+            if (core) {
+                const dx = c.baseX - core.baseX;
+                const dy = c.baseY - core.baseY;
+                const d = Math.hypot(dx, dy) || 1;
+                if (d < 420) {
+                    const push = (420 - d) * 0.45;
+                    c.baseX += (dx / d) * push;
+                    c.baseY += (dy / d) * push;
+                }
+            }
+
+            for (let hIdx = 0; hIdx < hubs.length; hIdx++) {
+                const h = hubs[hIdx];
+                const minHubDist = (h.id === c.hubId) ? 235 : 275;
+                const dx = c.baseX - h.baseX;
+                const dy = c.baseY - h.baseY;
+                const d = Math.hypot(dx, dy) || 1;
+                if (d < minHubDist) {
+                    const push = (minHubDist - d) * 0.45;
+                    c.baseX += (dx / d) * push;
+                    c.baseY += (dy / d) * push;
+                }
+            }
+        }
+    }
+
+    nodes.forEach(n => {
+        n.x = n.baseX;
+        n.y = n.baseY;
+        if (n.type === 'client' && hubMap[n.hubId]) {
+            n.relX = n.baseX - hubMap[n.hubId].baseX;
+            n.relY = n.baseY - hubMap[n.hubId].baseY;
         }
     });
 }
@@ -3212,29 +3354,39 @@ function buildTopoGraph(fitView = false) {
         y: corePos.y,
         baseX: corePos.x,
         baseY: corePos.y,
-        r: 34,
+        r: 42,
         color: '#00e5ff',
         online: true,
         phase: 0,
-        flash: 0.6
+        driftR: 5,
+        flash: 0.7
     };
     nodes.push(coreNode);
 
     const entries = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
     const hubCount = entries.length;
 
+    const weights = entries.map(([_, devs]) => 1.35 + Math.sqrt(devs.length) * 0.9);
+    const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+
+    const desiredCircumference = entries.reduce((acc, [_, devs]) => {
+        return acc + Math.max(680, 420 + Math.sqrt(devs.length) * 190);
+    }, 0);
+    const baseOrbitRadius = hubCount <= 1 ? 650 : Math.max(1050, desiredCircumference / (2 * Math.PI));
+
+    let accumWeight = 0;
+
     entries.forEach(([hubName, devs], idx) => {
         const hubId = 'hub:' + hubName;
-        const baseAngle = hubCount === 1 ? 0 : (-Math.PI / 2 + (idx * 2 * Math.PI) / hubCount);
+        const wShare = weights[idx] / totalWeight;
+        const centerWeight = accumWeight + weights[idx] / 2;
+        accumWeight += weights[idx];
+
+        const baseAngle = hubCount === 1 ? 0 : (-Math.PI / 2 + (centerWeight / totalWeight) * Math.PI * 2);
         const clientCount = devs.length;
 
-        const ringCount = clientCount > 36 ? 3 : (clientCount > 16 ? 2 : 1);
-        const ring1Radius = Math.max(210, Math.min(285, clientCount * 8.5));
-        const ring2Radius = ring1Radius + 115;
-        const ring3Radius = ring2Radius + 110;
-        const clusterOuterRadius = ringCount === 3 ? ring3Radius : (ringCount === 2 ? ring2Radius : ring1Radius);
-
-        const hubDist = hubCount === 1 ? 460 : Math.max(600, clusterOuterRadius + 290 + (hubCount > 3 ? 95 : 0));
+        const staggerOffset = (hubCount >= 5 && (idx % 2 === 1)) ? 430 : 0;
+        const hubDist = baseOrbitRadius + staggerOffset;
 
         const savedHub = topoState.customPositions[hubId];
         const hx = savedHub ? savedHub.x : Math.cos(baseAngle) * hubDist;
@@ -3252,7 +3404,7 @@ function buildTopoGraph(fitView = false) {
             y: hy,
             baseX: hx,
             baseY: hy,
-            r: 15,
+            r: 18,
             color: isCableHub ? '#10b981' : '#00e5ff',
             online: onlineDevs > 0,
             onlineCount: onlineDevs,
@@ -3260,19 +3412,10 @@ function buildTopoGraph(fitView = false) {
             isCable: isCableHub,
             angleFromCore: baseAngle,
             phase: idx * 1.7,
+            driftR: 9,
             flash: 0
         };
         nodes.push(hubNode);
-
-        links.push({
-            from: coreNode,
-            to: hubNode,
-            type: 'trunk',
-            online: onlineDevs > 0,
-            color: isCableHub ? '#10b981' : '#00d4ff',
-            medium: isCableHub ? 'cable' : 'wifi',
-            seed: (idx + 1) * 13.37
-        });
 
         const sortedDevs = [...devs].sort((a, b) => {
             const oa = isOnline(a) ? 1 : 0;
@@ -3281,21 +3424,17 @@ function buildTopoGraph(fitView = false) {
             return (a.hostname || '').localeCompare(b.hostname || '');
         });
 
-        const angleToCore = Math.atan2(coreNode.y - hy, coreNode.x - hx);
-        const gapRad = hubCount > 0 ? 0.38 : 0;
-        const spanRad = Math.PI * 2 - gapRad * 2;
-        const startRad = angleToCore + gapRad;
+        const outwardAngle = Math.atan2(hy - coreNode.baseY, hx - coreNode.baseX);
+        const ringCount = clientCount > 24 ? 3 : (clientCount > 9 ? 2 : 1);
+        const ringRadii = [320, 495, 670];
+        const fanSpan = Math.min(Math.PI * 1.48, Math.max(0.85, Math.min(wShare * Math.PI * 2 * 1.35, clientCount * 0.22)));
+        const startRad = outwardAngle - fanSpan / 2;
 
         sortedDevs.forEach((d, cIdx) => {
             const cid = 'dev:' + (d.mac || d.ip || cIdx);
             const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
-            const ang = startRad + t * spanRad;
-            let rad = ring1Radius;
-            if (ringCount === 2 && (cIdx % 2 === 1)) rad = ring2Radius;
-            else if (ringCount === 3) {
-                if (cIdx % 3 === 1) rad = ring2Radius;
-                else if (cIdx % 3 === 2) rad = ring3Radius;
-            }
+            const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + t * fanSpan);
+            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 28);
 
             const savedClient = topoState.customPositions[cid];
             const cx = savedClient ? savedClient.x : hx + Math.cos(ang) * rad;
@@ -3320,27 +3459,55 @@ function buildTopoGraph(fitView = false) {
                 relX: cx - hx,
                 relY: cy - hy,
                 angle: ang,
-                r: on ? 6.8 : 5.2,
+                r: on ? 7.2 : 5.5,
                 color: dotColor,
                 online: on,
                 static: !!d.static,
                 blocked: !!d.blocked,
                 dev: d,
                 hubId: hubId,
-                phase: (cIdx * 0.9) + idx,
+                phase: (cIdx * 1.13) + idx * 2.1,
+                driftR: on ? 13 : 6,
                 flash: 0
             };
             nodes.push(cNode);
+        });
+    });
 
-            links.push({
-                from: hubNode,
-                to: cNode,
-                type: 'spoke',
-                online: on,
-                color: d.blocked ? 'rgba(239,68,68,0.5)' : (on ? (d.static ? 'rgba(16,185,129,0.42)' : 'rgba(56,189,248,0.4)') : 'rgba(148,163,184,0.16)'),
-                medium: d.conn_medium,
-                seed: (cIdx + 1) * 7.13 + idx
-            });
+    relaxTopoPositions(nodes);
+
+    const hubsList = nodes.filter(n => n.type === 'hub');
+    hubsList.forEach((hubNode, idx) => {
+        const seed = (idx + 1) * 13.37;
+        const len = Math.hypot(hubNode.baseX - coreNode.baseX, hubNode.baseY - coreNode.baseY);
+        links.push({
+            from: coreNode,
+            to: hubNode,
+            type: 'trunk',
+            online: hubNode.online,
+            color: hubNode.isCable ? '#10b981' : '#00d4ff',
+            medium: hubNode.isCable ? 'cable' : 'wifi',
+            seed,
+            joints: createLinkZigzagJoints(true, seed, len)
+        });
+    });
+
+    const clientsList = nodes.filter(n => n.type === 'client');
+    clientsList.forEach((cNode, cIdx) => {
+        const hubNode = nodes.find(h => h.id === cNode.hubId);
+        if (!hubNode) return;
+        const d = cNode.dev || {};
+        const seed = (cIdx + 1) * 7.13;
+        const len = Math.hypot(cNode.baseX - hubNode.baseX, cNode.baseY - hubNode.baseY);
+        links.push({
+            from: hubNode,
+            to: cNode,
+            type: 'spoke',
+            online: cNode.online,
+            color: cNode.blocked ? 'rgba(239,68,68,0.55)' : (cNode.online ? (cNode.static ? 'rgba(16,185,129,0.48)' : 'rgba(56,189,248,0.45)') : 'rgba(148,163,184,0.18)'),
+            medium: d.conn_medium,
+            seed,
+            joints: createLinkZigzagJoints(false, seed, len)
         });
     });
 
@@ -3355,9 +3522,9 @@ function buildTopoGraph(fitView = false) {
             particles.push({
                 linkIdx: lIdx,
                 t: (i / count) + Math.random() * 0.25,
-                speed: lk.type === 'trunk' ? 0.0042 : (0.0022 + Math.random() * 0.0018),
+                speed: lk.type === 'trunk' ? 0.0036 : (0.0018 + Math.random() * 0.0015),
                 color: lk.type === 'trunk' ? '#00f5d4' : (lk.to.static ? '#34d399' : '#38bdf8'),
-                size: lk.type === 'trunk' ? 3.5 : 2.1
+                size: lk.type === 'trunk' ? 3.6 : 2.2
             });
         }
     });
@@ -3366,6 +3533,20 @@ function buildTopoGraph(fitView = false) {
     if (fitView) {
         fitTopoToScreen(false);
     }
+}
+
+function pointOnArticulatedLink(lk, t) {
+    const pts = [lk.from, ...(lk.joints || []), lk.to];
+    const segs = pts.length - 1;
+    const scaled = Math.max(0, Math.min(0.9999, t)) * segs;
+    const idx = Math.floor(scaled);
+    const localT = scaled - idx;
+    const a = pts[idx];
+    const b = pts[idx + 1];
+    return {
+        x: a.x + (b.x - a.x) * localT,
+        y: a.y + (b.y - a.y) * localT
+    };
 }
 
 function drawZigzagBolt(ctx, x1, y1, x2, y2, t0, t1, amp, segments, timeSeed, colorCore, colorGlow, width) {
@@ -3480,7 +3661,7 @@ function initTopoCanvas() {
             topoState.smoothCamera = false;
             const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
             const factor = e.deltaY < 0 ? 1.14 : 0.88;
-            const nextScale = Math.max(0.2, Math.min(3.8, topoState.scale * factor));
+            const nextScale = Math.max(0.11, Math.min(3.8, topoState.scale * factor));
             topoState.panX = topoState.targetPanX = sx - wx * nextScale;
             topoState.panY = topoState.targetPanY = sy - wy * nextScale;
             topoState.scale = topoState.targetScale = nextScale;
@@ -3632,6 +3813,9 @@ function drawTopoFrame(now) {
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
 
+            const usePlexus = (topoState.visualStyle === 'plexus' || topoState.visualStyle === 'hybrid');
+            const useSynapse = (topoState.visualStyle === 'synapse' || topoState.visualStyle === 'hybrid');
+
             if (topoState.smoothCamera) {
                 topoState.scale += (topoState.targetScale - topoState.scale) * 0.14;
                 topoState.panX += (topoState.targetPanX - topoState.panX) * 0.14;
@@ -3643,24 +3827,43 @@ function drawTopoFrame(now) {
                 }
             }
 
-            if (topoState.effectsOn) {
-                topoState.nodes.forEach(n => {
-                    if (n === topoState.dragNode) return;
-                    if (n.type === 'core') {
-                        n.x = n.baseX + Math.cos(tNow * 0.0012) * 2.2;
-                        n.y = n.baseY + Math.sin(tNow * 0.0015) * 2.2;
-                    } else if (n.type === 'hub') {
-                        n.x = n.baseX + Math.cos(tNow * 0.0014 + n.phase) * 4.0;
-                        n.y = n.baseY + Math.sin(tNow * 0.0017 + n.phase) * 4.0;
-                    } else {
-                        const wobble = n.online ? 3.2 : 1.2;
-                        n.x = n.baseX + Math.cos(tNow * 0.002 + n.phase) * wobble;
-                        n.y = n.baseY + Math.sin(tNow * 0.0023 + n.phase) * wobble;
-                    }
-                    if (n.flash > 0) n.flash = Math.max(0, n.flash - 0.03);
-                });
+            // 1. Slow, constant floating motion ("Floating Zigzag Constellation")
+            topoState.nodes.forEach(n => {
+                if (n === topoState.dragNode) return;
+                if (!topoState.effectsOn) {
+                    n.x = n.baseX;
+                    n.y = n.baseY;
+                    return;
+                }
+                const driftMult = usePlexus ? 1.0 : 0.45;
+                const rDrift = (n.driftR || 8) * driftMult;
+                const speed = n.type === 'core' ? 0.00045 : (n.type === 'hub' ? 0.00052 : 0.00062);
+                n.x = n.baseX + Math.cos(tNow * speed + n.phase) * rDrift;
+                n.y = n.baseY + Math.sin(tNow * (speed * 1.18) + n.phase * 1.3) * rDrift;
+                if (n.flash > 0) n.flash = Math.max(0, n.flash - 0.028);
+            });
 
-                if (tNow - topoState.lastSpontaneous > 260 && topoState.links.length > 0 && topoState.synapses.length < 28) {
+            // Compute world positions of intermediate floating zigzag vertices
+            topoState.links.forEach(lk => {
+                const x1 = lk.from.x, y1 = lk.from.y;
+                const x2 = lk.to.x, y2 = lk.to.y;
+                const dx = x2 - x1, dy = y2 - y1;
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = -dy / len, ny = dx / len;
+                (lk.joints || []).forEach(j => {
+                    const bx = x1 + dx * j.t;
+                    const by = y1 + dy * j.t;
+                    const slowWave = topoState.effectsOn ? Math.sin(tNow * 0.00055 + j.phaseX) : 0;
+                    const perpOffset = j.perp * (0.75 + 0.45 * slowWave);
+                    const floatX = topoState.effectsOn ? Math.cos(tNow * 0.00048 + j.phaseX) * j.drift : 0;
+                    const floatY = topoState.effectsOn ? Math.sin(tNow * 0.00053 + j.phaseY) * j.drift : 0;
+                    j.x = bx + nx * perpOffset + floatX;
+                    j.y = by + ny * perpOffset + floatY;
+                });
+            });
+
+            if (topoState.effectsOn && useSynapse) {
+                if (tNow - topoState.lastSpontaneous > 280 && topoState.links.length > 0 && topoState.synapses.length < 28) {
                     topoState.lastSpontaneous = tNow;
                     const trunkIdxs = [];
                     const spokeIdxs = [];
@@ -3734,35 +3937,120 @@ function drawTopoFrame(now) {
             if (coreNode) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(coreNode.x, coreNode.y, 115, 0, Math.PI * 2);
+                ctx.arc(coreNode.x, coreNode.y, 145, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(0, 229, 255, 0.09)';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 1.2;
                 ctx.stroke();
                 ctx.restore();
             }
 
-            // 1. Base trunk & spoke links
+            // 1. POLYGONAL CONSTELLATION PLEXUS MESH BETWEEN NEARBY VERTICES & NODES
+            if (usePlexus) {
+                const plexusPts = [];
+                topoState.nodes.forEach(n => {
+                    if (n.type !== 'core') {
+                        plexusPts.push({ x: n.x, y: n.y, hubId: n.hubId || n.id, online: n.online, isNode: true });
+                    }
+                });
+                topoState.links.forEach(lk => {
+                    const hId = lk.type === 'trunk' ? lk.to.id : lk.from.id;
+                    (lk.joints || []).forEach(j => {
+                        plexusPts.push({ x: j.x, y: j.y, hubId: hId, online: lk.online, isNode: false });
+                    });
+                });
+
+                const maxDist = 265;
+                const maxDistSq = maxDist * maxDist;
+                ctx.save();
+                ctx.lineWidth = 0.9;
+                for (let i = 0; i < plexusPts.length; i++) {
+                    const a = plexusPts[i];
+                    let linksCount = 0;
+                    for (let j = i + 1; j < plexusPts.length; j++) {
+                        if (linksCount >= 4) break;
+                        const b = plexusPts[j];
+                        const dx = b.x - a.x;
+                        if (Math.abs(dx) > maxDist) continue;
+                        const dy = b.y - a.y;
+                        if (Math.abs(dy) > maxDist) continue;
+                        const dSq = dx * dx + dy * dy;
+                        if (dSq < maxDistSq && dSq > 900) {
+                            linksCount++;
+                            const ratio = 1 - Math.sqrt(dSq) / maxDist;
+                            const dim = (hov || hasSearch) ? 0.18 : 1.0;
+                            const alpha = ratio * (a.online || b.online ? 0.36 : 0.14) * dim;
+                            ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                            ctx.beginPath();
+                            ctx.moveTo(a.x, a.y);
+                            ctx.lineTo(b.x, b.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+                ctx.restore();
+            }
+
+            // 2. Draw primary links (Plexus: articulated floating zigzag with glowing star-dots; Synapse: direct spokes)
             topoState.links.forEach(lk => {
                 const hi = isLinkHighlighted(lk);
                 const searchDim = hasSearch && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
                 const hovDim = hov && !hi;
 
-                ctx.beginPath();
-                ctx.moveTo(lk.from.x, lk.from.y);
-                ctx.lineTo(lk.to.x, lk.to.y);
+                if (usePlexus) {
+                    const pts = [lk.from, ...(lk.joints || []), lk.to];
+                    ctx.save();
+                    ctx.beginPath();
+                    pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
 
-                if (hi) {
-                    ctx.strokeStyle = lk.type === 'trunk' ? '#00f5d4' : '#38bdf8';
-                    ctx.lineWidth = lk.type === 'trunk' ? 3.0 : 1.9;
-                    ctx.globalAlpha = 0.92;
+                    if (hi) {
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = lk.type === 'trunk' ? 2.6 : 1.8;
+                        ctx.shadowColor = '#00e5ff';
+                        ctx.shadowBlur = 14;
+                        ctx.globalAlpha = 0.96;
+                    } else {
+                        ctx.strokeStyle = lk.type === 'trunk'
+                            ? 'rgba(186, 230, 253, 0.78)'
+                            : (lk.online ? 'rgba(224, 242, 254, 0.58)' : 'rgba(148, 163, 184, 0.2)');
+                        ctx.lineWidth = lk.type === 'trunk' ? 1.75 : 1.15;
+                        ctx.shadowColor = '#38bdf8';
+                        ctx.shadowBlur = lk.online ? 6 : 0;
+                        ctx.globalAlpha = (searchDim || hovDim) ? 0.12 : 0.9;
+                    }
+                    ctx.stroke();
+
+                    if (!searchDim && !hovDim) {
+                        (lk.joints || []).forEach(j => {
+                            const pulse = 0.7 + 0.3 * Math.sin(tNow * 0.002 + j.phaseX);
+                            const rDot = (lk.type === 'trunk' ? 2.6 : 1.9) * (hi ? 1.35 : 1);
+                            ctx.beginPath();
+                            ctx.arc(j.x, j.y, rDot, 0, Math.PI * 2);
+                            ctx.fillStyle = '#ffffff';
+                            ctx.shadowColor = '#00e5ff';
+                            ctx.shadowBlur = hi ? 14 : (8 * pulse);
+                            ctx.globalAlpha = lk.online ? (0.85 * pulse) : 0.3;
+                            ctx.fill();
+                        });
+                    }
+                    ctx.restore();
                 } else {
-                    ctx.strokeStyle = lk.color;
-                    ctx.lineWidth = lk.type === 'trunk' ? 2.4 : 1.1;
-                    ctx.globalAlpha = (searchDim || hovDim) ? 0.1 : 0.78;
-                }
-                ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(lk.from.x, lk.from.y);
+                    ctx.lineTo(lk.to.x, lk.to.y);
 
-                if (hi && topoState.effectsOn) {
+                    if (hi) {
+                        ctx.strokeStyle = lk.type === 'trunk' ? '#00f5d4' : '#38bdf8';
+                        ctx.lineWidth = lk.type === 'trunk' ? 3.0 : 1.9;
+                        ctx.globalAlpha = 0.92;
+                    } else {
+                        ctx.strokeStyle = lk.color;
+                        ctx.lineWidth = lk.type === 'trunk' ? 2.4 : 1.1;
+                        ctx.globalAlpha = (searchDim || hovDim) ? 0.1 : 0.78;
+                    }
+                    ctx.stroke();
+                }
+
+                if (hi && topoState.effectsOn && useSynapse) {
                     drawZigzagBolt(
                         ctx, lk.from.x, lk.from.y, lk.to.x, lk.to.y,
                         0.02, 0.98,
@@ -3776,24 +4064,31 @@ function drawTopoFrame(now) {
                 }
             });
 
-            // 2. Neural zigzag synapses + background particles + shockwaves
+            // 3. Particles + Synaptic Cascades + Shockwaves
             if (topoState.effectsOn) {
-                ctx.globalAlpha = 0.9;
+                ctx.globalAlpha = 0.92;
                 topoState.particles.forEach(p => {
-                    p.t += p.speed;
+                    p.t += p.speed * (usePlexus && !useSynapse ? 0.55 : 1.0);
                     if (p.t > 1) p.t -= 1;
                     const lk = topoState.links[p.linkIdx];
                     if (!lk) return;
                     if (hov && !isLinkHighlighted(lk)) return;
                     if (hasSearch && !nodeMatchesSearch(lk.to)) return;
 
-                    const px = lk.from.x + (lk.to.x - lk.from.x) * p.t;
-                    const py = lk.from.y + (lk.to.y - lk.from.y) * p.t;
+                    let px, py;
+                    if (usePlexus) {
+                        const pt = pointOnArticulatedLink(lk, p.t);
+                        px = pt.x;
+                        py = pt.y;
+                    } else {
+                        px = lk.from.x + (lk.to.x - lk.from.x) * p.t;
+                        py = lk.from.y + (lk.to.y - lk.from.y) * p.t;
+                    }
                     ctx.beginPath();
                     ctx.arc(px, py, p.size, 0, Math.PI * 2);
-                    ctx.fillStyle = p.color;
+                    ctx.fillStyle = usePlexus ? '#ffffff' : p.color;
                     ctx.shadowColor = p.color;
-                    ctx.shadowBlur = 8;
+                    ctx.shadowBlur = 9;
                     ctx.fill();
                     ctx.shadowBlur = 0;
                 });
@@ -3823,7 +4118,7 @@ function drawTopoFrame(now) {
                     if (syn.t >= 1.0) {
                         lk.to.flash = 1.0;
                         if (syn.cascade && lk.to.type === 'hub') {
-                            spawnNodeShockwave(lk.to.x, lk.to.y, lk.to.color, 85);
+                            spawnNodeShockwave(lk.to.x, lk.to.y, lk.to.color, 95);
                             const childLinks = [];
                             topoState.links.forEach((clk, cIdx) => {
                                 if (clk.from.id === lk.to.id && clk.online) childLinks.push(cIdx);
@@ -3837,7 +4132,7 @@ function drawTopoFrame(now) {
                                         linkIdx: pickIdx,
                                         t: 0,
                                         len: 0.42,
-                                        speed: 0.025 + Math.random() * 0.012,
+                                        speed: 0.024 + Math.random() * 0.012,
                                         amp: 6.5,
                                         colorCore: '#ffffff',
                                         colorGlow: clk.to.static ? '#10b981' : '#38bdf8',
@@ -3875,14 +4170,14 @@ function drawTopoFrame(now) {
                 topoState.nodes.forEach(n => {
                     if (n.type === 'core') {
                         ctx.beginPath();
-                        ctx.arc(n.x, n.y, n.r + 12 + pulsePhase * 65, 0, Math.PI * 2);
+                        ctx.arc(n.x, n.y, n.r + 14 + pulsePhase * 75, 0, Math.PI * 2);
                         ctx.strokeStyle = '#00e5ff';
                         ctx.lineWidth = 1.6;
                         ctx.globalAlpha = (1 - pulsePhase) * 0.42;
                         ctx.stroke();
                     } else if (n.type === 'hub' && n.online) {
                         ctx.beginPath();
-                        ctx.arc(n.x, n.y, n.r + pulsePhase * 34, 0, Math.PI * 2);
+                        ctx.arc(n.x, n.y, n.r + pulsePhase * 38, 0, Math.PI * 2);
                         ctx.strokeStyle = n.color;
                         ctx.lineWidth = 1.2;
                         ctx.globalAlpha = (1 - pulsePhase) * 0.32;
@@ -3891,7 +4186,7 @@ function drawTopoFrame(now) {
                 });
             }
 
-            // 3. Draw nodes & labels
+            // 4. Draw nodes & text labels
             topoState.nodes.forEach(n => {
                 const hi = isNodeHighlighted(n);
                 const isDirectHover = hov && hov.id === n.id;
@@ -3903,61 +4198,61 @@ function drawTopoFrame(now) {
 
                     ctx.save();
                     ctx.translate(n.x, n.y);
-                    ctx.rotate(tNow * 0.0008);
+                    ctx.rotate(tNow * 0.0007);
                     ctx.beginPath();
-                    ctx.setLineDash([14, 9]);
-                    ctx.arc(0, 0, rad + 16, 0, Math.PI * 2);
+                    ctx.setLineDash([16, 10]);
+                    ctx.arc(0, 0, rad + 18, 0, Math.PI * 2);
                     ctx.strokeStyle = '#00e5ff';
-                    ctx.lineWidth = 2.2;
+                    ctx.lineWidth = 2.4;
                     ctx.shadowColor = '#00e5ff';
-                    ctx.shadowBlur = 14;
+                    ctx.shadowBlur = 16;
                     ctx.stroke();
                     ctx.restore();
 
                     ctx.save();
                     ctx.translate(n.x, n.y);
-                    ctx.rotate(-tNow * 0.0013);
+                    ctx.rotate(-tNow * 0.0011);
                     ctx.beginPath();
-                    ctx.setLineDash([6, 12]);
-                    ctx.arc(0, 0, rad + 8, 0, Math.PI * 2);
+                    ctx.setLineDash([7, 13]);
+                    ctx.arc(0, 0, rad + 9, 0, Math.PI * 2);
                     ctx.strokeStyle = '#38bdf8';
-                    ctx.lineWidth = 1.6;
+                    ctx.lineWidth = 1.7;
                     ctx.stroke();
                     ctx.restore();
 
                     ctx.save();
-                    const grad = ctx.createRadialGradient(n.x - 6, n.y - 6, 4, n.x, n.y, rad);
+                    const grad = ctx.createRadialGradient(n.x - 7, n.y - 7, 5, n.x, n.y, rad);
                     grad.addColorStop(0, '#ffffff');
                     grad.addColorStop(0.35, '#00e5ff');
                     grad.addColorStop(1, '#0284c7');
                     ctx.fillStyle = grad;
                     ctx.shadowColor = '#00e5ff';
-                    ctx.shadowBlur = (isDirectHover || n.flash > 0.2) ? 38 : 24;
+                    ctx.shadowBlur = (isDirectHover || n.flash > 0.2) ? 42 : 28;
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, rad, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.lineWidth = 2.5;
+                    ctx.lineWidth = 2.6;
                     ctx.strokeStyle = '#e0f2fe';
                     ctx.stroke();
                     ctx.restore();
 
                     ctx.save();
-                    ctx.font = '22px system-ui, sans-serif';
+                    ctx.font = '26px system-ui, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('🌐', n.x, n.y + 1);
                     ctx.restore();
 
-                    const badgeW = 276;
-                    const badgeH = 40;
+                    const badgeW = 296;
+                    const badgeH = 44;
                     const bx = n.x - badgeW / 2;
-                    const by = n.y + rad + 24;
+                    const by = n.y + rad + 26;
                     ctx.save();
-                    ctx.fillStyle = 'rgba(11, 19, 36, 0.92)';
+                    ctx.fillStyle = 'rgba(11, 19, 36, 0.94)';
                     ctx.strokeStyle = isDirectHover ? '#00f5d4' : '#00e5ff';
-                    ctx.lineWidth = 1.5;
-                    ctx.shadowColor = 'rgba(0, 229, 255, 0.35)';
-                    ctx.shadowBlur = 12;
+                    ctx.lineWidth = 1.6;
+                    ctx.shadowColor = 'rgba(0, 229, 255, 0.38)';
+                    ctx.shadowBlur = 14;
                     ctx.beginPath();
                     if (ctx.roundRect) ctx.roundRect(bx, by, badgeW, badgeH, 10);
                     else ctx.rect(bx, by, badgeW, badgeH);
@@ -3965,72 +4260,95 @@ function drawTopoFrame(now) {
                     ctx.stroke();
                     ctx.restore();
 
-                    ctx.font = '800 11.5px system-ui, -apple-system, sans-serif';
+                    ctx.font = '800 12.5px system-ui, -apple-system, sans-serif';
                     ctx.fillStyle = '#f8fafc';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(n.label, n.x, by + 13);
-                    ctx.font = '600 9.8px monospace';
+                    ctx.fillText(n.label, n.x, by + 15);
+                    ctx.font = '600 10.5px monospace';
                     ctx.fillStyle = '#67e8f9';
-                    ctx.fillText(n.sub, n.x, by + 28);
+                    ctx.fillText(n.sub, n.x, by + 31);
                 } else if (n.type === 'hub') {
-                    const rad = isDirectHover ? n.r + 2.5 : n.r;
+                    const rad = isDirectHover ? n.r + 3 : n.r;
 
                     ctx.save();
                     ctx.translate(n.x, n.y);
-                    ctx.rotate(tNow * 0.001 + n.phase);
+                    ctx.rotate(tNow * 0.0009 + n.phase);
                     ctx.beginPath();
-                    ctx.setLineDash([7, 6]);
-                    ctx.arc(0, 0, rad + 6, 0, Math.PI * 2);
+                    ctx.setLineDash([8, 6]);
+                    ctx.arc(0, 0, rad + 7, 0, Math.PI * 2);
                     ctx.strokeStyle = n.color;
-                    ctx.lineWidth = 1.3;
-                    ctx.globalAlpha = (hi ? 0.65 : 0.15);
+                    ctx.lineWidth = 1.4;
+                    ctx.globalAlpha = (hi ? 0.7 : 0.15);
                     ctx.stroke();
                     ctx.restore();
 
                     ctx.save();
                     ctx.shadowColor = n.color;
-                    ctx.shadowBlur = (isDirectHover || n.flash > 0.1) ? 26 : 14;
+                    ctx.shadowBlur = (isDirectHover || n.flash > 0.1) ? 28 : 16;
                     ctx.fillStyle = n.flash > 0.3 ? '#ffffff' : n.color;
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, rad, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.lineWidth = 1.8;
-                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 2.0;
+                    ctx.strokeStyle = '#ffffff';
                     ctx.stroke();
                     ctx.restore();
 
-                    ctx.font = '700 12px system-ui, -apple-system, sans-serif';
+                    ctx.font = '800 13px system-ui, -apple-system, sans-serif';
+                    const lblW = Math.max(ctx.measureText(n.label).width, 110) + 18;
+                    const hbx = n.x + rad + 12;
+                    const hby = n.y - 19;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(11, 18, 32, 0.85)';
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(hbx, hby, lblW, 36, 7);
+                    else ctx.rect(hbx, hby, lblW, 36);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+
+                    ctx.font = '800 12.5px system-ui, -apple-system, sans-serif';
                     ctx.fillStyle = '#f8fafc';
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(n.label, n.x + rad + 11, n.y - 6);
-                    ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+                    ctx.fillText(n.label, hbx + 9, n.y - 7);
+                    ctx.font = '600 10.2px system-ui, -apple-system, sans-serif';
                     ctx.fillStyle = '#7dd3fc';
-                    ctx.fillText(n.sub, n.x + rad + 11, n.y + 8);
+                    ctx.fillText(n.sub, hbx + 9, n.y + 8);
                 } else {
+                    const rNode = (isDirectHover || matched) ? n.r + 2.8 : n.r;
                     ctx.save();
                     if (n.online || matched || isDirectHover || n.flash > 0.1) {
-                        ctx.shadowColor = matched ? '#f59e0b' : (n.flash > 0.2 ? '#00f5d4' : n.color);
-                        ctx.shadowBlur = (matched || isDirectHover || n.flash > 0.2) ? 16 : 7;
+                        ctx.shadowColor = matched ? '#f59e0b' : (usePlexus ? '#38bdf8' : n.color);
+                        ctx.shadowBlur = (matched || isDirectHover || n.flash > 0.2) ? 18 : 10;
                     }
                     ctx.fillStyle = matched ? '#fbbf24' : (n.flash > 0.4 ? '#ffffff' : n.color);
                     ctx.beginPath();
-                    ctx.arc(n.x, n.y, (isDirectHover || matched) ? n.r + 2.5 : n.r, 0, Math.PI * 2);
+                    ctx.arc(n.x, n.y, rNode, 0, Math.PI * 2);
                     ctx.fill();
+
+                    if (usePlexus && n.online) {
+                        ctx.beginPath();
+                        ctx.arc(n.x, n.y, rNode * 0.45, 0, Math.PI * 2);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fill();
+                    }
                     ctx.restore();
 
-                    if (topoState.scale >= 0.34 || isDirectHover || matched) {
+                    if (topoState.scale >= 0.22 || isDirectHover || matched) {
                         const hub = topoState.nodes.find(h => h.id === n.hubId);
                         const isLeftSide = hub ? (n.x < hub.x) : (Math.cos(n.angle || 0) < 0);
                         const txt = getClientDisplayText(n);
                         ctx.font = (isDirectHover || matched)
-                            ? '700 11.5px system-ui, -apple-system, sans-serif'
-                            : '500 10.2px system-ui, -apple-system, sans-serif';
-                        ctx.fillStyle = (isDirectHover || matched) ? '#ffffff' : (n.online ? '#e2e8f0' : '#94a3b8');
+                            ? '700 12px system-ui, -apple-system, sans-serif'
+                            : '500 10.8px system-ui, -apple-system, sans-serif';
+                        ctx.fillStyle = (isDirectHover || matched) ? '#ffffff' : (n.online ? '#f1f5f9' : '#94a3b8');
                         ctx.textAlign = isLeftSide ? 'right' : 'left';
                         ctx.textBaseline = 'middle';
-                        const offsetX = isLeftSide ? -(n.r + 7) : (n.r + 7);
+                        const offsetX = isLeftSide ? -(rNode + 8) : (rNode + 8);
                         ctx.fillText(txt, n.x + offsetX, n.y);
                     }
                 }
