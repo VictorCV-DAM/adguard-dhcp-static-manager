@@ -106,7 +106,14 @@ OUI_DATABASE = {
     "ec:b5:0a": ("Mediatek Mobile", "Smartphone / Mobile Device", "📱"),
     "e8:3d:c1": ("Smart Button / BLE Gateway", "IoT Smart Button", "🔘"),
     "10:00:20": ("Apple Inc.", "iPhone / iPad", "📱"),
-    "80:8a:bd": ("Samsung Electronics", "Samsung Smartphone", "📱")
+    "80:8a:bd": ("Samsung Electronics", "Samsung Smartphone", "📱"),
+    "bc:35:1e": ("Tuya Smart Inc.", "Smart Plug / Switch", "🔌"),
+    "fc:3c:d7": ("Tuya Smart Inc.", "Smart Plug / Switch", "🔌"),
+    "d4:ad:fc": ("Shenzhen Intellirocks (Govee)", "Smart Lighting", "💡"),
+    "d8:c8:0c": ("Tuya Smart Inc.", "Smart Light Bulb", "💡"),
+    "c0:f8:53": ("Tuya Smart Inc.", "Smart Home IoT", "🔌"),
+    "f8:17:2d": ("Tuya / Espressif", "Smart Home IoT", "🔌"),
+    "3c:8d:20": ("Google Inc.", "Google Nest Device", "🔊")
 }
 
 HALO_NICKNAME_MAP = {
@@ -566,11 +573,14 @@ def is_wireless_only_device(dev_class, dev_cat, hostname, mac):
         "Smartphone / Tablet (Private MAC)",
         "Smart IoT Device",
         "IP Camera / Doorbell",
-        "Smart TV / Streaming"
+        "Smart TV / Streaming",
+        "Robot Vacuum"
     }
     if dev_class in wireless_classes:
         return True
-    if dev_cat in ("iot", "mobile"):
+    if dev_cat in ("iot", "mobile", "media"):
+        return True
+    if dev_class in ("Network / IoT Device", "Smart IoT Device", "Smart Home IoT"):
         return True
     h = (hostname or "").lower()
     if any(k in h for k in [
@@ -1196,8 +1206,8 @@ def api_state():
             conn_medium_label = halo_info.get("medium_label", "Wi-Fi")
         elif live_ips:
             if is_wireless:
-                router_node = 'Wi-Fi Access Point'
-                router_tooltip = 'Active wireless network device (Wi-Fi)'
+                router_node = 'Wi-Fi AP / Repeater'
+                router_tooltip = 'Active wireless network device (Wi-Fi / Repeater)'
                 router_type = 'wifi'
                 conn_medium = 'wifi'
                 conn_medium_label = 'Wi-Fi'
