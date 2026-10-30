@@ -40,6 +40,7 @@ DEFAULT_CONFIG = {
     "adguard_url": "http://127.0.0.1:8080",
     "adguard_user": "admin",
     "adguard_pass": "",
+    "custom_service_names": {},
     "routers": [
         {
             "id": "primary-ap",
@@ -659,7 +660,7 @@ def scan_device_verified_services(ip):
     return results
 
 
-def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True):
+def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True, custom_service_names=None):
     """Returns strictly real and verified web management links."""
     ip = (ip or '').strip()
     if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip or not is_active:
@@ -669,6 +670,7 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
     c_lower = (dev_class or '').lower()
     routers = routers or []
     halo_node_info = halo_node_info or {}
+    custom_names = custom_service_names or {}
 
     is_router_cfg = False
     router_name = ""
@@ -695,7 +697,14 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
     def add_link(label, url, port=None):
         if url not in seen_urls:
             seen_urls.add(url)
-            item = {'label': label, 'url': url}
+            clean_u = url.rstrip('/')
+            custom = custom_names.get(url) or custom_names.get(clean_u) or (custom_names.get(f"{ip}:{port}") if port else None)
+            is_custom = False
+            default_label = label
+            if custom:
+                label = custom
+                is_custom = True
+            item = {'label': label, 'url': url, 'default_label': default_label, 'is_custom': is_custom}
             if port is not None:
                 item['port'] = int(port)
             links.append(item)
@@ -814,6 +823,8 @@ def save_config(new_cfg):
     for k in ('leases_path', 'yaml_path', 'docker_container', 'adguard_url', 'adguard_user', 'adguard_pass'):
         if k in new_cfg:
             cfg[k] = new_cfg[k]
+    if 'custom_service_names' in new_cfg and isinstance(new_cfg['custom_service_names'], dict):
+        cfg['custom_service_names'] = new_cfg['custom_service_names']
     if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
         cfg['routers'] = new_cfg['routers']
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
@@ -1609,6 +1620,7 @@ def api_state():
                     _SERVICE_SCAN_CACHE[a_ip] = (now, [])
 
     # Update web_links for all devices with detected services
+    custom_names = cfg.get('custom_service_names', {})
     for d in devices:
         is_active = bool(d.get('live_ips')) or d['ip'] in ('192.168.1.1', '192.168.1.249')
         d['web_links'] = get_device_web_links(
@@ -1618,7 +1630,8 @@ def api_state():
             d.get('dev_cat', ''),
             routers,
             halo_node_info,
-            is_active=is_active
+            is_active=is_active,
+            custom_service_names=custom_names
         )
         d['open_ports'] = sorted(list(set(l['port'] for l in d['web_links'] if 'port' in l)))
 
@@ -1677,8 +1690,36 @@ def api_state():
         'ghost_count': ghost_count,
         'expired_count': expired_count,
         'devices': devices,
-        'network_links': global_network_links
+        'network_links': global_network_links,
+        'custom_service_names': custom_names
     })
+
+
+@app.route('/api/services/rename', methods=['POST'])
+def api_rename_service():
+    try:
+        data = request.get_json(force=True) or {}
+        url = (data.get('url') or '').strip()
+        custom_name = (data.get('name') or '').strip()
+        if not url:
+            return jsonify({'success': False, 'error': 'Service URL not specified'}), 400
+
+        cfg = load_config()
+        if 'custom_service_names' not in cfg or not isinstance(cfg['custom_service_names'], dict):
+            cfg['custom_service_names'] = {}
+
+        norm_url = url.rstrip('/')
+        if custom_name:
+            cfg['custom_service_names'][norm_url] = custom_name
+            cfg['custom_service_names'][norm_url + '/'] = custom_name
+        else:
+            cfg['custom_service_names'].pop(norm_url, None)
+            cfg['custom_service_names'].pop(norm_url + '/', None)
+
+        save_config(cfg)
+        return jsonify({'success': True, 'custom_service_names': cfg['custom_service_names']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/assign-static', methods=['POST'])

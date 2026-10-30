@@ -579,6 +579,73 @@
             align-items: center;
             gap: 4px;
         }
+        .btn-card-edit {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.88rem;
+            color: #94a3b8;
+            transition: all 0.18s ease;
+            padding: 0;
+            flex-shrink: 0;
+        }
+        .btn-card-edit:hover {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: #38bdf8;
+            color: #38bdf8;
+            transform: scale(1.08);
+        }
+        .badge-custom-name {
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: #38bdf8;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .service-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 2px;
+        }
+        .service-title-wrap .service-title {
+            margin: 0;
+        }
+        .btn-inline-rename {
+            background: none;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+            opacity: 0.7;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .service-card:hover .btn-inline-rename,
+        .dropdown-item-link:hover .btn-inline-rename {
+            opacity: 1;
+            color: #38bdf8;
+        }
+        .btn-inline-rename:hover {
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.12);
+            transform: scale(1.15);
+        }
     </style>
 </head>
 <body>
@@ -630,6 +697,43 @@
             <div id="popup-body" class="popup-body"></div>
             <div id="popup-actions" class="popup-actions">
                 <button class="btn btn-primary" onclick="closePopup()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM SERVICE NAME MODAL -->
+    <div id="service-rename-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(4px);" onclick="if(event.target === this) closeRenameServiceModal()">
+        <div class="popup-modal" style="width:92%; max-width:480px; text-align:left; border-color:#38bdf8; background:#1e293b; border-radius:14px; padding:22px; box-shadow:0 20px 45px rgba(0,0,0,0.7);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.3rem;">✏️</span>
+                    <h3 style="margin:0; font-size:1.15rem; color:#f8fafc; font-weight:700;">Customize Service Name</h3>
+                </div>
+                <button onclick="closeRenameServiceModal()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; line-height:1;" title="Close">✕</button>
+            </div>
+            
+            <div style="margin-bottom:14px; font-size:0.84rem; color:#94a3b8; line-height:1.6; background:#0f172a; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                <div><strong style="color:#cbd5e1;">Host device:</strong> <span id="rename-modal-host" style="color:#f8fafc; font-weight:600;"></span></div>
+                <div style="margin-top:3px;"><strong style="color:#cbd5e1;">URL:</strong> <code id="rename-modal-url" style="color:#38bdf8; font-size:0.8rem;"></code></div>
+                <div style="margin-top:3px;"><strong style="color:#cbd5e1;">Originally detected:</strong> <span id="rename-modal-default" style="color:#94a3b8; font-style:italic;"></span></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:18px;">
+                <label style="display:block; margin-bottom:6px; font-size:0.85rem; font-weight:600; color:#f8fafc;">Custom name:</label>
+                <input type="text" id="rename-modal-input" placeholder="e.g. InfluxDB, Node-RED, My Smart Home..." style="width:100%; box-sizing:border-box; padding:10px 12px; background:#0f172a; border:1px solid #38bdf8; border-radius:8px; color:#f8fafc; font-size:0.95rem; outline:none;" onkeydown="if(event.key === 'Enter') submitRenameService()">
+                <div style="font-size:0.75rem; color:#64748b; margin-top:5px;">Enter the name you want to identify this service with. Leave blank to restore the original.</div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-outline" id="btn-reset-service-name" onclick="resetServiceName()" style="color:#f87171; border-color:rgba(239,68,68,0.4); padding:7px 12px; font-size:0.8rem;" title="Remove custom name and restore the original">
+                    ↺ Restore Original
+                </button>
+                <div style="display:flex; gap:8px; margin-left:auto;">
+                    <button class="btn btn-outline" onclick="closeRenameServiceModal()" style="padding:7px 14px; font-size:0.82rem;">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitRenameService()" style="background:#0284c7; padding:7px 16px; font-size:0.82rem; font-weight:600;">
+                        💾 Save Name
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1374,6 +1478,90 @@ function toggleServiceFavorite(ev, url) {
     renderTable();
 }
 
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+let renameServiceUrl = null;
+
+function findServiceByUrl(url) {
+    for (const d of allDevices) {
+        for (const l of (d.web_links || [])) {
+            if (l.url === url) return { service: l, device: d };
+        }
+    }
+    return null;
+}
+
+function openRenameServiceModal(ev, url) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    closeAllDropdowns && closeAllDropdowns();
+    const found = findServiceByUrl(url);
+    if (!found) return;
+    const { service, device } = found;
+    const meta = getServiceMeta(service.default_label || service.label, service.port, device.hostname);
+    renameServiceUrl = url;
+    document.getElementById('rename-modal-host').textContent = `${device.hostname || '-'} (${device.ip})`;
+    document.getElementById('rename-modal-url').textContent = url;
+    document.getElementById('rename-modal-default').textContent = meta.name || service.default_label || service.label;
+    const input = document.getElementById('rename-modal-input');
+    input.value = service.is_custom ? service.label : '';
+    input.placeholder = meta.name || 'Service name';
+    document.getElementById('btn-reset-service-name').style.display = service.is_custom ? 'inline-flex' : 'none';
+    document.getElementById('service-rename-overlay').style.display = 'flex';
+    setTimeout(() => { input.focus(); input.select(); }, 50);
+}
+
+function closeRenameServiceModal() {
+    document.getElementById('service-rename-overlay').style.display = 'none';
+    renameServiceUrl = null;
+}
+
+async function saveServiceName(url, name) {
+    try {
+        const res = await fetch('/api/services/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, name })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Unknown error');
+        // Apply the change locally right away (no rescan needed)
+        const found = findServiceByUrl(url);
+        if (found) {
+            const s = found.service;
+            if (!s.default_label) s.default_label = s.label;
+            if (name) { s.label = name; s.is_custom = true; }
+            else { s.label = s.default_label; s.is_custom = false; }
+        }
+        closeRenameServiceModal();
+        renderServicesCards();
+        renderTable();
+    } catch (e) {
+        showMessage('Error saving name: ' + e.message);
+    }
+}
+
+function submitRenameService() {
+    if (!renameServiceUrl) return;
+    const name = document.getElementById('rename-modal-input').value.trim();
+    saveServiceName(renameServiceUrl, name);
+}
+
+function resetServiceName() {
+    if (!renameServiceUrl) return;
+    saveServiceName(renameServiceUrl, '');
+}
+
+window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        const ov = document.getElementById('service-rename-overlay');
+        if (ov && ov.style.display === 'flex') closeRenameServiceModal();
+    }
+});
+
 function renderServicesCards() {
     const container = document.getElementById('services-cards-container');
     if (!container) return;
@@ -1386,7 +1574,11 @@ function renderServicesCards() {
     allDevices.forEach(d => {
         if (!d.web_links || d.web_links.length === 0) return;
         d.web_links.forEach(l => {
-            const meta = getServiceMeta(l.label, l.port, d.hostname);
+            const meta = Object.assign({}, getServiceMeta(l.default_label || l.label, l.port, d.hostname));
+            if (l.is_custom) {
+                meta.originalName = meta.name;
+                meta.name = l.label;
+            }
             items.push({
                 service: l,
                 device: d,
@@ -1430,7 +1622,7 @@ function renderServicesCards() {
     // 3. Filter by text query
     if (q) {
         filtered = filtered.filter(it => {
-            const text = `${it.meta.name} ${it.meta.tag} ${it.service.label} ${it.service.url} ${it.service.port || ''} ${it.device.hostname} ${it.device.ip} ${it.device.dev_class || ''}`.toLowerCase();
+            const text = `${it.meta.name} ${it.meta.originalName || ''} ${it.service.default_label || ''} ${it.meta.tag} ${it.service.label} ${it.service.url} ${it.service.port || ''} ${it.device.hostname} ${it.device.ip} ${it.device.dev_class || ''}`.toLowerCase();
             return text.includes(q);
         });
     }
@@ -1480,6 +1672,7 @@ function renderServicesCards() {
                             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                 <span class="service-tag">${meta.tag}</span>
                                 ${isFav ? '<span class="badge-fav">⭐ Favorite</span>' : ''}
+                                ${service.is_custom ? `<span class="badge-custom-name" title="Original name: ${escapeHtml(meta.originalName || service.default_label || '')}">✏️ Custom</span>` : ''}
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <div class="status-indicator-live" title="Service verified and responding on local network">
@@ -1491,7 +1684,10 @@ function renderServicesCards() {
                                 </button>
                             </div>
                         </div>
-                        <h4 class="service-title" title="${meta.name}">${meta.name}</h4>
+                        <div class="service-title-wrap">
+                            <h4 class="service-title" title="${escapeHtml(meta.name)}">${escapeHtml(meta.name)}</h4>
+                            <button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${service.url}')" title="Rename service">✏️</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1520,7 +1716,7 @@ function renderServicesCards() {
 
                 <div class="service-card-footer">
                     <a href="${service.url}" target="_blank" rel="noopener noreferrer" class="service-open-btn">
-                        <span>Open ${meta.name}</span>
+                        <span>Open ${escapeHtml(meta.name)}</span>
                         <span style="font-size: 0.95rem;">↗</span>
                     </a>
                 </div>
@@ -1815,7 +2011,7 @@ function renderTable() {
 
         // 4. General text search query (including ports, web service labels, URLs, IP, MAC, hostname, etc.)
         const portsText = openPorts.map(p => `${p} :${p} port:${p} puerto:${p}`).join(' ');
-        const servicesText = (d.web_links || []).map(w => `${w.label} ${w.url}`).join(' ');
+        const servicesText = (d.web_links || []).map(w => `${w.label} ${w.default_label || ''} ${w.url}`).join(' ');
         const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText}`.toLowerCase();
         return text.includes(q);
     });
@@ -1888,7 +2084,7 @@ function renderTable() {
             if (d.web_links.length === 1) {
                 const l = d.web_links[0];
                 const isFav = favsList.includes(l.url);
-                webDropdownHtml = `<a href="${l.url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:${isFav ? '#f59e0b' : '#38bdf8'};color:${isFav ? '#f59e0b' : '#38bdf8'};text-decoration:none;font-weight:600;" title="${l.label}">${isFav ? '⭐ ' : '🌐 '}Web ↗</a>`;
+                webDropdownHtml = `<a href="${l.url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:${isFav ? '#f59e0b' : '#38bdf8'};color:${isFav ? '#f59e0b' : '#38bdf8'};text-decoration:none;font-weight:600;" title="${escapeHtml(l.label)}">${isFav ? '⭐ ' : '🌐 '}Web ↗</a><button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${l.url}')" title="Rename: ${escapeHtml(l.label)}">✏️</button>`;
             } else {
                 const ipSafe = (d.ip || '').replace(/[^a-zA-Z0-9]/g, '-');
                 webDropdownHtml = `
@@ -1903,9 +2099,12 @@ function renderTable() {
                                 <a href="${l.url}" target="_blank" rel="noopener" class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:0.78rem; color:${isFav ? '#fcd34d' : '#f8fafc'}; text-decoration:none; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06); font-weight:${isFav ? '700' : '500'};">
                                     <span style="display:inline-flex; align-items:center; gap:6px;">
                                         ${isFav ? '<span style="color:#f59e0b;">⭐</span>' : ''}
-                                        <span>${l.label}</span>
+                                        <span>${escapeHtml(l.label)}</span>
                                     </span>
-                                    <span style="opacity:0.6; font-size:0.72rem; margin-left:8px;">↗</span>
+                                    <span style="display:inline-flex; align-items:center; gap:2px; margin-left:8px;">
+                                        <button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${l.url}')" title="Rename service">✏️</button>
+                                        <span style="opacity:0.6; font-size:0.72rem;">↗</span>
+                                    </span>
                                 </a>
                                 `;
                             }).join('')}
