@@ -360,9 +360,12 @@
             </div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <strong>Configured Routers / Access Points</strong>
-            <button class="btn btn-outline" onclick="addRouterRow()">➕ Add New Router / AP</button>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-outline" id="btn-discover-routers" onclick="discoverRouters()" title="Scan the local network to automatically detect routers and access points">🔍 Autodetect Network Routers</button>
+                <button class="btn btn-outline" onclick="addRouterRow()">➕ Add New Router / AP</button>
+            </div>
         </div>
         <div id="routers-list"></div>
 
@@ -682,6 +685,46 @@ function addRouterRow() {
 function removeRouterRow(idx) {
     routersConfig.splice(idx, 1);
     renderRoutersList();
+}
+
+async function discoverRouters() {
+    const btn = document.getElementById('btn-discover-routers');
+    const oldText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = '⏳ Scanning network...';
+        btn.disabled = true;
+    }
+    try {
+        const res = await fetch('/api/discover-routers', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ current_routers: routersConfig })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            routersConfig = data.routers || [];
+            renderRoutersList();
+            showMessage(data.message || `Discovery complete: ${routersConfig.length} router(s) configured.`);
+
+            // Warn if any discovered router has no password
+            const needPass = routersConfig.filter(r => !r.password);
+            if (needPass.length > 0) {
+                const names = needPass.map(r => r.name || r.ip).join(', ');
+                setTimeout(() => {
+                    showMessage(`⚠️ Discovered router(s) without password: ${names}. Please enter the password and click "Save & Test Configuration".`);
+                }, 2800);
+            }
+        } else {
+            showMessage('Error discovering routers: ' + (data.message || 'Unknown error'));
+        }
+    } catch (e) {
+        showMessage('Connection error while scanning: ' + e);
+    } finally {
+        if (btn) {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+        }
+    }
 }
 
 async function loadConfig() {

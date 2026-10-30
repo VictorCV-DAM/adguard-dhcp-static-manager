@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, Response
 import subprocess
 import threading
+import concurrent.futures
 import random
 import hashlib
 import json
@@ -844,6 +845,237 @@ def api_config():
         _, msg_ag = test_adguard_credentials(saved)
         msgs.append(msg_ag)
     return jsonify({'status': 'success', 'message': ' | '.join(msgs), 'config': saved})
+
+
+def probe_router_http(ip):
+    """Probes an IP on port 80 searching for signatures of known router/AP web interfaces."""
+    url = f"http://{ip}/"
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            status = resp.status
+            final_url = resp.geturl()
+            raw_body = resp.read()
+            text = raw_body.decode("utf-8", errors="ignore")
+            headers = dict(resp.headers)
+
+            # Detect HTML meta-refresh (e.g. Mercusys redirecting to /webpages/index.html)
+            m_refresh = re.search(r'<meta[^>]+http-equiv=["\']refresh["\'][^>]+content=["\'][^;]+;\s*URL=([^"\']+)["\']', text, re.IGNORECASE)
+            if m_refresh:
+                redir_target = m_refresh.group(1).strip()
+                redir_url = f"http://{ip}" + ("/" if not redir_target.startswith("/") else "") + redir_target if not redir_target.startswith("http") else redir_target
+                try:
+                    req_redir = urllib.request.Request(redir_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                    with urllib.request.urlopen(req_redir, timeout=1.5) as r2:
+                        final_url = r2.geturl()
+                        text_redir = r2.read().decode("utf-8", errors="ignore")
+                        text += "\n" + text_redir
+                except Exception:
+                    pass
+
+            return ip, True, status, final_url, text, headers
+    except urllib.error.HTTPError as e:
+        raw_body = e.read(65536) if hasattr(e, "read") else b""
+        text = raw_body.decode("utf-8", errors="ignore")
+        return ip, True, e.code, e.geturl() if hasattr(e, "geturl") else url, text, dict(e.headers)
+    except Exception:
+        return ip, False, 0, url, "", {}
+
+
+def discover_network_routers(current_routers=None):
+    """Scans the local network discovering routers/access points and returns candidate configs."""
+    cfg = load_config()
+    existing_list = current_routers if current_routers is not None else cfg.get('routers', [])
+
+    candidates = set()
+    # 1. Common default gateway and router infrastructure IPs
+    for gip in ["192.168.1.1", "192.168.1.10", "192.168.1.11", "192.168.1.12", "192.168.1.13", "192.168.1.254", "192.168.0.1", "192.168.0.254"]:
+        candidates.add(gip)
+
+    # 2. AdGuard Home active leases
+    leases_data = read_leases()
+    for l in leases_data.get('leases', []):
+        lip = l.get('ip')
+        if lip:
+            candidates.add(lip)
+
+    # 3. ARP table entries
+    arp_table = get_arp_table()
+    for mac, ip_list in arp_table.items():
+        for aip in ip_list:
+            if aip:
+                candidates.add(aip)
+
+    # 4. Currently configured router IPs
+    for r in existing_list:
+        for rip in (r.get('ip') or '').split(','):
+            rip_s = rip.strip()
+            if rip_s:
+                candidates.add(rip_s)
+
+    # Discard loopback and local host IP
+    candidates.discard("192.168.1.249")
+    candidates.discard("127.0.0.1")
+
+    # Concurrent probing
+    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+        results = list(executor.map(probe_router_http, sorted(list(candidates))))
+
+    discovered = []
+    for ip, success, status, final_url, text, headers in results:
+        if not success and status == 0:
+            continue
+        server = headers.get("server", "").lower()
+
+        # 1. Mercusys Halo Mesh
+        if "webpages/index.html" in final_url or "ozkersubs" in text or "su.url.ozkersubs" in text or "mercusys" in text.lower() or "halo" in text.lower():
+            discovered.append({
+                "ip": ip,
+                "type": "mercusys_halo",
+                "name": "Mercusys Halo H80X",
+                "user": "admin"
+            })
+        # 2. TP-Link CGI / Web interface
+        elif "modelName=" in text or "modelDesc=" in text or "tplinklogin.net" in text or "tplinkwifi.net" in text or "tpInput.js" in text or "/userRpm/" in text:
+            m_name = re.search(r'var\s+modelName\s*=\s*["\']([^"\']+)["\']', text)
+            m_desc = re.search(r'var\s+modelDesc\s*=\s*["\']([^"\']+)["\']', text)
+            model_name = m_name.group(1).strip() if m_name else ""
+            model_desc = m_desc.group(1).strip() if m_desc else ""
+
+            if "TL-WR841N" in model_name or "WR841N" in model_desc:
+                disp_name = "TP-Link WR841N"
+                rtype = "tplink_wr841n"
+            elif model_name:
+                disp_name = f"TP-Link {model_name}" + (f" ({model_desc})" if model_desc and model_desc != model_name else "")
+                rtype = "tplink_wr841n" if ip != "192.168.1.1" else "generic_ap"
+            elif model_desc:
+                disp_name = model_desc
+                rtype = "tplink_wr841n"
+            else:
+                disp_name = "TP-Link Router"
+                rtype = "tplink_wr841n"
+
+            discovered.append({
+                "ip": ip,
+                "type": rtype,
+                "name": disp_name,
+                "user": "admin"
+            })
+        # 3. MikroTik RouterOS
+        elif "routeros" in server or "mikrotik" in text.lower() or "/webfig/" in text.lower():
+            discovered.append({
+                "ip": ip,
+                "type": "mikrotik_rest",
+                "name": "MikroTik RouterOS",
+                "user": "admin"
+            })
+        # 4. OpenWrt / LuCI
+        elif "luci" in text.lower() or "openwrt" in text.lower():
+            discovered.append({
+                "ip": ip,
+                "type": "generic_ap",
+                "name": "OpenWrt / LuCI AP",
+                "user": "root"
+            })
+        # 5. Generic router web interface
+        elif "<title>" in text.lower():
+            m_title = re.search(r'<title[^>]*>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
+            title = m_title.group(1).strip() if m_title else ""
+            if title and any(k in title.lower() for k in ["router", "ap", "access point", "modem", "gateway", "fibra", "wifi", "livebox"]):
+                discovered.append({
+                    "ip": ip,
+                    "type": "generic_ap",
+                    "name": title,
+                    "user": "admin"
+                })
+
+    # Grouping & merging logic
+    halo_ips = []
+    other_discovered = []
+    for d in discovered:
+        if d["type"] == "mercusys_halo":
+            halo_ips.append(d["ip"])
+        else:
+            other_discovered.append(d)
+
+    final_routers = []
+
+    # 1. Mercusys Halo Mesh group
+    if halo_ips:
+        sorted_halo_ips = sorted(halo_ips, key=lambda x: [int(p) if p.isdigit() else 0 for p in x.split('.')])
+        joined_halo_ips = ", ".join(sorted_halo_ips)
+        matched = None
+        for r in existing_list:
+            r_ips = [x.strip() for x in r.get("ip", "").split(",") if x.strip()]
+            if any(hip in r_ips for hip in halo_ips) or r.get("type") == "mercusys_halo":
+                matched = r
+                break
+        if matched:
+            item = dict(matched)
+            item["ip"] = joined_halo_ips
+            final_routers.append(item)
+        else:
+            final_routers.append({
+                "id": f"mercusys-halo-{int(time.time())}",
+                "name": "Mercusys Halo H80X",
+                "type": "mercusys_halo",
+                "ip": joined_halo_ips,
+                "user": "admin",
+                "password": "",
+                "enabled": True
+            })
+
+    # 2. Other discovered routers
+    for d in other_discovered:
+        dip = d["ip"]
+        matched = None
+        for r in existing_list:
+            r_ips = [x.strip() for x in r.get("ip", "").split(",") if x.strip()]
+            if dip in r_ips:
+                matched = r
+                break
+        if matched:
+            item = dict(matched)
+            final_routers.append(item)
+        else:
+            final_routers.append({
+                "id": f"router-{dip.replace('.', '-')}",
+                "name": d["name"],
+                "type": d["type"],
+                "ip": dip,
+                "user": d.get("user", "admin"),
+                "password": "",
+                "enabled": True
+            })
+
+    # 3. Preserve user-configured routers that may be offline during scan
+    for r in existing_list:
+        r_id = r.get("id")
+        already_included = any(fr.get("id") == r_id for fr in final_routers)
+        if not already_included:
+            r_ips = [x.strip() for x in r.get("ip", "").split(",") if x.strip()]
+            ip_included = any(any(rip in fr.get("ip", "") for rip in r_ips) for fr in final_routers)
+            if not ip_included:
+                final_routers.append(r)
+
+    names = [r.get("name") or r.get("ip") for r in final_routers]
+    msg = f"Discovered {len(final_routers)} router(s)/access point(s) on your network ({', '.join(names)})."
+    return final_routers, msg
+
+
+@app.route('/api/discover-routers', methods=['GET', 'POST'])
+def api_discover_routers():
+    payload = request.json if (request.is_json and request.json) else {}
+    current_routers = payload.get('current_routers')
+    discovered_list, msg = discover_network_routers(current_routers=current_routers)
+    return jsonify({
+        'status': 'success',
+        'message': msg,
+        'routers': discovered_list
+    })
 
 
 @app.route('/api/state', methods=['GET'])
