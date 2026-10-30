@@ -724,7 +724,7 @@
             align-items: flex-start;
             gap: 12px;
             pointer-events: none;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             z-index: 10;
         }
         .topo-search-box {
@@ -737,7 +737,8 @@
             border: 1px solid rgba(148, 163, 184, 0.28);
             border-radius: 8px;
             padding: 6px 12px;
-            width: 270px;
+            width: 260px;
+            flex-shrink: 0;
             transition: border-color 0.15s, box-shadow 0.15s;
         }
         .topo-search-box:focus-within {
@@ -755,13 +756,21 @@
         .topo-controls {
             pointer-events: auto;
             display: flex;
+            flex-direction: column;
+            align-items: flex-end;
             gap: 6px;
-            flex-wrap: wrap;
             background: rgba(15, 23, 42, 0.82);
             backdrop-filter: blur(8px);
-            padding: 5px;
+            padding: 6px;
             border-radius: 10px;
             border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+        .topo-controls-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-items: center;
         }
         .topo-ctrl-btn {
             background: rgba(30, 41, 59, 0.75);
@@ -1209,41 +1218,45 @@
                 </div>
 
                 <div class="topo-controls">
-                    <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Toggle between Floating Zigzag Constellation (Plexus), Electric Synapse Pulses, or Full Hybrid">
-                        🕸️ Style: <span id="topo-style-txt">Floating Zigzag</span>
-                    </button>
-                    <button id="topo-btn-telemetry" class="topo-ctrl-btn" onclick="toggleTopoTelemetryMode()" title="Toggle between simulated ambient pulses or real AdGuard Home DNS traffic + Ping latency pulses">
-                        📡 Logic: <span id="topo-telemetry-txt">Simulated</span>
-                    </button>
-                    <div class="topo-freq-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Customize pulse frequency and speed (- / +)">
-                        <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(-1)" style="border:none; border-radius:0; padding:0 9px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Decrease pulse frequency (-)">−</button>
-                        <span id="topo-freq-txt" onclick="resetTopoImpulseFreq()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Pulse frequency (click to reset to 1.0x)">⚡ 1.0x</span>
-                        <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(1)" style="border:none; border-radius:0; padding:0 9px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Increase pulse frequency (+)">+</button>
+                    <div class="topo-controls-row">
+                        <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Toggle between Floating Zigzag Constellation (Plexus), Electric Synapse Pulses, or Full Hybrid">
+                            🕸️ Style: <span id="topo-style-txt">Floating Zigzag</span>
+                        </button>
+                        <button id="topo-btn-telemetry" class="topo-ctrl-btn" onclick="toggleTopoTelemetryMode()" title="Toggle between simulated ambient pulses or continuous streams driven by real AdGuard Home DNS traffic + Ping latency">
+                            📡 Logic: <span id="topo-telemetry-txt">Simulated</span>
+                        </button>
+                        <div class="topo-freq-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Customize pulse frequency and speed (- / +)">
+                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(-1)" style="border:none; border-radius:0; padding:0 9px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Decrease pulse frequency (-)">−</button>
+                            <span id="topo-freq-txt" onclick="resetTopoImpulseFreq()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Pulse frequency (click to reset to 1.0x)">⚡ 1.0x</span>
+                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(1)" style="border:none; border-radius:0; padding:0 9px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Increase pulse frequency (+)">+</button>
+                        </div>
+                        <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" title="Fire an immediate synaptic discharge from the Main Router across the entire mesh" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);">
+                            ⚡ Pulse
+                        </button>
                     </div>
-                    <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" title="Fire an immediate synaptic discharge from the Main Router across the entire mesh" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);">
-                        ⚡ Pulse
-                    </button>
-                    <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Show or hide offline devices in the mesh">
-                        👁️ Offline
-                    </button>
-                    <button id="topo-btn-label" class="topo-ctrl-btn" onclick="cycleTopoLabelMode()" title="Change label text next to each node">
-                        🏷️ <span id="topo-lbl-mode-txt">Name</span>
-                    </button>
-                    <button id="topo-btn-fx" class="topo-ctrl-btn active" onclick="toggleTopoEffects()" title="Toggle floating motion and network effects">
-                        ✨ Animation
-                    </button>
-                    <button class="topo-ctrl-btn" onclick="resetTopoLayout()" title="Recalculate ultra-spacious layout and center map">
-                        🎯 Center
-                    </button>
-                    <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" title="Show or hide card list below the map">
-                        🗂️ Cards
-                    </button>
-                    <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refresh network state">
-                        🔄
-                    </button>
-                    <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Fullscreen">
-                        ⛶
-                    </button>
+                    <div class="topo-controls-row">
+                        <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Show or hide offline devices in the mesh">
+                            👁️ Offline
+                        </button>
+                        <button id="topo-btn-label" class="topo-ctrl-btn" onclick="cycleTopoLabelMode()" title="Change label text next to each node">
+                            🏷️ <span id="topo-lbl-mode-txt">Name</span>
+                        </button>
+                        <button id="topo-btn-fx" class="topo-ctrl-btn active" onclick="toggleTopoEffects()" title="Toggle floating motion and network effects">
+                            ✨ Animation
+                        </button>
+                        <button class="topo-ctrl-btn" onclick="resetTopoLayout()" title="Recalculate ultra-spacious layout and center map">
+                            🎯 Center
+                        </button>
+                        <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" title="Show or hide card list below the map">
+                            🗂️ Cards
+                        </button>
+                        <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refresh network state">
+                            🔄
+                        </button>
+                        <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Fullscreen">
+                            ⛶
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1251,7 +1264,7 @@
             <div id="topo-tooltip" class="topo-tooltip"></div>
 
             <!-- Bottom legend bar -->
-            <div class="topo-legend">
+            <div id="topo-legend" class="topo-legend">
                 <span class="topo-legend-item"><span class="topo-dot-core"></span> Gateway / AdGuard Core</span>
                 <span class="topo-legend-item"><span class="topo-dot-hub"></span> Mesh Nodes / Routers / Switch</span>
                 <span class="topo-legend-item"><span class="topo-dot-static"></span> Online (Static IP)</span>
@@ -3100,16 +3113,67 @@ function syncTopoControlsUI() {
         freqTxt.textContent = topoState.impulseFreq === 0 ? '⚡ Paused' : `⚡ ${topoState.impulseFreq}x`;
         freqTxt.style.color = topoState.impulseFreq === 0 ? '#94a3b8' : (topoState.impulseFreq > 1.0 ? '#fcd34d' : '#e0f2fe');
     }
+    updateTopoLegendUI();
+}
+
+function getClientTelemetry(d) {
+    if (!d || !topoState.telemetryData) return null;
+    const candidates = [...(d.live_ips || []), d.ip].filter(Boolean);
+    for (let i = 0; i < candidates.length; i++) {
+        const entry = topoState.telemetryData[candidates[i]];
+        if (entry && (entry.queries > 0 || entry.blocked > 0)) return entry;
+    }
+    for (let i = 0; i < candidates.length; i++) {
+        if (topoState.telemetryData[candidates[i]]) return topoState.telemetryData[candidates[i]];
+    }
+    return null;
+}
+
+function formatShortDomain(dom) {
+    if (!dom) return '';
+    let s = String(dom).trim().replace(/^www\./i, '').replace(/\.$/, '');
+    const parts = s.split('.');
+    if (parts.length > 3) {
+        s = parts.slice(-3).join('.');
+    }
+    return s.length > 25 ? s.slice(0, 23) + '…' : s;
+}
+
+function updateTopoLegendUI() {
+    const leg = document.getElementById('topo-legend');
+    if (!leg) return;
+    if (topoState.telemetryMode) {
+        const sum = topoState.telemetrySummary || {};
+        const activeCount = Object.values(topoState.telemetryData || {}).filter(c => c && c.queries > 0).length;
+        leg.innerHTML = `
+            <span class="topo-legend-item" style="color:#6ee7b7; font-weight:700;">📡 Live AdGuard Traffic (${sum.total_queries || 0} dns · ${sum.total_blocked || 0} blocked · ${activeCount} active)</span>
+            <span class="topo-legend-item"><span style="width:14px; height:4px; border-radius:99px; background:linear-gradient(90deg, transparent, #38bdf8, #ffffff); display:inline-block; box-shadow:0 0 6px #38bdf8;"></span> Query (Client → Core)</span>
+            <span class="topo-legend-item"><span style="width:14px; height:4px; border-radius:99px; background:linear-gradient(90deg, transparent, #00f5d4, #ffffff); display:inline-block; box-shadow:0 0 6px #00f5d4;"></span> Reply (Core → Client)</span>
+            <span class="topo-legend-item"><span style="width:14px; height:4px; border-radius:99px; background:linear-gradient(90deg, transparent, #ef4444, #fecdd3); display:inline-block; box-shadow:0 0 6px #ef4444;"></span> Blocked by AdGuard 🛡️</span>
+            <span class="topo-legend-item" style="color:#94a3b8;"><span class="topo-dot-off" style="opacity:0.55;"></span> Idle (0 queries)</span>
+        `;
+    } else {
+        leg.innerHTML = `
+            <span class="topo-legend-item"><span class="topo-dot-core"></span> Gateway / AdGuard Core</span>
+            <span class="topo-legend-item"><span class="topo-dot-hub"></span> Mesh Nodes / Routers / Switch</span>
+            <span class="topo-legend-item"><span class="topo-dot-static"></span> Online (Static IP)</span>
+            <span class="topo-legend-item"><span class="topo-dot-dyn"></span> Online (Dynamic)</span>
+            <span class="topo-legend-item"><span class="topo-dot-off"></span> Offline</span>
+            <span style="color:#64748b; font-size:0.72rem; margin-left:4px;">🖱️ Wheel: Zoom · Drag: Move · Click: Sheet</span>
+        `;
+    }
 }
 
 function toggleTopoTelemetryMode() {
     topoState.telemetryMode = !topoState.telemetryMode;
     localStorage.setItem('ag_topo_telemetry', topoState.telemetryMode ? '1' : '0');
+    topoState.synapses = [];
     syncTopoControlsUI();
     if (topoState.telemetryMode) {
         pollTopoTelemetry(true);
+    } else {
+        triggerNeuralCascade();
     }
-    triggerNeuralCascade();
 }
 
 function adjustTopoImpulseFreq(delta) {
@@ -3130,7 +3194,7 @@ function resetTopoImpulseFreq() {
 async function pollTopoTelemetry(force = false) {
     if (!topoState.telemetryMode || topoState.telemetryFetching) return;
     const now = performance.now();
-    if (!force && now - topoState.telemetryLastFetch < 5200) return;
+    if (!force && now - topoState.telemetryLastFetch < 2800) return;
     topoState.telemetryFetching = true;
     topoState.telemetryLastFetch = now;
     try {
@@ -3144,6 +3208,7 @@ async function pollTopoTelemetry(force = false) {
                     total_queries: data.total_queries || 0,
                     total_blocked: data.total_blocked || 0
                 };
+                updateTopoLegendUI();
             }
         }
     } catch (_) {
@@ -3153,135 +3218,141 @@ async function pollTopoTelemetry(force = false) {
 }
 
 function getLinkLatencyFactor(lk) {
-    if (!lk || lk.type === 'trunk') return 1.18;
+    if (!lk || lk.type === 'trunk') return 1.15;
     const d = (lk.to && lk.to.dev) || {};
-    const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
-    const tel = topoState.telemetryData[ip];
+    const tel = getClientTelemetry(d);
     const ms = (tel && tel.latency_ms != null) ? tel.latency_ms : d.latency_ms;
-    if (ms == null) return lk.medium === 'cable' ? 1.25 : 0.95;
-    if (ms <= 2.0) return 1.45;
-    if (ms <= 12.0) return 1.15;
-    if (ms <= 40.0) return 0.90;
-    return 0.58;
+    if (ms == null) return lk.medium === 'cable' ? 1.18 : 0.96;
+    if (ms <= 2.5) return 1.32;
+    if (ms <= 12.0) return 1.12;
+    if (ms <= 40.0) return 0.92;
+    return 0.68;
+}
+
+function updateTelemetryStreams(tNow) {
+    if (!topoState.telemetryMode || !topoState.effectsOn || topoState.impulseFreq <= 0) return;
+    const freq = topoState.impulseFreq;
+    const maxActiveSynapses = Math.min(130, Math.round(52 * Math.max(1, freq)));
+    if (topoState.synapses.length >= maxActiveSynapses) return;
+
+    let anyHasQueries = false;
+    topoState.links.forEach((lk, sIdx) => {
+        if (lk.type !== 'spoke' || !lk.online) return;
+        const d = (lk.to && lk.to.dev) || {};
+        const tel = getClientTelemetry(d);
+        const qCount = tel ? (tel.queries || 0) : 0;
+        const bCount = tel ? (tel.blocked || 0) : 0;
+        if (qCount <= 0 && !d.blocked) return;
+        anyHasQueries = true;
+
+        const activity = Math.log2(1 + Math.max(1, qCount));
+        const baseInterval = Math.max(340, 2350 / (0.65 + activity * 0.52));
+        const intervalMs = baseInterval / Math.max(0.25, freq);
+
+        if (!lk.nextTelEmit) {
+            lk.nextTelEmit = tNow + Math.random() * Math.min(900, intervalMs);
+        }
+        if (tNow < lk.nextTelEmit) return;
+        lk.nextTelEmit = tNow + intervalMs * (0.86 + Math.random() * 0.28);
+
+        const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
+        const latFactor = getLinkLatencyFactor(lk);
+        const isBlockedPulse = Boolean(d.blocked) || (bCount > 0 && Math.random() < Math.min(0.82, (bCount / Math.max(1, qCount)) + 0.25));
+
+        lk.to.flash = Math.max(lk.to.flash || 0, isBlockedPulse ? 0.85 : 0.55);
+
+        if (isBlockedPulse) {
+            topoState.synapses.push({
+                fullRoute: true,
+                spokeIdx: sIdx,
+                trunkIdx: trunkIdx,
+                reverse: true,
+                t: 0,
+                len: 0.26,
+                speed: 0.0092 * latFactor,
+                amp: 6.5,
+                colorCore: '#fecdd3',
+                colorGlow: '#f43f5e',
+                width: 2.15,
+                isBlocked: true,
+                spawnReply: false
+            });
+        } else {
+            topoState.synapses.push({
+                fullRoute: true,
+                spokeIdx: sIdx,
+                trunkIdx: trunkIdx,
+                reverse: true,
+                t: 0,
+                len: 0.24,
+                speed: 0.0096 * latFactor,
+                amp: 5.5,
+                colorCore: '#e0f2fe',
+                colorGlow: '#38bdf8',
+                width: 1.9,
+                isBlocked: false,
+                spawnReply: true
+            });
+        }
+    });
+
+    if (!anyHasQueries && tNow - topoState.lastSpontaneous > (950 / Math.max(0.25, freq))) {
+        topoState.lastSpontaneous = tNow;
+        const aliveSpokes = [];
+        topoState.links.forEach((lk, idx) => {
+            if (lk.type === 'spoke' && lk.online) aliveSpokes.push(idx);
+        });
+        if (aliveSpokes.length > 0) {
+            const pick = aliveSpokes[Math.floor(Math.random() * aliveSpokes.length)];
+            const lk = topoState.links[pick];
+            const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
+            topoState.synapses.push({
+                fullRoute: true,
+                spokeIdx: pick,
+                trunkIdx: trunkIdx,
+                reverse: true,
+                t: 0,
+                len: 0.22,
+                speed: 0.0088 * getLinkLatencyFactor(lk),
+                amp: 5.0,
+                colorCore: '#e0f2fe',
+                colorGlow: '#38bdf8',
+                width: 1.7,
+                isBlocked: false,
+                spawnReply: true
+            });
+        }
+    }
 }
 
 function spawnAutoTopoImpulse() {
-    const trunkIdxs = [];
+    if (topoState.telemetryMode) return;
     const spokeIdxs = [];
     topoState.links.forEach((lk, idx) => {
-        if (!lk.online) return;
-        if (lk.type === 'trunk') trunkIdxs.push(idx);
-        else spokeIdxs.push(idx);
+        if (lk.online && lk.type === 'spoke') spokeIdxs.push(idx);
     });
-    if (trunkIdxs.length === 0 && spokeIdxs.length === 0) return;
+    if (spokeIdxs.length === 0) return;
 
-    if (topoState.telemetryMode && spokeIdxs.length > 0) {
-        const weights = spokeIdxs.map(idx => {
-            const lk = topoState.links[idx];
-            const d = (lk.to && lk.to.dev) || {};
-            const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
-            const tel = topoState.telemetryData[ip];
-            if (tel && tel.queries > 0) {
-                return 2.5 + Math.min(28, tel.queries * 1.8) + (tel.blocked > 0 ? 4.0 : 0);
-            }
-            const hasLiveDns = topoState.telemetrySummary.source === 'adguard_live' && topoState.telemetrySummary.total_queries > 0;
-            return hasLiveDns ? 0.22 : (lk.medium === 'cable' ? 1.5 : 1.0);
-        });
-        const totalW = weights.reduce((a, b) => a + b, 0) || 1;
-        let r = Math.random() * totalW;
-        let chosenSpokeIdx = spokeIdxs[0];
-        for (let i = 0; i < spokeIdxs.length; i++) {
-            r -= weights[i];
-            if (r <= 0) {
-                chosenSpokeIdx = spokeIdxs[i];
-                break;
-            }
-        }
-        const lk = topoState.links[chosenSpokeIdx];
-        const d = (lk.to && lk.to.dev) || {};
-        const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
-        const tel = topoState.telemetryData[ip] || { queries: 0, blocked: 0 };
-        const latFactor = getLinkLatencyFactor(lk);
-        const isBlockedPulse = (d.blocked) || (tel.blocked > 0 && Math.random() < Math.min(0.85, (tel.blocked / Math.max(1, tel.queries)) + 0.28));
+    const pick = spokeIdxs[Math.floor(Math.random() * spokeIdxs.length)];
+    const lk = topoState.links[pick];
+    const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
+    const goOutward = Math.random() < 0.58;
 
-        if (isBlockedPulse) {
-            lk.to.flash = 0.85;
-            topoState.synapses.push({
-                linkIdx: chosenSpokeIdx,
-                t: 0,
-                len: 0.40,
-                speed: 0.020 * latFactor,
-                amp: 7.5,
-                colorCore: '#fecdd3',
-                colorGlow: '#ef4444',
-                width: 1.9,
-                reverse: true,
-                cascadeUp: true,
-                isBlocked: true
-            });
-        } else if (Math.random() < 0.55) {
-            lk.to.flash = 0.65;
-            topoState.synapses.push({
-                linkIdx: chosenSpokeIdx,
-                t: 0,
-                len: 0.38,
-                speed: 0.021 * latFactor,
-                amp: 6.5,
-                colorCore: '#e0f2fe',
-                colorGlow: lk.to.static ? '#10b981' : '#38bdf8',
-                width: 1.65,
-                reverse: true,
-                cascadeUp: true,
-                isBlocked: false
-            });
-        } else {
-            const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
-            if (trunkIdx !== -1) {
-                topoState.synapses.push({
-                    linkIdx: trunkIdx,
-                    t: 0,
-                    len: 0.36,
-                    speed: 0.022,
-                    amp: 9.0,
-                    colorCore: '#ffffff',
-                    colorGlow: '#00f5d4',
-                    width: 2.1,
-                    cascade: true,
-                    targetClientId: lk.to.id
-                });
-            }
-        }
-        return;
-    }
-
-    if (trunkIdxs.length > 0 && Math.random() < 0.48) {
-        const pick = trunkIdxs[Math.floor(Math.random() * trunkIdxs.length)];
-        topoState.synapses.push({
-            linkIdx: pick,
-            t: 0,
-            len: 0.34,
-            speed: 0.018 + Math.random() * 0.008,
-            amp: 9.5,
-            colorCore: '#ffffff',
-            colorGlow: '#00f5d4',
-            width: 2.1,
-            cascade: true
-        });
-    } else if (spokeIdxs.length > 0) {
-        const pick = spokeIdxs[Math.floor(Math.random() * spokeIdxs.length)];
-        const lk = topoState.links[pick];
-        topoState.synapses.push({
-            linkIdx: pick,
-            t: 0,
-            len: 0.38,
-            speed: 0.022 + Math.random() * 0.012,
-            amp: 6.5,
-            colorCore: '#e0f2fe',
-            colorGlow: lk.to.static ? '#10b981' : '#38bdf8',
-            width: 1.5,
-            cascade: false
-        });
-    }
+    topoState.synapses.push({
+        fullRoute: true,
+        spokeIdx: pick,
+        trunkIdx: trunkIdx,
+        reverse: !goOutward,
+        t: 0,
+        len: 0.25,
+        speed: 0.0092 + Math.random() * 0.0035,
+        amp: 6.5,
+        colorCore: '#ffffff',
+        colorGlow: goOutward ? '#00f5d4' : (lk.to.static ? '#10b981' : '#38bdf8'),
+        width: 1.9,
+        isBlocked: false,
+        spawnReply: false
+    });
 }
 
 function cycleTopoVisualStyle() {
@@ -3820,18 +3891,171 @@ function buildTopoGraph(fitView = false) {
     }
 }
 
+function pointOnPolylineByArc(pts, t) {
+    if (!pts || pts.length === 0) return { x: 0, y: 0 };
+    if (pts.length === 1) return { x: pts[0].x, y: pts[0].y };
+    const clamped = Math.max(0, Math.min(1, t));
+    let total = 0;
+    const segLens = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+        const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        segLens.push(d);
+        total += d;
+    }
+    if (total < 0.001) return { x: pts[0].x, y: pts[0].y };
+    const target = clamped * total;
+    let acc = 0;
+    for (let i = 0; i < segLens.length; i++) {
+        const sl = segLens[i];
+        if (acc + sl >= target || i === segLens.length - 1) {
+            const u = sl > 0.0001 ? (target - acc) / sl : 0;
+            return {
+                x: pts[i].x + (pts[i + 1].x - pts[i].x) * u,
+                y: pts[i].y + (pts[i + 1].y - pts[i].y) * u
+            };
+        }
+        acc += sl;
+    }
+    return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
+}
+
 function pointOnArticulatedLink(lk, t) {
-    const pts = [lk.from, ...(lk.joints || []), lk.to];
-    const segs = pts.length - 1;
-    const scaled = Math.max(0, Math.min(0.9999, t)) * segs;
-    const idx = Math.floor(scaled);
-    const localT = scaled - idx;
-    const a = pts[idx];
-    const b = pts[idx + 1];
-    return {
-        x: a.x + (b.x - a.x) * localT,
-        y: a.y + (b.y - a.y) * localT
+    return pointOnPolylineByArc([lk.from, ...(lk.joints || []), lk.to], t);
+}
+
+function buildSynapseRoutePoints(syn, usePlexus) {
+    if (syn.fullRoute) {
+        const spokeLk = topoState.links[syn.spokeIdx];
+        if (!spokeLk) return null;
+        const trunkLk = syn.trunkIdx >= 0 ? topoState.links[syn.trunkIdx] : null;
+        if (syn.reverse) {
+            const sPts = usePlexus
+                ? [spokeLk.to, ...(spokeLk.joints || []).slice().reverse(), spokeLk.from]
+                : [spokeLk.to, spokeLk.from];
+            if (!trunkLk) return sPts;
+            const tPts = usePlexus
+                ? [...(trunkLk.joints || []).slice().reverse(), trunkLk.from]
+                : [trunkLk.from];
+            return [...sPts, ...tPts];
+        } else {
+            if (!trunkLk) {
+                return usePlexus
+                    ? [spokeLk.from, ...(spokeLk.joints || []), spokeLk.to]
+                    : [spokeLk.from, spokeLk.to];
+            }
+            const tPts = usePlexus
+                ? [trunkLk.from, ...(trunkLk.joints || []), trunkLk.to]
+                : [trunkLk.from, trunkLk.to];
+            const sPts = usePlexus
+                ? [...(spokeLk.joints || []), spokeLk.to]
+                : [spokeLk.to];
+            return [...tPts, ...sPts];
+        }
+    }
+    const lk = topoState.links[syn.linkIdx];
+    if (!lk) return null;
+    const basePts = usePlexus ? [lk.from, ...(lk.joints || []), lk.to] : [lk.from, lk.to];
+    return syn.reverse ? basePts.slice().reverse() : basePts;
+}
+
+function drawSmoothRouteComet(ctx, pts, tHead, tailLen, colorCore, colorGlow, width, addBoltJitter = false, timeSeed = 0) {
+    if (!pts || pts.length < 2) return null;
+    const cum = [0];
+    let total = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+        total += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        cum.push(total);
+    }
+    if (total < 2) return null;
+
+    const dHead = Math.max(0, Math.min(total, tHead * total));
+    const dTail = Math.max(0, Math.min(total, (tHead - tailLen) * total));
+    if (dHead - dTail < 1.2) return null;
+
+    const interpAt = (dist) => {
+        for (let i = 0; i < pts.length - 1; i++) {
+            if (cum[i + 1] >= dist || i === pts.length - 2) {
+                const segL = cum[i + 1] - cum[i];
+                const u = segL > 0.0001 ? (dist - cum[i]) / segL : 0;
+                return {
+                    x: pts[i].x + (pts[i + 1].x - pts[i].x) * u,
+                    y: pts[i].y + (pts[i + 1].y - pts[i].y) * u
+                };
+            }
+        }
+        return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
     };
+
+    const subPts = [interpAt(dTail)];
+    for (let i = 1; i < pts.length - 1; i++) {
+        if (cum[i] > dTail + 0.5 && cum[i] < dHead - 0.5) {
+            subPts.push({ x: pts[i].x, y: pts[i].y });
+        }
+    }
+    const headPt = interpAt(dHead);
+    subPts.push(headPt);
+    const tailPt = subPts[0];
+
+    let drawPts = subPts;
+    if (addBoltJitter) {
+        drawPts = [];
+        const steps = 11;
+        for (let s = 0; s <= steps; s++) {
+            const u = s / steps;
+            const dCur = dTail + (dHead - dTail) * u;
+            const p = interpAt(dCur);
+            if (s === 0 || s === steps) {
+                drawPts.push(p);
+            } else {
+                const pNext = interpAt(Math.min(total, dCur + 4));
+                const dx = pNext.x - p.x, dy = pNext.y - p.y;
+                const l = Math.hypot(dx, dy) || 1;
+                const env = Math.sin(u * Math.PI);
+                const wave = Math.sin(timeSeed * 0.02 + s * 2.3) * 4.5 * env;
+                drawPts.push({ x: p.x + (-dy / l) * wave, y: p.y + (dx / l) * wave });
+            }
+        }
+    }
+
+    ctx.save();
+    const gradGlow = ctx.createLinearGradient(tailPt.x, tailPt.y, headPt.x, headPt.y);
+    gradGlow.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    gradGlow.addColorStop(0.35, colorGlow);
+    gradGlow.addColorStop(1, colorGlow);
+
+    ctx.beginPath();
+    drawPts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = gradGlow;
+    ctx.lineWidth = width * 2.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = colorGlow;
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = 0.78;
+    ctx.stroke();
+
+    const gradCore = ctx.createLinearGradient(tailPt.x, tailPt.y, headPt.x, headPt.y);
+    gradCore.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    gradCore.addColorStop(0.45, colorGlow);
+    gradCore.addColorStop(1, colorCore);
+
+    ctx.beginPath();
+    drawPts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = gradCore;
+    ctx.lineWidth = width * 1.15;
+    ctx.globalAlpha = 0.98;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(headPt.x, headPt.y, width * 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = colorGlow;
+    ctx.shadowBlur = 16;
+    ctx.globalAlpha = 1;
+    ctx.fill();
+    ctx.restore();
+
+    return headPt;
 }
 
 function drawZigzagBolt(ctx, x1, y1, x2, y2, t0, t1, amp, segments, timeSeed, colorCore, colorGlow, width) {
@@ -3878,47 +4102,6 @@ function drawZigzagBolt(ctx, x1, y1, x2, y2, t0, t1, amp, segments, timeSeed, co
     if (head) {
         ctx.beginPath();
         ctx.arc(head.x, head.y, width * 1.7, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = colorGlow;
-        ctx.shadowBlur = 14;
-        ctx.fill();
-    }
-    ctx.restore();
-}
-
-function drawArticulatedPulse(ctx, lk, t0, t1, reverse, colorCore, colorGlow, width) {
-    const steps = 10;
-    const pts = [];
-    for (let i = 0; i <= steps; i++) {
-        const u = t0 + (t1 - t0) * (i / steps);
-        const linkT = reverse ? (1.0 - u) : u;
-        pts.push(pointOnArticulatedLink(lk, linkT));
-    }
-    if (pts.length < 2) return;
-
-    ctx.save();
-    ctx.beginPath();
-    pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.strokeStyle = colorGlow;
-    ctx.lineWidth = width * 2.5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.shadowColor = colorGlow;
-    ctx.shadowBlur = 14;
-    ctx.globalAlpha = 0.72;
-    ctx.stroke();
-
-    ctx.beginPath();
-    pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.strokeStyle = colorCore;
-    ctx.lineWidth = width * 1.05;
-    ctx.globalAlpha = 0.96;
-    ctx.stroke();
-
-    const head = pts[pts.length - 1];
-    if (head) {
-        ctx.beginPath();
-        ctx.arc(head.x, head.y, width * 1.75, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.shadowColor = colorGlow;
         ctx.shadowBlur = 14;
@@ -4205,18 +4388,19 @@ function drawTopoFrame(now) {
                 });
             });
 
+            const freq = topoState.impulseFreq;
             if (topoState.telemetryMode) {
                 pollTopoTelemetry(false);
-            }
-
-            const freq = topoState.impulseFreq;
-            const autoImpulsesActive = topoState.effectsOn && freq > 0 && (useSynapse || topoState.telemetryMode || freq !== 1.0);
-            if (autoImpulsesActive && topoState.links.length > 0) {
-                const spawnInterval = Math.max(42, 300 / freq);
-                const maxSynapses = Math.min(95, Math.round(28 * Math.max(1, freq)));
-                if (tNow - topoState.lastSpontaneous > spawnInterval && topoState.synapses.length < maxSynapses) {
-                    topoState.lastSpontaneous = tNow;
-                    spawnAutoTopoImpulse();
+                updateTelemetryStreams(tNow);
+            } else {
+                const autoImpulsesActive = topoState.effectsOn && freq > 0 && (useSynapse || freq !== 1.0);
+                if (autoImpulsesActive && topoState.links.length > 0) {
+                    const spawnInterval = Math.max(55, 320 / freq);
+                    const maxSynapses = Math.min(95, Math.round(28 * Math.max(1, freq)));
+                    if (tNow - topoState.lastSpontaneous > spawnInterval && topoState.synapses.length < maxSynapses) {
+                        topoState.lastSpontaneous = tNow;
+                        spawnAutoTopoImpulse();
+                    }
                 }
             }
 
@@ -4313,6 +4497,16 @@ function drawTopoFrame(now) {
                 const searchDim = hasSearch && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
                 const hovDim = hov && !hi;
 
+                let telActive = false;
+                let telBlocked = false;
+                if (topoState.telemetryMode && lk.type === 'spoke' && lk.to && lk.to.dev) {
+                    const tel = getClientTelemetry(lk.to.dev);
+                    telActive = Boolean(tel && tel.queries > 0);
+                    telBlocked = Boolean(lk.to.dev.blocked || (tel && tel.blocked > 0));
+                } else if (topoState.telemetryMode && lk.type === 'trunk') {
+                    telActive = true;
+                }
+
                 if (usePlexus) {
                     const pts = [lk.from, ...(lk.joints || []), lk.to];
                     ctx.save();
@@ -4325,6 +4519,14 @@ function drawTopoFrame(now) {
                         ctx.shadowColor = '#00e5ff';
                         ctx.shadowBlur = 14;
                         ctx.globalAlpha = 0.96;
+                    } else if (topoState.telemetryMode && lk.type === 'spoke') {
+                        ctx.strokeStyle = telBlocked
+                            ? 'rgba(244, 63, 94, 0.72)'
+                            : (telActive ? 'rgba(56, 189, 248, 0.82)' : (lk.online ? 'rgba(148, 163, 184, 0.24)' : 'rgba(148, 163, 184, 0.12)'));
+                        ctx.lineWidth = telActive ? 1.55 : 0.95;
+                        ctx.shadowColor = telBlocked ? '#f43f5e' : '#00f5d4';
+                        ctx.shadowBlur = telActive ? 9 : 0;
+                        ctx.globalAlpha = (searchDim || hovDim) ? 0.12 : 0.92;
                     } else {
                         ctx.strokeStyle = lk.type === 'trunk'
                             ? 'rgba(186, 230, 253, 0.78)'
@@ -4339,13 +4541,13 @@ function drawTopoFrame(now) {
                     if (!searchDim && !hovDim) {
                         (lk.joints || []).forEach(j => {
                             const pulse = 0.7 + 0.3 * Math.sin(tNow * 0.002 + j.phaseX);
-                            const rDot = (lk.type === 'trunk' ? 2.6 : 1.9) * (hi ? 1.35 : 1);
+                            const rDot = (lk.type === 'trunk' ? 2.6 : (topoState.telemetryMode && !telActive ? 1.3 : 1.9)) * (hi ? 1.35 : 1);
                             ctx.beginPath();
                             ctx.arc(j.x, j.y, rDot, 0, Math.PI * 2);
                             ctx.fillStyle = '#ffffff';
                             ctx.shadowColor = '#00e5ff';
                             ctx.shadowBlur = hi ? 14 : (8 * pulse);
-                            ctx.globalAlpha = lk.online ? (0.85 * pulse) : 0.3;
+                            ctx.globalAlpha = lk.online ? ((topoState.telemetryMode && !telActive ? 0.35 : 0.85) * pulse) : 0.25;
                             ctx.fill();
                         });
                     }
@@ -4359,6 +4561,10 @@ function drawTopoFrame(now) {
                         ctx.strokeStyle = lk.type === 'trunk' ? '#00f5d4' : '#38bdf8';
                         ctx.lineWidth = lk.type === 'trunk' ? 3.0 : 1.9;
                         ctx.globalAlpha = 0.92;
+                    } else if (topoState.telemetryMode && lk.type === 'spoke') {
+                        ctx.strokeStyle = telBlocked ? 'rgba(244, 63, 94, 0.7)' : (telActive ? 'rgba(56, 189, 248, 0.78)' : 'rgba(148, 163, 184, 0.22)');
+                        ctx.lineWidth = telActive ? 1.55 : 0.95;
+                        ctx.globalAlpha = (searchDim || hovDim) ? 0.1 : 0.88;
                     } else {
                         ctx.strokeStyle = lk.color;
                         ctx.lineWidth = lk.type === 'trunk' ? 2.4 : 1.1;
@@ -4381,15 +4587,20 @@ function drawTopoFrame(now) {
                 }
             });
 
-            // 3. Particles + Synaptic Cascades + Shockwaves
+            // 3. Particles + Continuous 2-Hop Route Comets + Shockwaves
             if (topoState.effectsOn) {
                 const freqSpeedMult = topoState.impulseFreq === 0 ? 0 : (0.45 + 0.55 * Math.pow(topoState.impulseFreq, 0.72));
-                ctx.globalAlpha = 0.92;
                 topoState.particles.forEach(p => {
                     const lk = topoState.links[p.linkIdx];
                     if (!lk) return;
+
+                    if (topoState.telemetryMode && lk.type === 'spoke') {
+                        const tel = lk.to && lk.to.dev ? getClientTelemetry(lk.to.dev) : null;
+                        if (!tel || !tel.queries) return;
+                    }
+
                     const latMult = topoState.telemetryMode ? getLinkLatencyFactor(lk) : 1.0;
-                    p.t += p.speed * (usePlexus && !useSynapse ? 0.62 : 1.0) * freqSpeedMult * latMult;
+                    p.t += p.speed * (usePlexus && !useSynapse ? 0.65 : 1.0) * freqSpeedMult * latMult;
                     if (p.t > 1) p.t -= 1;
                     if (hov && !isLinkHighlighted(lk)) return;
                     if (hasSearch && !nodeMatchesSearch(lk.to)) return;
@@ -4403,104 +4614,114 @@ function drawTopoFrame(now) {
                         px = lk.from.x + (lk.to.x - lk.from.x) * p.t;
                         py = lk.from.y + (lk.to.y - lk.from.y) * p.t;
                     }
+                    ctx.save();
+                    ctx.globalAlpha = topoState.telemetryMode ? 0.65 : 0.92;
                     ctx.beginPath();
                     ctx.arc(px, py, p.size, 0, Math.PI * 2);
                     ctx.fillStyle = usePlexus ? '#ffffff' : p.color;
                     ctx.shadowColor = p.color;
                     ctx.shadowBlur = 9;
                     ctx.fill();
-                    ctx.shadowBlur = 0;
+                    ctx.restore();
                 });
 
-                const synFreqMult = topoState.impulseFreq === 0 ? 0.85 : (0.65 + 0.35 * Math.pow(topoState.impulseFreq, 0.55));
+                const synFreqMult = topoState.impulseFreq === 0 ? 0.85 : (0.68 + 0.32 * Math.pow(topoState.impulseFreq, 0.52));
                 for (let i = topoState.synapses.length - 1; i >= 0; i--) {
                     const syn = topoState.synapses[i];
+                    const prevT = syn.t;
                     syn.t += syn.speed * synFreqMult;
-                    const lk = topoState.links[syn.linkIdx];
-                    if (!lk) {
+
+                    const spokeLk = syn.fullRoute ? topoState.links[syn.spokeIdx] : topoState.links[syn.linkIdx];
+                    const trunkLk = (syn.fullRoute && syn.trunkIdx >= 0) ? topoState.links[syn.trunkIdx] : null;
+                    if (!spokeLk) {
                         topoState.synapses.splice(i, 1);
                         continue;
                     }
-                    const t0 = Math.max(0, syn.t - syn.len);
-                    const t1 = Math.min(1, syn.t);
-                    if (t1 > t0 && (!hov || isLinkHighlighted(lk))) {
-                        if (usePlexus && !useSynapse) {
-                            drawArticulatedPulse(
-                                ctx, lk, t0, t1, !!syn.reverse,
-                                syn.colorCore, syn.colorGlow, syn.width
-                            );
-                        } else {
-                            const sx1 = syn.reverse ? lk.to.x : lk.from.x;
-                            const sy1 = syn.reverse ? lk.to.y : lk.from.y;
-                            const sx2 = syn.reverse ? lk.from.x : lk.to.x;
-                            const sy2 = syn.reverse ? lk.from.y : lk.to.y;
-                            drawZigzagBolt(
-                                ctx, sx1, sy1, sx2, sy2,
-                                t0, t1,
-                                syn.amp,
-                                lk.type === 'trunk' ? 12 : 9,
-                                tNow + syn.linkIdx * 37,
-                                syn.colorCore,
-                                syn.colorGlow,
-                                syn.width
+
+                    const routeVisible = !hov || isLinkHighlighted(spokeLk) || (trunkLk && isLinkHighlighted(trunkLk));
+                    if (routeVisible) {
+                        const routePts = buildSynapseRoutePoints(syn, usePlexus);
+                        if (routePts && routePts.length >= 2) {
+                            drawSmoothRouteComet(
+                                ctx,
+                                routePts,
+                                syn.t,
+                                syn.len || 0.24,
+                                syn.colorCore || '#ffffff',
+                                syn.colorGlow || '#00f5d4',
+                                syn.width || 1.9,
+                                useSynapse,
+                                tNow + (syn.spokeIdx || syn.linkIdx || 0) * 37
                             );
                         }
                     }
-                    if (syn.t >= 1.0) {
-                        const destNode = syn.reverse ? lk.from : lk.to;
-                        destNode.flash = 1.0;
 
-                        if (syn.cascade && !syn.reverse && lk.to.type === 'hub') {
-                            spawnNodeShockwave(lk.to.x, lk.to.y, lk.to.color, 85);
-                            const childLinks = [];
-                            topoState.links.forEach((clk, cIdx) => {
-                                if (clk.from.id === lk.to.id && clk.online) {
-                                    if (!syn.targetClientId || clk.to.id === syn.targetClientId) {
-                                        childLinks.push(cIdx);
-                                    }
-                                }
-                            });
-                            const maxTotal = Math.min(110, Math.round(48 * Math.max(1, topoState.impulseFreq)));
-                            const branchCount = syn.targetClientId ? childLinks.length : Math.min(childLinks.length, 2 + Math.floor(Math.random() * 4));
-                            for (let b = 0; b < branchCount; b++) {
-                                const pickIdx = syn.targetClientId ? childLinks[b] : childLinks[Math.floor(Math.random() * childLinks.length)];
-                                const clk = topoState.links[pickIdx];
-                                if (clk && topoState.synapses.length < maxTotal) {
-                                    const latF = topoState.telemetryMode ? getLinkLatencyFactor(clk) : 1.0;
-                                    topoState.synapses.push({
-                                        linkIdx: pickIdx,
-                                        t: 0,
-                                        len: 0.42,
-                                        speed: (0.024 + Math.random() * 0.010) * latF,
-                                        amp: 6.5,
-                                        colorCore: '#ffffff',
-                                        colorGlow: clk.to.static ? '#10b981' : '#38bdf8',
-                                        width: 1.55,
-                                        cascade: false
-                                    });
-                                }
-                            }
-                        }
+                    if (syn.fullRoute && prevT < 0.5 && syn.t >= 0.5 && spokeLk.from) {
+                        spokeLk.from.flash = Math.max(spokeLk.from.flash || 0, 0.48);
+                    }
 
-                        if (syn.cascadeUp && syn.reverse && lk.from.type === 'hub') {
-                            const trunkIdx = topoState.links.findIndex(tLk => tLk.type === 'trunk' && tLk.to.id === lk.from.id);
-                            if (trunkIdx !== -1 && topoState.synapses.length < 95) {
+                    if (syn.t >= 1.0 + (syn.len || 0.24) * 0.65) {
+                        if (syn.fullRoute) {
+                            const coreNodeRef = trunkLk ? trunkLk.from : spokeLk.from;
+                            const clientNodeRef = spokeLk.to;
+                            const dest = syn.reverse ? coreNodeRef : clientNodeRef;
+                            if (dest) dest.flash = Math.max(dest.flash || 0, 0.8);
+
+                            if (syn.reverse && syn.isBlocked && coreNodeRef) {
+                                spawnNodeShockwave(coreNodeRef.x, coreNodeRef.y, '#f43f5e', 76);
+                            } else if (syn.reverse && syn.spawnReply && topoState.synapses.length < 135) {
                                 topoState.synapses.push({
-                                    linkIdx: trunkIdx,
+                                    fullRoute: true,
+                                    spokeIdx: syn.spokeIdx,
+                                    trunkIdx: syn.trunkIdx,
+                                    reverse: false,
                                     t: 0,
-                                    len: 0.36,
-                                    speed: 0.024,
-                                    amp: 8.5,
-                                    colorCore: syn.isBlocked ? '#fecdd3' : '#ffffff',
-                                    colorGlow: syn.isBlocked ? '#ef4444' : '#00f5d4',
-                                    width: syn.isBlocked ? 2.2 : 1.95,
-                                    reverse: true,
-                                    cascadeUp: false,
-                                    isBlocked: !!syn.isBlocked
+                                    len: 0.24,
+                                    speed: syn.speed * 1.06,
+                                    amp: 5.5,
+                                    colorCore: '#ffffff',
+                                    colorGlow: '#00f5d4',
+                                    width: 1.85,
+                                    isBlocked: false,
+                                    spawnReply: false
                                 });
                             }
-                        } else if (syn.reverse && lk.from.type === 'core' && syn.isBlocked) {
-                            spawnNodeShockwave(lk.from.x, lk.from.y, '#ef4444', 95);
+                        } else {
+                            const lk = spokeLk;
+                            const destNode = syn.reverse ? lk.from : lk.to;
+                            if (destNode) destNode.flash = 1.0;
+
+                            if (syn.cascade && !syn.reverse && lk.to.type === 'hub') {
+                                spawnNodeShockwave(lk.to.x, lk.to.y, lk.to.color, 85);
+                                const childLinks = [];
+                                topoState.links.forEach((clk, cIdx) => {
+                                    if (clk.from.id === lk.to.id && clk.online) {
+                                        if (!syn.targetClientId || clk.to.id === syn.targetClientId) {
+                                            childLinks.push(cIdx);
+                                        }
+                                    }
+                                });
+                                const maxTotal = Math.min(110, Math.round(48 * Math.max(1, topoState.impulseFreq)));
+                                const branchCount = syn.targetClientId ? childLinks.length : Math.min(childLinks.length, 2 + Math.floor(Math.random() * 4));
+                                for (let b = 0; b < branchCount; b++) {
+                                    const pickIdx = syn.targetClientId ? childLinks[b] : childLinks[Math.floor(Math.random() * childLinks.length)];
+                                    const clk = topoState.links[pickIdx];
+                                    if (clk && topoState.synapses.length < maxTotal) {
+                                        topoState.synapses.push({
+                                            fullRoute: false,
+                                            linkIdx: pickIdx,
+                                            t: 0,
+                                            len: 0.28,
+                                            speed: (0.015 + Math.random() * 0.006),
+                                            amp: 6.0,
+                                            colorCore: '#ffffff',
+                                            colorGlow: clk.to.static ? '#10b981' : '#38bdf8',
+                                            width: 1.6,
+                                            cascade: false
+                                        });
+                                    }
+                                }
+                            }
                         }
 
                         topoState.synapses.splice(i, 1);
@@ -4664,11 +4885,28 @@ function drawTopoFrame(now) {
                     }
                     ctx.restore();
                 } else {
-                    const rNode = (isDirectHover || matched) ? n.r + 2.8 : n.r;
+                    const telClient = (topoState.telemetryMode && n.dev) ? getClientTelemetry(n.dev) : null;
+                    const hasLiveTraffic = Boolean(telClient && telClient.queries > 0);
+                    const hasBlockedTraffic = Boolean((n.dev && n.dev.blocked) || (telClient && telClient.blocked > 0));
+                    const rNode = (isDirectHover || matched) ? n.r + 2.8 : (hasLiveTraffic ? n.r + 1.2 : n.r);
+
                     ctx.save();
+                    if (topoState.telemetryMode && !hasLiveTraffic && !isDirectHover && !matched && n.online) {
+                        ctx.globalAlpha = (hi ? 0.55 : 0.12);
+                    }
+
+                    if (topoState.telemetryMode && hasLiveTraffic) {
+                        const haloPulse = 0.5 + 0.5 * Math.sin(tNow * 0.004 + n.phase);
+                        ctx.beginPath();
+                        ctx.arc(n.x, n.y, rNode + 4 + haloPulse * 4.5, 0, Math.PI * 2);
+                        ctx.strokeStyle = hasBlockedTraffic ? 'rgba(244, 63, 94, 0.55)' : 'rgba(0, 245, 212, 0.52)';
+                        ctx.lineWidth = 1.3;
+                        ctx.stroke();
+                    }
+
                     if (n.online || matched || isDirectHover || n.flash > 0.1) {
-                        ctx.shadowColor = matched ? '#f59e0b' : (usePlexus ? '#38bdf8' : n.color);
-                        ctx.shadowBlur = (matched || isDirectHover || n.flash > 0.2) ? 18 : 10;
+                        ctx.shadowColor = matched ? '#f59e0b' : (hasBlockedTraffic && topoState.telemetryMode ? '#f43f5e' : (usePlexus ? '#38bdf8' : n.color));
+                        ctx.shadowBlur = (matched || isDirectHover || n.flash > 0.2 || hasLiveTraffic) ? 18 : 10;
                     }
                     ctx.fillStyle = matched ? '#fbbf24' : (n.flash > 0.4 ? '#ffffff' : n.color);
                     ctx.beginPath();
@@ -4687,14 +4925,29 @@ function drawTopoFrame(now) {
                         const hub = topoState.nodes.find(h => h.id === n.hubId);
                         const isLeftSide = hub ? (n.x < hub.x) : (Math.cos(n.angle || 0) < 0);
                         const txt = getClientDisplayText(n);
-                        ctx.font = (isDirectHover || matched)
-                            ? '700 12px system-ui, -apple-system, sans-serif'
-                            : '500 10.8px system-ui, -apple-system, sans-serif';
+                        ctx.save();
+                        if (topoState.telemetryMode && !hasLiveTraffic && !isDirectHover && !matched && n.online) {
+                            ctx.globalAlpha = (hi ? 0.58 : 0.12);
+                        }
+                        ctx.font = (isDirectHover || matched || hasLiveTraffic)
+                            ? '600 11.2px system-ui, -apple-system, sans-serif'
+                            : '500 10.5px system-ui, -apple-system, sans-serif';
                         ctx.fillStyle = (isDirectHover || matched) ? '#ffffff' : (n.online ? '#f1f5f9' : '#94a3b8');
                         ctx.textAlign = isLeftSide ? 'right' : 'left';
                         ctx.textBaseline = 'middle';
                         const offsetX = isLeftSide ? -(rNode + 8) : (rNode + 8);
-                        ctx.fillText(txt, n.x + offsetX, n.y);
+                        ctx.fillText(txt, n.x + offsetX, hasLiveTraffic ? (n.y - 4) : n.y);
+
+                        if (topoState.telemetryMode && hasLiveTraffic && telClient) {
+                            const domShow = formatShortDomain(hasBlockedTraffic && telClient.last_blocked_domain ? telClient.last_blocked_domain : telClient.last_domain);
+                            const subTraffic = hasBlockedTraffic
+                                ? `🛡️ ${telClient.queries} dns (${telClient.blocked} blk)${domShow ? ' · ' + domShow : ''}`
+                                : `⚡ ${telClient.queries} dns${domShow ? ' · ' + domShow : ''}`;
+                            ctx.font = '600 8.6px monospace';
+                            ctx.fillStyle = hasBlockedTraffic ? '#fda4af' : '#67e8f9';
+                            ctx.fillText(subTraffic, n.x + offsetX, n.y + 7.5);
+                        }
+                        ctx.restore();
                     }
                 }
             });

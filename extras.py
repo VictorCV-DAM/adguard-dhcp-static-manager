@@ -593,7 +593,7 @@ def api_monitor_status():
 @bp.route('/api/topology/telemetry')
 def api_topology_telemetry():
     now_f = time.time()
-    if _TOPO_TELEMETRY_CACHE['payload'] is not None and (now_f - _TOPO_TELEMETRY_CACHE['ts'] < 5.0):
+    if _TOPO_TELEMETRY_CACHE['payload'] is not None and (now_f - _TOPO_TELEMETRY_CACHE['ts'] < 2.5):
         return jsonify(_TOPO_TELEMETRY_CACHE['payload'])
 
     clients = {}
@@ -611,7 +611,7 @@ def api_topology_telemetry():
     total_q = 0
     total_b = 0
     try:
-        data = ag_get('/control/querylog?limit=160&response_status=all')
+        data = ag_get('/control/querylog?limit=320&response_status=all')
         entries = data.get('data') or []
         source = 'adguard_live'
         for e in entries:
