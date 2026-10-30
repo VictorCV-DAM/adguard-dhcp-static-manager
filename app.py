@@ -595,6 +595,50 @@ def is_wireless_only_device(dev_class, dev_cat, hostname, mac):
     return False
 
 
+def get_device_web_links(ip, hostname, dev_class, dev_cat, routers=None, halo_node_info=None):
+    """Returns management web URLs for core network devices or servers."""
+    links = []
+    ip = (ip or '').strip()
+    h_lower = (hostname or '').lower()
+    c_lower = (dev_class or '').lower()
+    routers = routers or []
+    halo_node_info = halo_node_info or {}
+
+    if ip in ('192.168.1.1', '192.168.0.1'):
+        links.append({'label': 'Gateway Router (HTTP)', 'url': f'http://{ip}'})
+        links.append({'label': 'Gateway Router (HTTPS)', 'url': f'https://{ip}'})
+    elif ip == '192.168.1.9' or 'em4590' in h_lower:
+        links.append({'label': 'Wi-Fi Repeater EM4590', 'url': f'http://{ip}'})
+        links.append({'label': 'Repeater EM4590 (HTTPS)', 'url': f'https://{ip}'})
+    elif ip in ('192.168.1.10', '192.168.0.2') or 'wr841n' in h_lower:
+        links.append({'label': 'TP-Link WR841N Web', 'url': f'http://{ip}'})
+    elif ip in halo_node_info or 'mercusys-halo' in h_lower:
+        lbl = halo_node_info.get(ip, {}).get('label', f'Halo Node ({ip})')
+        links.append({'label': f'{lbl} Web', 'url': f'http://{ip}'})
+        links.append({'label': 'Halo Web (HTTPS)', 'url': f'https://{ip}'})
+    elif ip == '192.168.1.249' or 'pi-server' in h_lower:
+        links.append({'label': 'AdGuard Home (:8080)', 'url': f'http://{ip}:8080'})
+        links.append({'label': 'DHCP Panel (:5001)', 'url': f'http://{ip}:5001'})
+        links.append({'label': 'Wi-Fi Panel (:5000)', 'url': f'http://{ip}:5000'})
+    elif ip == '192.168.1.219' or 'ha-vm' in h_lower or 'homeassistant' in h_lower:
+        links.append({'label': 'Home Assistant (:8123)', 'url': f'http://{ip}:8123'})
+    else:
+        is_router_cfg = False
+        for r in routers:
+            r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
+            if ip in r_ips:
+                rname = r.get('name') or 'Router'
+                links.append({'label': f'{rname} (HTTP)', 'url': f'http://{ip}'})
+                links.append({'label': f'{rname} (HTTPS)', 'url': f'https://{ip}'})
+                is_router_cfg = True
+                break
+        if not is_router_cfg and (dev_cat in ('infra', 'server') or any(k in c_lower for k in ['router', 'repeater', 'access point', 'server', 'node'])):
+            links.append({'label': f'Web Management (HTTP)', 'url': f'http://{ip}'})
+            links.append({'label': f'Web Management (HTTPS)', 'url': f'https://{ip}'})
+
+    return links
+
+
 def load_config():
     cfg = dict(DEFAULT_CONFIG)
     if os.path.exists(CONFIG_PATH):
@@ -1272,7 +1316,8 @@ def api_state():
             'dev_class': dev_class,
             'dev_vendor': dev_vendor,
             'dev_icon': dev_icon,
-            'dev_cat': dev_cat
+            'dev_cat': dev_cat,
+            'web_links': get_device_web_links(ip, hostname, dev_class, dev_cat, routers, halo_node_info)
         })
 
     seen_ips = {d['ip'] for d in devices if d.get('ip')}
@@ -1364,18 +1409,61 @@ def api_state():
                 'dev_class': dev_class,
                 'dev_vendor': dev_vendor,
                 'dev_icon': dev_icon,
-                'dev_cat': dev_cat
+                'dev_cat': dev_cat,
+                'web_links': get_device_web_links(aip, hostname, dev_class, dev_cat, routers, halo_node_info)
             })
             seen_ips.add(aip)
 
     devices.sort(key=lambda d: (not d['static'], ip_sort_key(d['ip'])))
+
+    # Global network infrastructure links for the top quick-access dropdown
+    global_network_links = []
+    for r in routers:
+        r_name = r.get('name') or 'Router'
+        r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
+        for rip in r_ips:
+            node_title = halo_node_info.get(rip, {}).get('label', r_name) if r.get('type') == 'mercusys_halo' else r_name
+            icon = "🌐" if r.get('type') == 'mercusys_halo' else ("📶" if any(k in r_name.lower() for k in ["repeater", "em4590"]) else "🖧")
+            global_network_links.append({
+                'name': node_title,
+                'ip': rip,
+                'url': f'http://{rip}',
+                'icon': icon
+            })
+
+    existing_link_ips = {l['ip'] for l in global_network_links}
+    if '192.168.1.1' not in existing_link_ips and '192.168.0.1' not in existing_link_ips:
+        gw = '192.168.1.1'
+        global_network_links.insert(0, {
+            'name': 'Gateway Router',
+            'ip': gw,
+            'url': f'http://{gw}',
+            'icon': '🏠'
+        })
+
+    global_network_links.append({
+        'name': 'AdGuard Home (DNS/DHCP)',
+        'ip': '192.168.1.249:8080',
+        'url': 'http://192.168.1.249:8080',
+        'icon': '🛡️'
+    })
+
+    ha_dev = next((d for d in devices if d.get('ip') == '192.168.1.219' or 'ha-vm' in (d.get('hostname') or '').lower()), None)
+    if ha_dev:
+        global_network_links.append({
+            'name': 'Home Assistant',
+            'ip': '192.168.1.219:8123',
+            'url': 'http://192.168.1.219:8123',
+            'icon': '🏠'
+        })
 
     return jsonify({
         'status': 'success',
         'lease_duration': get_lease_duration(),
         'ghost_count': ghost_count,
         'expired_count': expired_count,
-        'devices': devices
+        'devices': devices,
+        'network_links': global_network_links
     })
 
 

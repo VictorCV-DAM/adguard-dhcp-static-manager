@@ -302,6 +302,13 @@
             border-radius: 6px;
             font-size: 0.85rem;
         }
+        .dropdown-item-link {
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .dropdown-item-link:hover {
+            background: #334155 !important;
+            color: #38bdf8 !important;
+        }
     </style>
 </head>
 <body>
@@ -328,7 +335,18 @@
                 <p class="subtitle">Reassign static IPs by purging stale dynamic leases immediately without lowering your 12-hour IoT lease duration.</p>
             </div>
         </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+            <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
+                <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="toggleNetworkMenu(event)">🌐 Network Devices ▾</button>
+                <div id="network-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid #38bdf8; border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:320px; z-index:150; padding:8px 0;">
+                    <div style="padding:6px 14px 8px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:#94a3b8; border-bottom:1px solid rgba(148,163,184,0.15);">
+                        Network Management Interfaces
+                    </div>
+                    <div id="network-menu-items">
+                        <div style="padding:10px 14px; font-size:0.82rem; color:#64748b;">Loading devices...</div>
+                    </div>
+                </div>
+            </div>
             <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columns</button>
             <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Settings (AdGuard / Routers)</button>
         </div>
@@ -843,8 +861,62 @@ async function loadState() {
     document.getElementById('lbl-ghost').textContent = data.ghost_count;
     document.getElementById('lbl-expired').textContent = data.expired_count;
     allDevices = data.devices || [];
+    renderGlobalNetworkMenu(data.network_links || []);
     renderTable();
 }
+
+function renderGlobalNetworkMenu(links) {
+    const container = document.getElementById('network-menu-items');
+    if (!container) return;
+    if (!links || links.length === 0) {
+        container.innerHTML = '<div style="padding:10px 14px; font-size:0.82rem; color:#64748b;">No network devices detected</div>';
+        return;
+    }
+    container.innerHTML = links.map(l => `
+        <a href="${l.url}" target="_blank" rel="noopener" class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:8px 14px; font-size:0.83rem; color:#f8fafc; text-decoration:none;">
+            <span style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.1rem;">${l.icon || '🖧'}</span>
+                <div>
+                    <div style="font-weight:600; color:#f1f5f9; line-height:1.2;">${l.name}</div>
+                    <div style="font-size:0.72rem; color:#94a3b8; font-family:monospace;">${l.ip}</div>
+                </div>
+            </span>
+            <span style="opacity:0.5; font-size:0.75rem;">↗</span>
+        </a>
+    `).join('');
+}
+
+function toggleNetworkMenu(ev) {
+    ev.stopPropagation();
+    const m = document.getElementById('network-menu-dropdown');
+    if (!m) return;
+    const isVisible = m.style.display === 'block';
+    closeAllDropdowns();
+    if (!isVisible) {
+        m.style.display = 'block';
+    }
+}
+
+function toggleRowWebMenu(ev, ipSafe) {
+    ev.stopPropagation();
+    const m = document.getElementById(`row-web-${ipSafe}`);
+    if (!m) return;
+    const isVisible = m.style.display === 'block';
+    closeAllDropdowns();
+    if (!isVisible) {
+        m.style.display = 'block';
+    }
+}
+
+function closeAllDropdowns() {
+    const globalMenu = document.getElementById('network-menu-dropdown');
+    if (globalMenu) globalMenu.style.display = 'none';
+    document.querySelectorAll('.row-web-menu').forEach(el => el.style.display = 'none');
+}
+
+document.addEventListener('click', () => {
+    closeAllDropdowns();
+});
 
 function ipToNum(ip) {
     if (!ip) return 0;
@@ -1056,6 +1128,30 @@ function renderTable() {
             </div>
         `;
 
+        let webDropdownHtml = '';
+        if (d.web_links && d.web_links.length > 0) {
+            if (d.web_links.length === 1) {
+                webDropdownHtml = `<a href="${d.web_links[0].url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:#38bdf8;color:#38bdf8;text-decoration:none;font-weight:600;" title="${d.web_links[0].label}">🌐 Web ↗</a>`;
+            } else {
+                const ipSafe = (d.ip || '').replace(/[^a-zA-Z0-9]/g, '-');
+                webDropdownHtml = `
+                    <div style="position:relative; display:inline-block;">
+                        <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:#38bdf8;color:#38bdf8;font-weight:600;" onclick="toggleRowWebMenu(event, '${ipSafe}')" title="Open Web Interface">
+                            🌐 Web ▾
+                        </button>
+                        <div id="row-web-${ipSafe}" class="row-web-menu dropdown-menu-custom" style="display:none; position:absolute; left:0; top:calc(100% + 4px); background:#1e293b; border:1px solid #38bdf8; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.7); min-width:220px; z-index:120; padding:4px 0;">
+                            ${d.web_links.map(l => `
+                                <a href="${l.url}" target="_blank" rel="noopener" class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:7px 12px; font-size:0.78rem; color:#f8fafc; text-decoration:none; text-align:left;">
+                                    <span>${l.label}</span>
+                                    <span style="opacity:0.5; font-size:0.72rem; margin-left:8px;">↗</span>
+                                </a>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         const cellMap = {
             hostname: `<strong>${d.hostname}</strong>`,
             prediction: predHtml,
@@ -1066,7 +1162,8 @@ function renderTable() {
             router: routerHtml,
             type: typeBadge,
             actions: `
-                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                    ${webDropdownHtml}
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${d.hostname}', '${d.mac}', '${d.ip}')">Edit / Set</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="pingDevice('${d.ip}')">Ping</button>
                     <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Delete</button>
