@@ -195,6 +195,25 @@
             background: rgba(56, 189, 248, 0.35);
             color: #fff;
         }
+        .filter-group {
+            display: inline-flex;
+            background: #0f172a;
+            border-radius: 999px;
+            padding: 2px;
+            border: 1px solid var(--border);
+        }
+        .filter-group .pill-btn {
+            border: none;
+            background: transparent;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+        }
+        .filter-group .pill-btn.active {
+            background: rgba(56, 189, 248, 0.22);
+            color: #38bdf8;
+            font-weight: 700;
+        }
         .pred-cell { display: flex; flex-direction: column; line-height: 1.25; }
         .pred-sub { font-size: 0.73rem; color: var(--muted); }
         #popup-overlay {
@@ -407,13 +426,41 @@
         </div>
     </div>
 
-    <div class="toolbar" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px;">
-        <input type="text" id="search" class="search-bar" style="flex:1; min-width:260px;" placeholder="Filter by hostname, class, medium (wifi/cable), router, IP, or MAC..." oninput="renderTable()">
-        <div class="filter-pills" id="medium-filters">
-            <button class="pill-btn active" data-filter="all" onclick="setMediumFilter('all')">All <span class="pill-count" id="count-all">0</span></button>
-            <button class="pill-btn" data-filter="wifi" onclick="setMediumFilter('wifi')">📶 Wi-Fi <span class="pill-count" id="count-wifi">0</span></button>
-            <button class="pill-btn" data-filter="cable" onclick="setMediumFilter('cable')">🔌 Cable <span class="pill-count" id="count-cable">0</span></button>
-            <button class="pill-btn" data-filter="offline" onclick="setMediumFilter('offline')">⚪ Inactive <span class="pill-count" id="count-offline">0</span></button>
+    <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
+            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Filter by hostname, class, medium, router, IP, or MAC..." oninput="renderTable()">
+            <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()">✕ Reset Filters</button>
+        </div>
+        <div class="filter-pills" id="multi-filters" style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+            <!-- Status Group -->
+            <div style="display:inline-flex; align-items:center; gap:5px;">
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Status:</span>
+                <div class="filter-group">
+                    <button class="pill-btn active" data-group="status" data-val="all" onclick="setFilter('status', 'all')">All <span class="pill-count" id="count-status-all">0</span></button>
+                    <button class="pill-btn" data-group="status" data-val="online" onclick="setFilter('status', 'online')">🟢 Online <span class="pill-count" id="count-status-online">0</span></button>
+                    <button class="pill-btn" data-group="status" data-val="offline" onclick="setFilter('status', 'offline')">⚪ Offline <span class="pill-count" id="count-status-offline">0</span></button>
+                </div>
+            </div>
+
+            <!-- Medium Group -->
+            <div style="display:inline-flex; align-items:center; gap:5px;">
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Medium:</span>
+                <div class="filter-group">
+                    <button class="pill-btn active" data-group="medium" data-val="all" onclick="setFilter('medium', 'all')">All <span class="pill-count" id="count-medium-all">0</span></button>
+                    <button class="pill-btn" data-group="medium" data-val="wifi" onclick="setFilter('medium', 'wifi')">📶 Wi-Fi <span class="pill-count" id="count-medium-wifi">0</span></button>
+                    <button class="pill-btn" data-group="medium" data-val="cable" onclick="setFilter('medium', 'cable')">🔌 Cable <span class="pill-count" id="count-medium-cable">0</span></button>
+                </div>
+            </div>
+
+            <!-- IP Type Group -->
+            <div style="display:inline-flex; align-items:center; gap:5px;">
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">IP Type:</span>
+                <div class="filter-group">
+                    <button class="pill-btn active" data-group="type" data-val="all" onclick="setFilter('type', 'all')">All <span class="pill-count" id="count-type-all">0</span></button>
+                    <button class="pill-btn" data-group="type" data-val="static" onclick="setFilter('type', 'static')">📌 Static <span class="pill-count" id="count-type-static">0</span></button>
+                    <button class="pill-btn" data-group="type" data-val="dynamic" onclick="setFilter('type', 'dynamic')">⚡ Dynamic <span class="pill-count" id="count-type-dynamic">0</span></button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -430,13 +477,34 @@ let allDevices = [];
 let routersConfig = [];
 let sortState = { colId: 'ip', asc: true };
 let dragSrcColId = null;
-let activeMediumFilter = 'all';
+let tableFilters = {
+    status: 'all',  // 'all', 'online', 'offline'
+    medium: 'all',  // 'all', 'wifi', 'cable'
+    type: 'all'     // 'all', 'static', 'dynamic'
+};
 
-function setMediumFilter(filter) {
-    activeMediumFilter = filter;
-    document.querySelectorAll('#medium-filters .pill-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
+function setFilter(group, value) {
+    tableFilters[group] = value;
+    document.querySelectorAll(`.pill-btn[data-group="${group}"]`).forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.val === value);
     });
+
+    const isFiltered = (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all');
+    const resetBtn = document.getElementById('btn-reset-filters');
+    if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-flex' : 'none';
+
+    renderTable();
+}
+
+function resetAllFilters() {
+    tableFilters = { status: 'all', medium: 'all', type: 'all' };
+    document.querySelectorAll('.pill-btn[data-group]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.val === 'all');
+    });
+    const resetBtn = document.getElementById('btn-reset-filters');
+    if (resetBtn) resetBtn.style.display = 'none';
+    const sInput = document.getElementById('search');
+    if (sInput) sInput.value = '';
     renderTable();
 }
 
@@ -630,6 +698,18 @@ function renderRoutersList() {
     const list = document.getElementById('routers-list');
     list.innerHTML = '';
     routersConfig.forEach((r, idx) => {
+        const ips = (r.ip || '').split(',').map(s => s.trim()).filter(Boolean);
+        let webButtonsHtml = '';
+        if (ips.length === 0) {
+            webButtonsHtml = `<button type="button" class="btn btn-outline" style="padding:6px 10px; font-size:0.78rem; opacity:0.5;" disabled title="Enter an IP address first">🌐 Open Web</button>`;
+        } else if (ips.length === 1) {
+            webButtonsHtml = `<a href="http://${ips[0]}" target="_blank" rel="noopener noreferrer" class="btn btn-outline" style="padding:6px 10px; font-size:0.78rem; text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Open web management interface for ${ips[0]} in new tab">🌐 Open Web</a>`;
+        } else {
+            webButtonsHtml = ips.map(ip => 
+                `<a href="http://${ip}" target="_blank" rel="noopener noreferrer" class="btn btn-outline" style="padding:6px 8px; font-size:0.74rem; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Open web interface for node ${ip}">🌐 Web (${ip})</a>`
+            ).join(' ');
+        }
+
         const div = document.createElement('div');
         div.className = 'router-item';
         div.innerHTML = `
@@ -658,7 +738,8 @@ function renderRoutersList() {
                 <label>Password</label>
                 <input type="password" value="${r.password || ''}" oninput="routersConfig[${idx}].password = this.value" placeholder="AP Password">
             </div>
-            <div style="display:flex; gap:8px; align-items:center;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                ${webButtonsHtml}
                 <label style="font-size:0.8rem; display:flex; align-items:center; gap:4px; cursor:pointer;">
                     <input type="checkbox" ${r.enabled !== false ? 'checked' : ''} onchange="routersConfig[${idx}].enabled = this.checked"> Enabled
                 </label>
@@ -823,19 +904,37 @@ function renderTable() {
     const q = (document.getElementById('search').value || '').toLowerCase();
     const visibleCols = columnsConfig.filter(c => c.visible);
 
-    // Update dynamic filter pill counters
-    const countAll = allDevices.length;
-    const countWifi = allDevices.filter(d => d.conn_medium === 'wifi').length;
-    const countCable = allDevices.filter(d => d.conn_medium === 'cable').length;
-    const countOffline = allDevices.filter(d => d.conn_medium === 'offline').length;
-    const elAll = document.getElementById('count-all');
-    if (elAll) elAll.textContent = countAll;
-    const elWifi = document.getElementById('count-wifi');
-    if (elWifi) elWifi.textContent = countWifi;
-    const elCable = document.getElementById('count-cable');
-    if (elCable) elCable.textContent = countCable;
-    const elOffline = document.getElementById('count-offline');
-    if (elOffline) elOffline.textContent = countOffline;
+    const isOnlineDevice = (d) => {
+        return (d.conn_medium !== 'offline') && (Boolean(d.live_ips && d.live_ips.length > 0) || (d.router_type && d.router_type !== 'offline'));
+    };
+
+    // Update dynamic filter counters
+    const totalCount = allDevices.length;
+    const cntStatusOnline = allDevices.filter(isOnlineDevice).length;
+    const cntStatusOffline = totalCount - cntStatusOnline;
+
+    const cntMedWifi = allDevices.filter(d => d.conn_medium === 'wifi').length;
+    const cntMedCable = allDevices.filter(d => d.conn_medium === 'cable').length;
+
+    const cntTypeStatic = allDevices.filter(d => d.static).length;
+    const cntTypeDynamic = allDevices.filter(d => !d.static).length;
+
+    const setCounter = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
+    setCounter('count-status-all', totalCount);
+    setCounter('count-status-online', cntStatusOnline);
+    setCounter('count-status-offline', cntStatusOffline);
+
+    setCounter('count-medium-all', totalCount);
+    setCounter('count-medium-wifi', cntMedWifi);
+    setCounter('count-medium-cable', cntMedCable);
+
+    setCounter('count-type-all', totalCount);
+    setCounter('count-type-static', cntTypeStatic);
+    setCounter('count-type-dynamic', cntTypeDynamic);
 
     const thead = document.getElementById('thead');
     thead.innerHTML = '';
@@ -885,10 +984,23 @@ function renderTable() {
     });
     thead.appendChild(trHead);
 
+    // 2. Filter and sort rows (combining Status, Medium, IP Type, and text query)
     const filtered = allDevices.filter(d => {
-        if (activeMediumFilter !== 'all' && d.conn_medium !== activeMediumFilter) {
-            return false;
-        }
+        const isOnline = isOnlineDevice(d);
+
+        // Filter 1: Status (Online / Offline)
+        if (tableFilters.status === 'online' && !isOnline) return false;
+        if (tableFilters.status === 'offline' && isOnline) return false;
+
+        // Filter 2: Medium (Wi-Fi / Cable)
+        if (tableFilters.medium === 'wifi' && d.conn_medium !== 'wifi') return false;
+        if (tableFilters.medium === 'cable' && d.conn_medium !== 'cable') return false;
+
+        // Filter 3: Type (Static / Dynamic)
+        if (tableFilters.type === 'static' && !d.static) return false;
+        if (tableFilters.type === 'dynamic' && d.static) return false;
+
+        // Filter 4: Text search query
         if (!q) return true;
         const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')}`.toLowerCase();
         return text.includes(q);
