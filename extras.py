@@ -161,6 +161,10 @@ def init_db():
             );
             CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
         ''')
+        try:
+            con.execute("ALTER TABLE devices ADD COLUMN photo TEXT DEFAULT ''")
+        except Exception:
+            pass
         con.commit()
         con.close()
 
@@ -670,6 +674,7 @@ def enrich_state(state):
         d['last_seen'] = iso(row.get('last_seen')) if not d.get('live_ips') else iso(now_ts())
         d['notes'] = row.get('notes') or ''
         d['room'] = row.get('room') or ''
+        d['photo'] = row.get('photo') or ''
         try:
             d['tags'] = json.loads(row.get('tags') or '[]')
         except Exception:
@@ -1077,6 +1082,8 @@ def api_device_meta(mac):
         fields.append('notes=?'); vals.append(str(body['notes'])[:2000])
     if 'room' in body:
         fields.append('room=?'); vals.append(str(body['room'])[:60])
+    if 'photo' in body:
+        fields.append('photo=?'); vals.append(str(body['photo'])[:2500000])
     if 'tags' in body and isinstance(body['tags'], list):
         fields.append('tags=?'); vals.append(json.dumps([str(t)[:30] for t in body['tags']][:15]))
     if 'known' in body:
@@ -1539,9 +1546,13 @@ def build_backup(include_secrets=False):
     static = [{'mac': norm_mac(l.get('mac')), 'ip': l.get('ip'), 'hostname': l.get('hostname') or ''}
               for l in leases if l.get('static') and norm_mac(l.get('mac')) != '00:00:00:00:00:00']
     meta = {}
-    for r in db_query('SELECT mac, notes, room, tags, known FROM devices'):
-        if r['notes'] or r['room'] or (r['tags'] and r['tags'] != '[]') or not r['known']:
-            meta[r['mac']] = {'notes': r['notes'], 'room': r['room'], 'tags': json.loads(r['tags'] or '[]'), 'known': bool(r['known'])}
+    for r in db_query('SELECT mac, notes, room, tags, known, photo FROM devices'):
+        if r['notes'] or r['room'] or (r['tags'] and r['tags'] != '[]') or not r['known'] or r.get('photo'):
+            meta[r['mac']] = {
+                'notes': r['notes'], 'room': r['room'],
+                'tags': json.loads(r['tags'] or '[]'), 'known': bool(r['known']),
+                'photo': r.get('photo') or ''
+            }
     topo_positions = kv_get('topology_custom_positions', {}) or {}
     return {
         'app': 'adguard-dhcp-panel', 'format_version': 1, 'exported_at': iso(now_ts()),
@@ -1673,8 +1684,8 @@ def api_backup_apply():
                 continue
             if not db_query('SELECT mac FROM devices WHERE mac=?', (mac,)):
                 db_exec('INSERT INTO devices (mac, first_seen, known) VALUES (?,?,1)', (mac, now_ts()))
-            db_exec('UPDATE devices SET notes=?, room=?, tags=?, known=? WHERE mac=?',
-                    (m.get('notes') or '', m.get('room') or '', json.dumps(m.get('tags') or []), 1 if m.get('known', True) else 0, mac))
+            db_exec('UPDATE devices SET notes=?, room=?, tags=?, known=?, photo=COALESCE(?, photo) WHERE mac=?',
+                    (m.get('notes') or '', m.get('room') or '', json.dumps(m.get('tags') or []), 1 if m.get('known', True) else 0, m.get('photo'), mac))
             n += 1
         done.append(f'fichas de {n} dispositivos')
 

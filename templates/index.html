@@ -1515,12 +1515,30 @@
     <!-- MODAL: FICHA TÉCNICA COMPLETA DE DISPOSITIVO -->
     <div id="device-sheet-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99998; justify-content:center; align-items:center; backdrop-filter:blur(4px); padding:16px;" onclick="if(event.target===this) closeDeviceSheet()">
         <div class="popup-modal" style="width:96%; max-width:860px; max-height:90vh; overflow-y:auto; text-align:left; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:12px; margin-bottom:14px;">
-                <div>
-                    <h3 id="ds-title" style="margin:0; font-size:1.2rem; color:#f8fafc;">🧾 Ficha de Dispositivo</h3>
-                    <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:14px; margin-bottom:14px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                    <!-- Foto / Avatar del dispositivo -->
+                    <div style="position:relative; width:68px; height:68px; border-radius:12px; border:2px solid rgba(56,189,248,0.45); background:#0f172a; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; box-shadow:0 4px 14px rgba(0,0,0,0.45);">
+                        <img id="ds-photo-img" src="" style="width:100%; height:100%; object-fit:cover; display:none;" alt="Foto del dispositivo" />
+                        <div id="ds-photo-placeholder" style="font-size:1.9rem; color:#64748b; line-height:1; user-select:none;">📱</div>
+                    </div>
+                    <div>
+                        <h3 id="ds-title" style="margin:0; font-size:1.2rem; color:#f8fafc; display:flex; align-items:center; gap:8px;">🧾 Ficha de Dispositivo</h3>
+                        <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
+                        <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="document.getElementById('ds-photo-file').click()" title="Subir o cambiar foto del dispositivo">📷 Cambiar Foto</button>
+                            <button class="btn btn-outline" id="ds-photo-btn-delete" style="padding:2px 7px; font-size:0.72rem; color:#f87171; border-color:rgba(248,113,113,0.35); display:none;" onclick="removeDevicePhoto()" title="Eliminar foto">🗑️ Quitar Foto</button>
+                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar ficha técnica con foto en formato JSON">📥 Exportar Ficha</button>
+                            <input type="file" id="ds-photo-file" accept="image/*" style="display:none;" onchange="handleDevicePhotoUpload(event)" />
+                        </div>
+                    </div>
                 </div>
-                <button onclick="closeDeviceSheet()" style="background:none; border:none; color:#94a3b8; font-size:1.3rem; cursor:pointer;">✕</button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:6px;" onclick="closeDeviceSheet(); locateDeviceInTopology(currentSheetMac, currentSheetIp)" title="Ver y centrar este dispositivo en el mapa de topología">
+                        <span>🌐</span> Ver en Topología
+                    </button>
+                    <button onclick="closeDeviceSheet()" style="background:none; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer; padding:4px 8px; line-height:1;" title="Cerrar ficha">✕</button>
+                </div>
             </div>
 
             <!-- Acciones rápidas -->
@@ -3105,9 +3123,12 @@ function renderTable() {
         (d.tags || []).slice(0, 2).forEach(t => badges.push(`<span class="tag-chip">🏷️ ${escapeHtml(t)}</span>`));
 
         const hostHtml = `
-            <div>
-                <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
+            <div style="display:flex; align-items:center; gap:8px;">
+                ${d.photo ? `<img src="${d.photo}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(56,189,248,0.5); cursor:pointer; flex-shrink:0;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ver foto y ficha de ${escapeHtml(d.hostname)}" />` : ''}
+                <div>
+                    <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
                 ${badges.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:3px;">${badges.join('')}</div>` : ''}
+                </div>
             </div>
         `;
 
@@ -3142,6 +3163,7 @@ function renderTable() {
                 <div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
                     ${webDropdownHtml}
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ficha completa: notas, DNS, historial, WoL, cortar Internet y puertos">🧾 Ficha</button>
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar y centrar este dispositivo en la topología de red">🌐 Mapa</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${(d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Editar / Fijar</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="pingDevice('${d.ip}')">Ping</button>
                     <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Borrar</button>
@@ -6221,6 +6243,187 @@ let currentSheetMac = '';
 let currentSheetIp = '';
 let portScanTimer = null;
 
+
+// =====================================================================
+//  Gestión de Fotos de Dispositivos y Navegación a Topología
+// =====================================================================
+function handleDevicePhotoUpload(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        showMessage('El archivo seleccionado no es una imagen válida.');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            // Comprimir suavemente en canvas manteniendo alta fidelidad (máx 480x480)
+            const maxDim = 480;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) {
+                    h = Math.round(h * (maxDim / w));
+                    w = maxDim;
+                } else {
+                    w = Math.round(w * (maxDim / h));
+                    h = maxDim;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
+
+            saveDevicePhoto(compressedBase64);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    ev.target.value = '';
+}
+
+async function saveDevicePhoto(base64Photo) {
+    if (!currentSheetMac) return;
+    try {
+        const res = await fetch(`/api/device/${encodeURIComponent(currentSheetMac)}/meta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photo: base64Photo })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+            renderDeviceSheetPhoto(base64Photo);
+            const d = allDevices.find(x => x.mac === currentSheetMac);
+            if (d) d.photo = base64Photo;
+            renderTable();
+            showMessage(base64Photo ? '📸 Foto del dispositivo guardada correctamente.' : 'Foto eliminada.');
+        } else {
+            showMessage('Error al guardar foto: ' + (json.message || 'Error desconocido'));
+        }
+    } catch(e) {
+        console.error('Error guardando foto:', e);
+        showMessage('Error de conexión al guardar la foto.');
+    }
+}
+
+async function removeDevicePhoto() {
+    if (!currentSheetMac) return;
+    if (!confirm('¿Eliminar la foto guardada de este dispositivo?')) return;
+    await saveDevicePhoto('');
+}
+
+function renderDeviceSheetPhoto(photoUrl, devIcon = '📱') {
+    const img = document.getElementById('ds-photo-img');
+    const ph = document.getElementById('ds-photo-placeholder');
+    const btnDel = document.getElementById('ds-photo-btn-delete');
+    if (photoUrl && photoUrl.trim()) {
+        if (img) {
+            img.src = photoUrl;
+            img.style.display = 'block';
+        }
+        if (ph) ph.style.display = 'none';
+        if (btnDel) btnDel.style.display = 'inline-block';
+    } else {
+        if (img) {
+            img.src = '';
+            img.style.display = 'none';
+        }
+        if (ph) {
+            ph.textContent = devIcon || '📱';
+            ph.style.display = 'block';
+        }
+        if (btnDel) btnDel.style.display = 'none';
+    }
+}
+
+function exportSingleDeviceSheet() {
+    if (!currentSheetMac) return;
+    const dev = allDevices.find(d => d.mac === currentSheetMac) || {};
+    const exportData = {
+        app: 'adguard-dhcp-panel',
+        type: 'device_sheet',
+        exported_at: new Date().toISOString(),
+        device: {
+            mac: currentSheetMac,
+            ip: currentSheetIp || dev.ip || '',
+            hostname: dev.hostname || '',
+            vendor: dev.dev_vendor || '',
+            class: dev.dev_class || '',
+            medium: dev.conn_medium_label || dev.conn_medium || '',
+            router_node: dev.router_node || '',
+            room: document.getElementById('ds-room')?.value || dev.room || '',
+            tags: (document.getElementById('ds-tags')?.value || '').split(',').map(s => s.trim()).filter(Boolean),
+            notes: document.getElementById('ds-notes')?.value || dev.notes || '',
+            photo: dev.photo || '',
+            static: !!dev.static,
+            latency_ms: dev.latency_ms,
+            os_guess: dev.os_guess || ''
+        }
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safeName = (dev.hostname || currentSheetMac).replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    a.download = `ficha-${safeName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showMessage('📥 Ficha técnica exportada correctamente (incluye foto).');
+}
+
+function locateDeviceInTopology(mac, ip) {
+    if (currentMainTab !== 'topology') {
+        switchMainTab('topology');
+    }
+    setTimeout(() => {
+        const cid = 'dev:' + mac;
+        let targetNode = topoState.nodes.find(n => n.id === cid || (n.dev && (n.dev.mac === mac || (ip && n.dev.ip === ip))));
+
+        // Si el dispositivo está desconectado y el usuario tenía ocultos los inactivos, activarlos temporalmente
+        if (!targetNode && !topoState.showOffline) {
+            topoState.showOffline = true;
+            const btnOff = document.getElementById('topo-btn-offline');
+            if (btnOff) btnOff.classList.add('active');
+            buildTopoGraph(false);
+            targetNode = topoState.nodes.find(n => n.id === cid || (n.dev && (n.dev.mac === mac || (ip && n.dev.ip === ip))));
+        }
+
+        if (targetNode) {
+            focusTopoNode(targetNode, 1.25);
+            const name = targetNode.label || targetNode.sub || mac;
+            showMessage(`🎯 Localizado en topología: ${name}`);
+        } else {
+            showMessage('Dispositivo localizado en topología.');
+        }
+    }, 180);
+}
+
+function focusTopoNode(nodeOrId, targetScale = 1.2) {
+    const canvas = document.getElementById('topo-canvas');
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.width / dpr;
+    const ch = canvas.height / dpr;
+
+    let n = (typeof nodeOrId === 'string')
+        ? topoState.nodes.find(x => x.id === nodeOrId || (x.dev && (x.dev.mac === nodeOrId || x.dev.ip === nodeOrId)))
+        : nodeOrId;
+    if (!n) return;
+
+    // Centrar exactamente la coordenada (n.x, n.y) en el viewport del canvas
+    const px = (cw / 2) - n.x * targetScale;
+    const py = (ch / 2) - n.y * targetScale;
+
+    setTopoCamera(targetScale, px, py, true);
+    topoState.hoverNode = n;
+    topoState.selectedNode = n;
+    n.flash = 1.0;
+    spawnNodeShockwave(n.x, n.y, n.color || '#38bdf8', 95);
+}
+
 async function openDeviceSheet(mac, ipHint = '') {
     currentSheetMac = mac;
     setTimeout(() => {
@@ -6246,6 +6449,7 @@ async function openDeviceSheet(mac, ipHint = '') {
     }, 30);
     const dev = allDevices.find(d => d.mac === mac) || { mac };
     currentSheetIp = ipHint || (dev.live_ips && dev.live_ips[0]) || dev.ip || '';
+    renderDeviceSheetPhoto(dev.photo || '', dev.dev_icon || '📱');
 
     document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Dispositivo sin nombre)'}`;
     document.getElementById('ds-subtitle').innerHTML = `MAC: <code>${mac}</code> · IP: <code>${currentSheetIp || '—'}</code> · Fabricante: <strong>${escapeHtml(dev.dev_vendor || 'Desconocido')}</strong>`;
@@ -6275,6 +6479,10 @@ async function openDeviceSheet(mac, ipHint = '') {
     document.getElementById('ds-tags').value = Array.isArray(meta.tags) ? meta.tags.join(', ') : (meta.tags || '');
     document.getElementById('ds-notes').value = meta.notes || '';
     document.getElementById('ds-known').checked = meta.known !== false;
+    if (meta.photo !== undefined) {
+        renderDeviceSheetPhoto(meta.photo, dev.dev_icon || '📱');
+        if (dev) dev.photo = meta.photo;
+    }
 
     const blocked = !!dev.blocked;
     document.getElementById('ds-actions').innerHTML = `
