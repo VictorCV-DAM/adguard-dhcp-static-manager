@@ -701,13 +701,87 @@
             position: relative;
             width: 100%;
             height: 82vh;
-            min-height: 660px;
+            min-height: 420px;
             background: radial-gradient(circle at 50% 50%, #0f1b33 0%, #090e1a 55%, #05070e 100%);
             border: 1px solid rgba(56, 189, 248, 0.32);
             border-radius: 16px;
             overflow: hidden;
             box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.85), 0 12px 36px rgba(0, 0, 0, 0.55);
             user-select: none;
+            resize: vertical;
+        }
+        .topo-stage.resizing {
+            border-color: #38bdf8;
+            box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.85), 0 0 24px rgba(56, 189, 248, 0.35);
+        }
+        .topo-resizer-bottom {
+            position: absolute;
+            left: 0;
+            right: 20px;
+            bottom: 0;
+            height: 10px;
+            cursor: ns-resize;
+            z-index: 15;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .topo-resizer-bottom:hover {
+            background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.45), transparent);
+        }
+        .topo-resizer-right {
+            position: absolute;
+            top: 0;
+            bottom: 20px;
+            right: 0;
+            width: 10px;
+            cursor: ew-resize;
+            z-index: 15;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .topo-resizer-right:hover {
+            background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.45), transparent);
+        }
+        .topo-resizer-corner {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            z-index: 16;
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
+            padding: 4px;
+        }
+        .topo-resizer-corner::after {
+            content: '';
+            width: 9px;
+            height: 9px;
+            border-right: 2px solid rgba(56, 189, 248, 0.45);
+            border-bottom: 2px solid rgba(56, 189, 248, 0.45);
+            border-bottom-right-radius: 4px;
+            transition: border-color 0.2s;
+        }
+        .topo-resizer-corner:hover::after {
+            border-color: #38bdf8;
+        }
+        .topo-resizing-badge {
+            position: absolute;
+            bottom: 16px;
+            right: 26px;
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid rgba(56, 189, 248, 0.55);
+            color: #7dd3fc;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            pointer-events: none;
+            z-index: 25;
+            display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.55);
         }
         .topo-stage:fullscreen {
             height: 100vh;
@@ -1249,6 +1323,12 @@
                         <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);" title="Disparar una onda de sinapsis neuronal desde el Router Principal hacia toda la red">
                             ⚡ Impulso
                         </button>
+                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.15);" title="Reorganizar automáticamente los nodos y clientes de forma equilibrada, amplia y sin solapamientos">
+                            🪄 Auto-Organizar
+                        </button>
+                        <button id="topo-btn-undo" class="topo-ctrl-btn" onclick="undoLastTopoAction()" disabled style="opacity:0.45; cursor:not-allowed;" title="Revertir el último cambio de posición en la topología">
+                            ↩️ Revertir
+                        </button>
                     </div>
                     <div class="topo-controls-row">
                         <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Mostrar u ocultar dispositivos desconectados en la malla">
@@ -1285,6 +1365,12 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Agarradores discretos para redimensionar el cuadro a gusto -->
+            <div class="topo-resizer-bottom" id="topo-resizer-b" title="Arrastra el borde inferior para ajustar la altura del cuadro"></div>
+            <div class="topo-resizer-right" id="topo-resizer-r" title="Arrastra el borde derecho para ajustar el ancho del cuadro"></div>
+            <div class="topo-resizer-corner" id="topo-resizer-c" title="Arrastra la esquina para ajustar el tamaño y resolución del cuadro libremente"></div>
+            <div class="topo-resizing-badge" id="topo-resizing-badge">📐 1440 × 900 px</div>
 
             <!-- Tooltip flotante -->
             <div id="topo-tooltip" class="topo-tooltip"></div>
@@ -3118,6 +3204,8 @@ let topoState = {
     hoverNode: null,
     selectedNode: null,
     dragNode: null,
+    dragPreSnapshot: null,
+    undoHistory: [],
     isPanning: false,
     dragStartX: 0,
     dragStartY: 0,
@@ -3428,6 +3516,171 @@ function cycleTopoVisualStyle() {
     triggerNeuralCascade();
 }
 
+function pushTopoUndo(snapshot) {
+    if (!topoState.undoHistory) topoState.undoHistory = [];
+    topoState.undoHistory.push(snapshot);
+    if (topoState.undoHistory.length > 35) topoState.undoHistory.shift();
+    updateTopoUndoBtn();
+}
+
+function updateTopoUndoBtn() {
+    const btn = document.getElementById('topo-btn-undo');
+    if (!btn) return;
+    const canUndo = topoState.undoHistory && topoState.undoHistory.length > 0;
+    btn.disabled = !canUndo;
+    btn.style.opacity = canUndo ? '1' : '0.45';
+    btn.style.cursor = canUndo ? 'pointer' : 'not-allowed';
+    btn.title = canUndo ? `Revertir último cambio (${topoState.undoHistory.length} disponibles)` : 'No hay cambios recientes que revertir';
+}
+
+function undoLastTopoAction() {
+    if (!topoState.undoHistory || topoState.undoHistory.length === 0) return;
+    const prevPositions = topoState.undoHistory.pop();
+    topoState.customPositions = prevPositions || {};
+    try {
+        localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(topoState.customPositions));
+    } catch (e) {}
+    fetch('/api/topology/positions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(topoState.customPositions)
+    }).catch(() => {});
+    updateTopoUndoBtn();
+    buildTopoGraph(false);
+    triggerNeuralCascade();
+    showMessage('Paso anterior revertido.');
+}
+
+function smartAutoOrganizeTopology() {
+    // Guardar el estado actual en el historial de deshacer
+    pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions)));
+
+    // Limpiar posiciones manuales para permitir cálculo automático limpio
+    topoState.customPositions = {};
+    try {
+        localStorage.removeItem('ag_topo_custom_positions_v3');
+    } catch (e) {}
+
+    // Reconstruir grafo con algoritmo de sectores óptimos
+    buildTopoGraph(true);
+
+    // Fijar la nueva distribución calculada como posiciones personalizadas
+    topoState.nodes.forEach(n => {
+        topoState.customPositions[n.id] = { x: n.baseX, y: n.baseY };
+    });
+    saveCustomPositionsToStorage();
+
+    fitTopoToScreen(true);
+    triggerNeuralCascade();
+    updateTopoUndoBtn();
+    showMessage('🪄 Topología auto-organizada inteligentemente.');
+}
+
+function initTopoStageResizer() {
+    const stage = document.getElementById('topo-stage');
+    if (!stage) return;
+
+    // Restaurar dimensiones previas guardadas por el usuario
+    try {
+        const savedH = localStorage.getItem('ag_topo_stage_height');
+        const savedW = localStorage.getItem('ag_topo_stage_width');
+        if (savedH) stage.style.height = savedH;
+        if (savedW && savedW !== '100%') stage.style.width = savedW;
+    } catch (e) {}
+
+    const resizerB = document.getElementById('topo-resizer-b');
+    const resizerR = document.getElementById('topo-resizer-r');
+    const resizerC = document.getElementById('topo-resizer-c');
+    const badge = document.getElementById('topo-resizing-badge');
+
+    let isResizing = false;
+    let resizeMode = '';
+    let startX = 0, startY = 0, startW = 0, startH = 0;
+
+    function startResize(e, mode) {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizing = true;
+        resizeMode = mode;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = stage.getBoundingClientRect();
+        startW = rect.width;
+        startH = rect.height;
+        stage.classList.add('resizing');
+        if (badge) {
+            badge.style.display = 'block';
+            badge.textContent = `📐 ${Math.round(stage.clientWidth)} × ${Math.round(stage.clientHeight)} px`;
+        }
+    }
+
+    if (resizerB) resizerB.addEventListener('mousedown', e => startResize(e, 'b'));
+    if (resizerR) resizerR.addEventListener('mousedown', e => startResize(e, 'r'));
+    if (resizerC) resizerC.addEventListener('mousedown', e => startResize(e, 'c'));
+
+    window.addEventListener('mousemove', e => {
+        if (!isResizing) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (resizeMode === 'b' || resizeMode === 'c') {
+            const newH = Math.max(380, startH + dy);
+            stage.style.height = newH + 'px';
+        }
+        if (resizeMode === 'r' || resizeMode === 'c') {
+            const newW = Math.max(480, startW + dx);
+            stage.style.width = newW + 'px';
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const canvas = document.getElementById('topo-canvas');
+        if (canvas) {
+            canvas.width = stage.clientWidth * dpr;
+            canvas.height = stage.clientHeight * dpr;
+        }
+
+        if (badge) {
+            badge.textContent = `📐 ${Math.round(stage.clientWidth)} × ${Math.round(stage.clientHeight)} px`;
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+        isResizing = false;
+        stage.classList.remove('resizing');
+        if (badge) badge.style.display = 'none';
+
+        try {
+            localStorage.setItem('ag_topo_stage_height', stage.style.height);
+            if (stage.style.width) {
+                localStorage.setItem('ag_topo_stage_width', stage.style.width);
+            }
+        } catch (err) {}
+
+        const canvas = document.getElementById('topo-canvas');
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas) {
+            canvas.width = stage.clientWidth * dpr;
+            canvas.height = stage.clientHeight * dpr;
+        }
+        fitTopoToScreen(true);
+    });
+
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+            const canvas = document.getElementById('topo-canvas');
+            const dpr = window.devicePixelRatio || 1;
+            if (canvas && stage.clientWidth > 0 && stage.clientHeight > 0) {
+                if (canvas.width !== stage.clientWidth * dpr || canvas.height !== stage.clientHeight * dpr) {
+                    canvas.width = stage.clientWidth * dpr;
+                    canvas.height = stage.clientHeight * dpr;
+                }
+            }
+        });
+        ro.observe(stage);
+    }
+}
+
 function exportTopoPositionsJson() {
     const exportData = {
         app: 'adguard-dhcp-panel',
@@ -3485,6 +3738,7 @@ function importTopoPositionsJson(event) {
 
 function resetTopoPositionsToDefault() {
     if (!confirm('¿Deseas restablecer el orden de la topología al diseño circular original?')) return;
+    pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions)));
     topoState.customPositions = {};
     try {
         localStorage.removeItem('ag_topo_custom_positions_v3');
@@ -4493,6 +4747,7 @@ function initTopoCanvas() {
             topoState.dragStartY = sy;
             if (hit) {
                 topoState.dragNode = hit;
+                topoState.dragPreSnapshot = JSON.parse(JSON.stringify(topoState.customPositions));
             } else {
                 topoState.isPanning = true;
             }
@@ -4550,18 +4805,23 @@ function initTopoCanvas() {
 
         window.addEventListener('mouseup', () => {
             if (currentMainTab !== 'topology') return;
-            if (topoState.dragNode && !topoState.movedDuringDrag) {
-                const n = topoState.dragNode;
-                if (n.type === 'client' && n.dev) {
-                    spawnNodeShockwave(n.x, n.y, n.color, 75);
-                    const ipShow = (n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip || '';
-                    openDeviceSheet(n.dev.mac, ipShow);
-                } else if (n.type === 'hub') {
-                    triggerNeuralCascade(n);
-                    centerOnPoint(n.x, n.y, Math.max(topoState.scale, 0.88), true);
-                } else if (n.type === 'core') {
-                    triggerNeuralCascade(n);
-                    fitTopoToScreen(true);
+            if (topoState.dragNode) {
+                if (topoState.movedDuringDrag && topoState.dragPreSnapshot) {
+                    pushTopoUndo(topoState.dragPreSnapshot);
+                    topoState.dragPreSnapshot = null;
+                } else if (!topoState.movedDuringDrag) {
+                    const n = topoState.dragNode;
+                    if (n.type === 'client' && n.dev) {
+                        spawnNodeShockwave(n.x, n.y, n.color, 75);
+                        const ipShow = (n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip || '';
+                        openDeviceSheet(n.dev.mac, ipShow);
+                    } else if (n.type === 'hub') {
+                        triggerNeuralCascade(n);
+                        centerOnPoint(n.x, n.y, Math.max(topoState.scale, 0.88), true);
+                    } else if (n.type === 'core') {
+                        triggerNeuralCascade(n);
+                        fitTopoToScreen(true);
+                    }
                 }
             }
             topoState.dragNode = null;
@@ -5283,6 +5543,7 @@ function drawTopoFrame(now) {
 
 function renderTopology() {
     initTopoCanvas();
+initTopoStageResizer();
     const firstRender = topoState.nodes.length <= 1;
     buildTopoGraph(firstRender);
     if (firstRender) {
