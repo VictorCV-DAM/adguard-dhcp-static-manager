@@ -4878,7 +4878,7 @@ function onTopoSearchInput() {
 function onTopoSearchKeyDown(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
-        focusFirstTopoMatch();
+        focusFirstTopoMatch(topoState.searchExact);
     } else if (e.key === 'Escape') {
         e.preventDefault();
         clearTopoSearch();
@@ -4893,7 +4893,7 @@ function toggleTopoExactSearch() {
         else exactBtn.classList.remove('active');
     }
     if (topoState.searchQuery) {
-        focusFirstTopoMatch();
+        focusFirstTopoMatch(topoState.searchExact);
     }
 }
 
@@ -4935,7 +4935,7 @@ function fitNodesInView(nodesList, smooth = true) {
     centerOnPoint(cx, cy, sc, smooth);
 }
 
-function focusFirstTopoMatch() {
+function focusFirstTopoMatch(preserveExactMode = false) {
     if (!topoState.searchQuery) return;
     topoState.searchExact = true;
     const exactBtn = document.getElementById('topo-search-exact-btn');
@@ -4944,8 +4944,8 @@ function focusFirstTopoMatch() {
     // Buscar todos los nodos que coinciden con el término
     let matches = topoState.nodes.filter(n => nodeMatchesSearch(n));
 
-    // Si con búsqueda exacta estricta no hay resultados, reintentar con búsqueda amplia
-    if (matches.length === 0) {
+    // Si con búsqueda exacta estricta no hay resultados y no se pidió preservar modo exacto, reintentar con búsqueda amplia
+    if (matches.length === 0 && !preserveExactMode) {
         topoState.searchExact = false;
         if (exactBtn) exactBtn.classList.remove('active');
         matches = topoState.nodes.filter(n => nodeMatchesSearch(n));
@@ -5008,7 +5008,8 @@ function nodeMatchesSearch(n) {
     }
 
     // D) Prefijo de subred (ej. '192.168.1' o '192.168.1.' o '192.168')
-    if (/^(\d{1,3}\.){1,3}\d{0,3}$/.test(q)) {
+    const isSubnetQuery = q.endsWith('.') || (q.split('.').length < 4 && q.includes('.'));
+    if ((!topoState.searchExact || isSubnetQuery) && /^(\d{1,3}\.){1,3}\d{0,3}$/.test(q)) {
         const prefix = q.endsWith('.') ? q : q + '.';
         if (ips.some(ip => ip === q || ip.startsWith(prefix))) return true;
     }
@@ -5016,9 +5017,9 @@ function nodeMatchesSearch(n) {
     // 2. Si es modo EXACTO (Enter pulsado o botón Exacto activo):
     if (topoState.searchExact) {
         if (mac && mac === q) return true;
-        if (hostname && (hostname === q || hostname === cleanLabel)) return true;
-        if (label === q || cleanLabel === q) return true;
-        if (id === q || id === 'hub:' + q || id === 'dev:' + q) return true;
+        if (hostname && hostname === q) return true;
+        if (label && (label === q || cleanLabel === q)) return true;
+        if (id && (id === q || id === 'hub:' + q || id === 'dev:' + q)) return true;
 
         if (!/^\d+$/.test(q)) {
             const tokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
