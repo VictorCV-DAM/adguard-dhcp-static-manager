@@ -1038,70 +1038,174 @@
         }
 
         /* DISEÑO RESPONSIVO / MOBILE-FRIENDLY */
+        /* REGLAS MOBILE-FRIENDLY MEJORADAS */
         @media (max-width: 768px) {
-            body {
+            html, body {
+                width: 100% !important;
+                max-width: 100vw !important;
+                overflow-x: hidden !important;
+                margin: 0 !important;
                 padding: 10px 8px !important;
+                box-sizing: border-box !important;
             }
             .container {
                 width: 100% !important;
                 max-width: 100% !important;
+                overflow-x: hidden !important;
                 padding: 0 !important;
+                margin: 0 !important;
+                box-sizing: border-box !important;
             }
             .header {
                 flex-direction: column !important;
-                align-items: flex-start !important;
+                align-items: stretch !important;
+                width: 100% !important;
+                max-width: 100% !important;
                 gap: 12px !important;
+                margin-bottom: 14px !important;
             }
             .header-left {
                 width: 100% !important;
+                max-width: 100% !important;
+            }
+            .header-left h1 {
+                font-size: 1.15rem !important;
+                line-height: 1.25 !important;
+            }
+            .header-actions {
+                width: 100% !important;
+                max-width: 100% !important;
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 6px !important;
+            }
+            .header-actions .btn,
+            .header-actions .dropdown-wrapper {
+                flex: 1 1 calc(50% - 6px) !important;
+                min-width: calc(50% - 6px) !important;
+                box-sizing: border-box !important;
+            }
+            .header-actions .dropdown-wrapper button {
+                width: 100% !important;
+                white-space: nowrap !important;
+                text-overflow: ellipsis !important;
+                overflow: hidden !important;
+                padding: 8px 6px !important;
+                font-size: 0.78rem !important;
+            }
+            .header-actions .btn {
+                padding: 8px 6px !important;
+                font-size: 0.78rem !important;
+                white-space: nowrap !important;
+                text-overflow: ellipsis !important;
+                overflow: hidden !important;
             }
             .grid {
                 grid-template-columns: 1fr !important;
                 gap: 12px !important;
+                width: 100% !important;
+            }
+            .card {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                padding: 12px !important;
             }
             .main-tabs-bar {
+                width: 100% !important;
+                max-width: 100% !important;
                 overflow-x: auto !important;
                 flex-wrap: nowrap !important;
                 -webkit-overflow-scrolling: touch;
                 padding-bottom: 8px !important;
+                gap: 6px !important;
             }
             .tab-nav-btn {
                 white-space: nowrap !important;
                 flex-shrink: 0 !important;
-                padding: 8px 12px !important;
-                font-size: 0.82rem !important;
+                padding: 8px 10px !important;
+                font-size: 0.8rem !important;
+            }
+            .toolbar {
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
             .search-bar {
                 min-width: 0 !important;
                 width: 100% !important;
+                box-sizing: border-box !important;
             }
             .filter-pills {
-                gap: 8px !important;
+                gap: 6px !important;
+                width: 100% !important;
+            }
+            #table-outer-box, .table-outer-box {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                box-sizing: border-box !important;
+            }
+            .table-wrap {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch;
+                min-height: 380px !important;
+            }
+            .table-resizer-left, .table-resizer-right, #table-resizing-badge,
+            #topo-resizer-l, #topo-resizer-r, #topo-resizer-b, #topo-resizer-bl, #topo-resizer-c, #topo-resizing-badge {
+                display: none !important;
+            }
+            #topo-stage, .topo-stage {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                height: 68vh !important;
+                min-height: 440px !important;
+                box-sizing: border-box !important;
+            }
+            .topo-overlay-top {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                left: 8px !important;
+                right: 8px !important;
+                top: 8px !important;
+                gap: 6px !important;
+            }
+            .topo-search-box {
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            .topo-controls {
+                width: 100% !important;
+            }
+            .topo-controls-row {
+                flex-wrap: wrap !important;
+                gap: 4px !important;
+            }
+            .topo-ctrl-btn {
+                padding: 4px 8px !important;
+                font-size: 0.72rem !important;
+            }
+            .topo-legend {
+                flex-wrap: wrap !important;
+                gap: 6px !important;
+                font-size: 0.68rem !important;
+                padding: 6px 10px !important;
             }
             .popup-modal {
-                width: 98% !important;
+                width: 96% !important;
                 max-width: 100% !important;
                 max-height: 94vh !important;
                 padding: 14px !important;
                 margin: 4px auto !important;
+                box-sizing: border-box !important;
             }
             .modal-overlay {
                 padding: 6px !important;
             }
-            .table-container {
-                max-width: 100vw !important;
-                overflow-x: auto !important;
-                -webkit-overflow-scrolling: touch;
-            }
-            .topo-controls-row {
-                flex-wrap: wrap !important;
-                gap: 6px !important;
-            }
-            .topo-stage {
-                height: 520px !important;
-            }
         }
-
     </style>
 </head>
 <body>
@@ -1131,7 +1235,7 @@
                 <p class="subtitle" style="margin-top:4px;">Reasigna IPs estáticas purgando la concesión previa al instante sin reducir tus 12 horas de estabilidad.</p>
             </div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="header-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
                 <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="toggleNetworkMenu(event)">🌐 Equipos de Red ▾</button>
                 <div id="network-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid #38bdf8; border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:320px; z-index:150; padding:8px 0;">
@@ -4194,6 +4298,13 @@ function centerTopoStageBox() {
 function initTopoStageResizer() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
+    if (window.innerWidth <= 768) {
+        stage.style.width = '100%';
+        stage.style.maxWidth = '100%';
+        stage.style.marginLeft = '0';
+        stage.style.marginRight = '0';
+        return;
+    }
 
     // Por defecto, la caja de topología está totalmente centrada en la web igual que el encabezado (width: 100%, margin: 0 auto)
     stage.style.width = '100%';
@@ -5822,9 +5933,72 @@ function drawTopoFrame(now) {
                 ctx.restore();
             }
 
-            // 1. Malla limpia (Modo Zigzag Flotante): Enlaces radiales limpios sin telarañas ni cruces entre clientes
+            // 1. ENTRAMADO DE TELA DE ARAÑA / CONSTELACIÓN (PLEXUS) ENTRE CLIENTES Y VÉRTICES DE CADA NODO
             if (usePlexus) {
-                // Se mantiene la topología radial limpia y legible; cada cliente conecta únicamente a su punto de acceso
+                const plexusPts = [];
+                topoState.nodes.forEach(n => {
+                    if (n.type === 'core') return;
+                    const isOff = n.hubId && (n.hubId.toLowerCase().includes('desconectado') || n.hubId.toLowerCase().includes('offline'));
+                    if (!isOff && n.travelStartTime === undefined) {
+                        plexusPts.push({
+                            x: n.x,
+                            y: n.y,
+                            hubId: n.hubId || n.id,
+                            online: n.online,
+                            isNode: true
+                        });
+                    }
+                });
+
+                topoState.links.forEach(lk => {
+                    const hId = lk.type === 'trunk' ? lk.to.id : lk.from.id;
+                    const isOff = hId && (hId.toLowerCase().includes('desconectado') || hId.toLowerCase().includes('offline'));
+                    if (!isOff && lk.online && (lk.to ? lk.to.travelStartTime === undefined : true)) {
+                        (lk.joints || []).forEach(j => {
+                            plexusPts.push({
+                                x: j.x,
+                                y: j.y,
+                                hubId: hId,
+                                online: lk.online,
+                                isNode: false
+                            });
+                        });
+                    }
+                });
+
+                const maxDist = 215;
+                const maxDistSq = maxDist * maxDist;
+                ctx.save();
+                ctx.lineWidth = 0.9;
+                for (let i = 0; i < plexusPts.length; i++) {
+                    const a = plexusPts[i];
+                    let linksCount = 0;
+                    for (let j = i + 1; j < plexusPts.length; j++) {
+                        if (linksCount >= 4) break;
+                        const b = plexusPts[j];
+                        // REGLA ANTI-RAYOS TRANSVERSALES:
+                        // Solo enlazar puntos que pertenezcan estrictamente al MISMO nodo / AP (hubId).
+                        if (!a.hubId || !b.hubId || a.hubId !== b.hubId) continue;
+
+                        const dx = b.x - a.x;
+                        if (Math.abs(dx) > maxDist) continue;
+                        const dy = b.y - a.y;
+                        if (Math.abs(dy) > maxDist) continue;
+                        const dSq = dx * dx + dy * dy;
+                        if (dSq < maxDistSq && dSq > 350) {
+                            linksCount++;
+                            const ratio = 1 - Math.sqrt(dSq) / maxDist;
+                            const dim = (hov || hasSearch) ? 0.18 : 1.0;
+                            const alpha = ratio * (a.online || b.online ? 0.36 : 0.14) * dim;
+                            ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                            ctx.beginPath();
+                            ctx.moveTo(a.x, a.y);
+                            ctx.lineTo(b.x, b.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+                ctx.restore();
             }
 
             // 2. Dibujar enlaces principales (En modo Plexus: Zigzag articulado flotante con micro-estrellas en cada vértice; En modo Synapse: líneas directas)
@@ -7649,6 +7823,13 @@ function toggleTableFullWidth() {
 
 function initTableResizers() {
     const box = document.getElementById('table-outer-box');
+    if (box && window.innerWidth <= 768) {
+        box.style.width = '100%';
+        box.style.maxWidth = '100%';
+        box.style.marginLeft = '0';
+        box.style.marginRight = '0';
+        return;
+    }
     const resizerL = document.getElementById('table-resizer-l');
     const resizerR = document.getElementById('table-resizer-r');
     const badge = document.getElementById('table-resizing-badge');
