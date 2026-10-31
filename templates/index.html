@@ -4721,23 +4721,15 @@ function toggleMobileTopoControls() {
 function onTopoSearchInput() {
     const inp = document.getElementById('topo-search');
     const clr = document.getElementById('topo-search-clear');
+    const exactBtn = document.getElementById('topo-search-exact-btn');
     topoState.searchQuery = (inp ? inp.value : '').trim().toLowerCase();
     if (clr) clr.style.display = topoState.searchQuery ? 'inline' : 'none';
 
-    // Si la consulta es una IP completa de 4 octetos (ej: 192.168.1.14), activar modo exacto
-    // automáticamente para evitar seleccionar .144 o .148 y fijar el nodo palpitante de inmediato
-    if (isFullIpv4(topoState.searchQuery)) {
-        topoState.searchExact = true;
-        const exactBtn = document.getElementById('topo-search-exact-btn');
-        if (exactBtn) exactBtn.classList.add('active');
-        const m = topoState.nodes.find(n => nodeMatchesSearch(n));
-        if (m) {
-            focusTopoNode(m, 1.35);
-        }
-    } else if (!topoState.searchQuery) {
-        topoState.searchExact = false;
-        const exactBtn = document.getElementById('topo-search-exact-btn');
-        if (exactBtn) exactBtn.classList.remove('active');
+    // Al escribir, NO se marca Exacto automáticamente (solo se marca al pulsar Enter)
+    topoState.searchExact = false;
+    if (exactBtn) exactBtn.classList.remove('active');
+
+    if (!topoState.searchQuery) {
         clearTopoPin();
     }
 }
@@ -4774,13 +4766,15 @@ function clearTopoSearch() {
 
 function focusFirstTopoMatch() {
     if (!topoState.searchQuery) return;
-    // Terminar la búsqueda: fijar coincidencia exacta y dejar el dispositivo seleccionado palpitante
+    // LO DE EXACTO SOLO SE MARCA AL PULSAR ENTER
     topoState.searchExact = true;
     const exactBtn = document.getElementById('topo-search-exact-btn');
     if (exactBtn) exactBtn.classList.add('active');
 
+    // Buscar coincidencia exacta
     let m = topoState.nodes.find(n => nodeMatchesSearch(n));
     if (!m) {
+        // Fallback si no hay exacto estricto
         topoState.searchExact = false;
         if (exactBtn) exactBtn.classList.remove('active');
         m = topoState.nodes.find(n => nodeMatchesSearch(n));
@@ -4788,7 +4782,7 @@ function focusFirstTopoMatch() {
 
     if (m) {
         focusTopoNode(m, 1.35);
-        showMessage(`🎯 Búsqueda terminada: ${m.label || m.sub || 'Dispositivo'} enfocado y palpitante`);
+        showMessage(`🎯 Coincidencia exacta: ${m.label || m.sub || 'Dispositivo'} enfocado y palpitante`);
     }
 }
 
@@ -4803,7 +4797,7 @@ function nodeMatchesSearch(n) {
     const label = (n.label || '').toLowerCase();
     const sub = (n.sub || '').toLowerCase();
 
-    // 1. Si la opción de coincidencia exacta está activa (o búsqueda finalizada con Enter)
+    // Solo se aplica coincidencia exacta si se ha pulsado Enter (o activado Exacto explícitamente)
     if (topoState.searchExact) {
         if (ips.some(ip => ip === q)) return true;
         if (mac === q) return true;
@@ -4811,15 +4805,7 @@ function nodeMatchesSearch(n) {
         return false;
     }
 
-    // 2. Si la consulta es una IP completa de 4 octetos (ej: 192.168.1.14)
-    // REGLA CRÍTICA: Coincidencia de IP exacta para que nunca seleccione .144 o .148
-    if (isFullIpv4(q)) {
-        if (ips.some(ip => ip === q)) return true;
-        if (hostname === q || label === q) return true;
-        return false;
-    }
-
-    // 3. Coincidencia general de subcadena durante la escritura
+    // Coincidencia estándar mientras se escribe antes de pulsar Enter
     const hay = `${label} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
     return hay.includes(q);
 }
