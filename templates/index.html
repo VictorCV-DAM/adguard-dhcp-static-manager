@@ -90,6 +90,38 @@
             flex-wrap: wrap;
         }
         .search-bar { flex: 1; min-width: 240px; }
+                .table-outer-box {
+            position: relative;
+            width: 100%;
+            transition: width 0.16s ease-out, margin 0.16s ease-out;
+        }
+        .table-outer-box.resizing {
+            transition: none !important;
+            user-select: none;
+        }
+        .table-resizer-left, .table-resizer-right {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 14px;
+            cursor: ew-resize;
+            z-index: 25;
+            background: transparent;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .table-resizer-left {
+            left: -7px;
+            border-radius: 6px 0 0 6px;
+        }
+        .table-resizer-right {
+            right: -7px;
+            border-radius: 0 6px 6px 0;
+        }
+        .table-resizer-left:hover, .table-resizer-right:hover,
+        .table-resizer-left:active, .table-resizer-right:active {
+            background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.45), transparent);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
         .table-wrap {
             width: 100%;
             overflow-x: auto;
@@ -1215,6 +1247,10 @@
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
             <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="renderTable()">
             <div style="display:inline-flex; align-items:center; gap:8px;">
+                <button id="btn-toggle-table-width" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="toggleTableFullWidth()" title="Ampliar la caja de la tabla horizontalmente a pantalla ancha o restaurar (↔)">
+                    <span id="icon-table-width">↔</span>
+                    <span id="lbl-table-width">Ampliar Ancho</span>
+                </button>
                 <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()">✕ Restablecer Filtros</button>
                 <button id="btn-refresh" class="btn btn-outline" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="manualRefresh()" title="Actualizar inmediatamente dispositivos y puertos">
                     <span id="refresh-icon" style="font-size:0.95rem; line-height:1;">🔄</span>
@@ -1265,11 +1301,18 @@
         </div>
     </div>
 
-    <div class="table-wrap">
-        <table id="devices-table">
-            <thead id="thead"></thead>
-            <tbody id="tbody"></tbody>
-        </table>
+    <div id="table-outer-box" class="table-outer-box">
+        <!-- Agarradores discretos para redimensionar la caja a izquierda y derecha -->
+        <div class="table-resizer-left" id="table-resizer-l" title="Arrastra el borde izquierdo para ampliar la tabla por la izquierda (doble clic: alternar ancho completo)"></div>
+        <div class="table-resizer-right" id="table-resizer-r" title="Arrastra el borde derecho para ampliar la tabla por la derecha (doble clic: alternar ancho completo)"></div>
+        <div class="topo-resizing-badge" id="table-resizing-badge">📐 1600 px</div>
+
+        <div class="table-wrap" id="devices-table-wrap">
+            <table id="devices-table">
+                <thead id="thead"></thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
     </div>
     </div> <!-- FIN view-devices -->
 
@@ -6865,6 +6908,138 @@ if (Object.keys(topoState.customPositions).length === 0) {
         }).catch(() => {});
 }
 
+
+// ==========================================================================
+//  REDIMENSIÓN Y EXPANSIÓN HORIZONTAL DE LA TABLA DE DISPOSITIVOS
+// ==========================================================================
+function toggleTableFullWidth() {
+    const box = document.getElementById('table-outer-box');
+    const lbl = document.getElementById('lbl-table-width');
+    const icon = document.getElementById('icon-table-width');
+    if (!box) return;
+
+    const isExpanded = box.classList.toggle('is-expanded-width');
+    if (isExpanded) {
+        box.style.width = 'calc(100vw - 40px)';
+        box.style.maxWidth = 'calc(100vw - 40px)';
+        box.style.marginLeft = 'calc((100% - (100vw - 40px)) / 2)';
+        if (lbl) lbl.textContent = 'Ancho Estándar';
+        if (icon) icon.textContent = '⇤⇥';
+        try { localStorage.setItem('ag_table_full_width', '1'); } catch(e){}
+    } else {
+        box.style.width = '';
+        box.style.maxWidth = '';
+        box.style.marginLeft = '';
+        if (lbl) lbl.textContent = 'Ampliar Ancho';
+        if (icon) icon.textContent = '↔';
+        try {
+            localStorage.removeItem('ag_table_full_width');
+            localStorage.removeItem('ag_table_wrap_width');
+            localStorage.removeItem('ag_table_wrap_margin_left');
+        } catch(e){}
+    }
+}
+
+function initTableResizers() {
+    const box = document.getElementById('table-outer-box');
+    const resizerL = document.getElementById('table-resizer-l');
+    const resizerR = document.getElementById('table-resizer-r');
+    const badge = document.getElementById('table-resizing-badge');
+    const lbl = document.getElementById('lbl-table-width');
+    const icon = document.getElementById('icon-table-width');
+    if (!box || !resizerL || !resizerR) return;
+
+    try {
+        const savedFull = localStorage.getItem('ag_table_full_width');
+        const savedW = localStorage.getItem('ag_table_wrap_width');
+        const savedML = localStorage.getItem('ag_table_wrap_margin_left');
+        if (savedFull === '1') {
+            box.classList.add('is-expanded-width');
+            box.style.width = 'calc(100vw - 40px)';
+            box.style.maxWidth = 'calc(100vw - 40px)';
+            box.style.marginLeft = 'calc((100% - (100vw - 40px)) / 2)';
+            if (lbl) lbl.textContent = 'Ancho Estándar';
+            if (icon) icon.textContent = '⇤⇥';
+        } else if (savedW) {
+            box.style.width = savedW;
+            if (savedML) box.style.marginLeft = savedML;
+            if (lbl) lbl.textContent = 'Restablecer Ancho';
+            if (icon) icon.textContent = '⇤⇥';
+        }
+    } catch(e){}
+
+    let isResizing = false;
+    let resizeMode = '';
+    let startX = 0, startW = 0, startML = 0;
+
+    function startTableResize(e, mode) {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizing = true;
+        resizeMode = mode;
+        startX = e.clientX;
+        const rect = box.getBoundingClientRect();
+        startW = rect.width;
+        const computed = window.getComputedStyle(box);
+        startML = parseFloat(computed.marginLeft) || 0;
+        box.classList.add('resizing');
+        box.classList.remove('is-expanded-width');
+        if (badge) {
+            badge.style.display = 'block';
+            badge.textContent = `📐 ${Math.round(box.clientWidth)} px`;
+        }
+    }
+
+    resizerL.addEventListener('mousedown', e => startTableResize(e, 'l'));
+    resizerR.addEventListener('mousedown', e => startTableResize(e, 'r'));
+
+    resizerL.addEventListener('dblclick', toggleTableFullWidth);
+    resizerR.addEventListener('dblclick', toggleTableFullWidth);
+
+    window.addEventListener('mousemove', e => {
+        if (!isResizing) return;
+        const dx = e.clientX - startX;
+
+        if (resizeMode === 'l') {
+            const maxAllowedW = window.innerWidth - 30;
+            const newW = Math.min(maxAllowedW, Math.max(700, startW - dx));
+            const actualDeltaW = newW - startW;
+            box.style.width = newW + 'px';
+            box.style.maxWidth = 'none';
+            box.style.marginLeft = (startML - actualDeltaW) + 'px';
+        } else if (resizeMode === 'r') {
+            const maxAllowedW = window.innerWidth - 30;
+            const newW = Math.min(maxAllowedW, Math.max(700, startW + dx));
+            box.style.width = newW + 'px';
+            box.style.maxWidth = 'none';
+        }
+
+        if (badge) {
+            badge.textContent = `📐 ${Math.round(box.clientWidth)} px`;
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+        isResizing = false;
+        box.classList.remove('resizing');
+        if (badge) badge.style.display = 'none';
+
+        try {
+            if (box.style.width) {
+                localStorage.setItem('ag_table_wrap_width', box.style.width);
+                localStorage.removeItem('ag_table_full_width');
+            }
+            if (box.style.marginLeft) {
+                localStorage.setItem('ag_table_wrap_margin_left', box.style.marginLeft);
+            }
+            if (lbl) lbl.textContent = 'Restablecer Ancho';
+            if (icon) icon.textContent = '⇤⇥';
+        } catch (err) {}
+    });
+}
+
+initTableResizers();
 switchMainTab(currentMainTab);
 loadConfig();
 loadState();
