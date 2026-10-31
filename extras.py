@@ -801,6 +801,7 @@ def dns_stats_for(ip, limit=500):
         if reason.startswith('Filtered') or reason in ('FilteredBlackList', 'FilteredBlockedService', 'FilteredParental', 'FilteredSafeBrowsing'):
             blocked[host] += 1
     whitelisted = {}
+    custom_blocked = {}
     try:
         filt = ag_get('/control/filtering/status')
         for r in filt.get('user_rules') or []:
@@ -814,6 +815,16 @@ def dns_stats_for(ip, limit=500):
                         'rule': r,
                         'mode': 'global' if is_global else 'client'
                     }
+            elif r.startswith('||'):
+                rest = r[2:]
+                d_part = rest.split('^')[0].strip().lower()
+                is_global = '$client=' not in r
+                is_this_client = bool(ip and (f"$client='{ip}'" in r or f"$client={ip}" in r))
+                if is_global or is_this_client:
+                    custom_blocked[d_part] = {
+                        'rule': r,
+                        'mode': 'global' if is_global else 'client'
+                    }
     except Exception:
         pass
 
@@ -823,6 +834,7 @@ def dns_stats_for(ip, limit=500):
         'top_domains': domains.most_common(15),
         'top_blocked': blocked.most_common(10),
         'whitelisted': whitelisted,
+        'custom_blocked': custom_blocked,
         'oldest': entries[-1].get('time') if entries else None,
     }
 
@@ -1319,6 +1331,85 @@ def api_dns_unwhitelist():
             })
         else:
             return jsonify({'status': 'success', 'message': f'No se encontró ninguna regla activa para {domain}.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Error en AdGuard Home: {e}'}), 500
+
+
+@bp.route('/api/dns/block', methods=['POST'])
+def api_dns_block():
+    body = request.json or {}
+    domain = (body.get('domain') or '').strip().lower().rstrip('.')
+    ip = (body.get('ip') or '').strip()
+    mode = body.get('mode', 'client')
+    if not domain:
+        return jsonify({'status': 'error', 'message': 'Dominio no proporcionado.'}), 400
+
+    if mode == 'client' and ip:
+        rule = f"||{domain}^$client='{ip}'"
+        target_desc = f"para este dispositivo ({ip})"
+    else:
+        rule = f"||{domain}^"
+        target_desc = "para toda la red"
+
+    try:
+        status = ag_get('/control/filtering/status')
+        rules = list(status.get('user_rules') or [])
+        # Quitar posible regla de excepción previa que anularía el bloqueo
+        rules = [r for r in rules if not (r.startswith(f"@@||{domain}^") and (mode != 'client' or f"$client='{ip}'" in r or '$client=' not in r))]
+        if rule not in rules:
+            rules.append(rule)
+            ag_post('/control/filtering/set_rules', {'rules': rules})
+            send_alert('🚫 Dominio bloqueado', f"AdGuard Home: {domain} bloqueado {target_desc}.", 'info')
+        return jsonify({
+            'status': 'success',
+            'message': f'🚫 Dominio {domain} bloqueado {target_desc}.',
+            'domain': domain,
+            'rule': rule,
+            'mode': mode
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Error en AdGuard Home: {e}'}), 500
+
+
+@bp.route('/api/dns/unblock', methods=['POST'])
+def api_dns_unblock():
+    body = request.json or {}
+    domain = (body.get('domain') or '').strip().lower().rstrip('.')
+    ip = (body.get('ip') or '').strip()
+    rule_to_remove = (body.get('rule') or '').strip()
+    if not domain and not rule_to_remove:
+        return jsonify({'status': 'error', 'message': 'Dominio no proporcionado.'}), 400
+
+    try:
+        status = ag_get('/control/filtering/status')
+        rules = list(status.get('user_rules') or [])
+        new_rules = []
+        removed = 0
+        for r in rules:
+            if rule_to_remove and r == rule_to_remove:
+                removed += 1
+                continue
+            if not rule_to_remove and domain:
+                if r.startswith(f"||{domain}^"):
+                    if ip:
+                        if f"$client='{ip}'" in r or f"$client={ip}" in r or "$client=" not in r:
+                            removed += 1
+                            continue
+                    else:
+                        removed += 1
+                        continue
+            new_rules.append(r)
+
+        if removed > 0:
+            ag_post('/control/filtering/set_rules', {'rules': new_rules})
+            send_alert('✅ Bloqueo DNS eliminado', f"AdGuard Home: Regla de bloqueo eliminada para {domain}.", 'info')
+            return jsonify({
+                'status': 'success',
+                'message': f'Bloqueo eliminado para {domain}.',
+                'domain': domain
+            })
+        else:
+            return jsonify({'status': 'success', 'message': f'No se encontró regla de bloqueo para {domain}.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Error en AdGuard Home: {e}'}), 500
 
