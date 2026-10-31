@@ -195,18 +195,19 @@ def os_guess(ttl, dev_class=''):
     if not ttl:
         return ''
     c = (dev_class or '').lower()
+    # Si la clase del dispositivo ya nos indica qué tipo de equipo es, la respetamos
+    if any(k in c for k in ['smartphone', 'móvil', 'movil', 'android', 'phone']):
+        return 'Android'
+    if any(k in c for k in ['iphone', 'ipad', 'apple', 'macbook', 'imac', 'macos']):
+        return 'iOS / macOS'
+    if any(k in c for k in ['enchufe', 'bombilla', 'sensor', 'esp', 'domótica', 'domotica', 'cámara', 'camara', 'cam', 'iot']):
+        return 'Firmware IoT (RTOS)'
+
     if ttl <= 64:
-        if any(k in c for k in ['iphone', 'ipad', 'apple']):
-            return 'iOS / macOS'
-        if any(k in c for k in ['smartphone', 'móvil', 'android']):
-            return 'Android'
-        if any(k in c for k in ['iot', 'enchufe', 'bombilla', 'sensor', 'esp', 'domótica', 'iluminación']):
-            return 'Firmware IoT (RTOS/Linux)'
         return 'Linux / Android / Unix'
     if ttl <= 128:
         return 'Windows'
     return 'Equipo de red (Cisco/Router)'
-
 
 def tcp_latency(ip, port, timeout=1.5):
     t0 = time.time()
