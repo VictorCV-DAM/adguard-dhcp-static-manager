@@ -1456,7 +1456,7 @@
                     </p>
                 </div>
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:700; color:#f8fafc; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:8px; border:1px solid var(--border);">
-                    <input type="checkbox" id="cfg-wifi-plugin-enabled" onchange="toggleWifiPluginFromConfig(this.checked)"> Activar Plugin Wi-Fi
+                    <input type="checkbox" id="cfg-wifi-plugin-enabled" onchange="toggleWifiPluginFromConfig(this.checked)"> Activar Expulsión Forzosa Wi-Fi
                 </label>
             </div>
             <div id="cfg-wifi-status-pills" style="margin-top:10px; font-size:0.75rem; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap;"></div>
@@ -1512,7 +1512,7 @@
             📅 Línea Temporal
         </button>
         <button id="tab-btn-wifirf" class="tab-nav-btn" onclick="switchMainTab('wifirf')" style="display:none;">
-            📡 Radar Wi-Fi (RF)
+            ⚡ Expulsión Forzosa Wi-Fi
         </button>
         <button id="tab-btn-diagnostics" class="tab-nav-btn" onclick="switchMainTab('diagnostics')">
             ⚠️ Diagnóstico <span id="tab-badge-diag" class="tab-badge" style="display:none; background:rgba(245,158,11,0.22); color:#fcd34d;">0</span>
@@ -1856,7 +1856,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
             <div>
                 <h2 style="margin:0; font-size:1.35rem; color:#38bdf8; display:flex; align-items:center; gap:8px;">
-                    📡 Radar y Gestión de Radiofrecuencia Wi-Fi
+                    ⚡ Expulsión y Reconexión Forzosa Wi-Fi
                     <span id="wifi-badge-mode" class="badge" style="font-size:0.75rem; background:rgba(56,189,248,0.18); color:#38bdf8; border:1px solid rgba(56,189,248,0.4);">Comprobando...</span>
                 </h2>
                 <p id="wifi-pi-info" style="margin:4px 0 0 0; font-size:0.82rem; color:var(--muted);">
@@ -1866,6 +1866,25 @@
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="refreshWifiPluginUi(true)">🔄 Actualizar Diagnóstico</button>
                 <button class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="toggleWifiPluginFromConfig(false)">🔌 Desactivar Plugin</button>
+            </div>
+        </div>
+
+        
+        <!-- Cuadro explicativo de finalidad del módulo -->
+        <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.28); border-radius:12px; padding:14px 18px; margin-bottom:18px;">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+                <span style="font-size:1.6rem; line-height:1; user-select:none;">ℹ️</span>
+                <div style="font-size:0.84rem; line-height:1.55;">
+                    <strong style="color:#38bdf8; font-size:0.92rem; display:block; margin-bottom:4px;">
+                        ¿En qué consiste este módulo y cuál es su finalidad?
+                    </strong>
+                    <p style="margin:0 0 6px 0; color:#e2e8f0;">
+                        Al asignar o modificar una <strong>IP estática fija</strong> en AdGuard Home para un dispositivo conectado por Wi-Fi (como enchufes domóticos, bombillas, televisores o móviles), el equipo suele conservar su IP anterior en memoria hasta que se reinicia físicamente o se reinicia el router/mesh.
+                    </p>
+                    <p style="margin:0; color:#94a3b8;">
+                        <strong>Finalidad:</strong> Esta herramienta emite un paquete breve de reconexión por radiofrecuencia (RF). Al forzar la desasociación instantánea del punto de acceso, el dispositivo se reconecta de inmediato de forma automática y pide una nueva concesión DHCP al servidor AdGuard, <strong>adoptando su nueva IP fija sin necesidad de apagarlo, desenchufarlo ni reiniciar el router</strong>.
+                    </p>
+                </div>
             </div>
         </div>
 
