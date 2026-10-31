@@ -716,7 +716,7 @@
         }
         .topo-resizer-bottom {
             position: absolute;
-            left: 0;
+            left: 20px;
             right: 20px;
             bottom: 0;
             height: 10px;
@@ -730,7 +730,7 @@
         }
         .topo-resizer-right {
             position: absolute;
-            top: 0;
+            top: 20px;
             bottom: 20px;
             right: 0;
             width: 10px;
@@ -742,7 +742,21 @@
         .topo-resizer-right:hover {
             background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.45), transparent);
         }
-        .topo-resizer-corner {
+        .topo-resizer-left {
+            position: absolute;
+            top: 20px;
+            bottom: 20px;
+            left: 0;
+            width: 10px;
+            cursor: ew-resize;
+            z-index: 15;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .topo-resizer-left:hover {
+            background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.45), transparent);
+        }
+        .topo-resizer-corner, .topo-resizer-corner-br {
             position: absolute;
             right: 0;
             bottom: 0;
@@ -755,7 +769,7 @@
             justify-content: flex-end;
             padding: 4px;
         }
-        .topo-resizer-corner::after {
+        .topo-resizer-corner::after, .topo-resizer-corner-br::after {
             content: '';
             width: 9px;
             height: 9px;
@@ -764,7 +778,32 @@
             border-bottom-right-radius: 4px;
             transition: border-color 0.2s;
         }
-        .topo-resizer-corner:hover::after {
+        .topo-resizer-corner:hover::after, .topo-resizer-corner-br:hover::after {
+            border-color: #38bdf8;
+        }
+        .topo-resizer-corner-bl {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nesw-resize;
+            z-index: 16;
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-start;
+            padding: 4px;
+        }
+        .topo-resizer-corner-bl::after {
+            content: '';
+            width: 9px;
+            height: 9px;
+            border-left: 2px solid rgba(56, 189, 248, 0.45);
+            border-bottom: 2px solid rgba(56, 189, 248, 0.45);
+            border-bottom-left-radius: 4px;
+            transition: border-color 0.2s;
+        }
+        .topo-resizer-corner-bl:hover::after {
             border-color: #38bdf8;
         }
         .topo-resizing-badge {
@@ -1366,10 +1405,12 @@
                 </div>
             </div>
 
-            <!-- Agarradores discretos para redimensionar el cuadro a gusto -->
+            <!-- Agarradores discretos para redimensionar el cuadro a gusto por todos sus bordes (izquierda, derecha, abajo y esquinas) -->
+            <div class="topo-resizer-left" id="topo-resizer-l" title="Arrastra el borde izquierdo para expandir o contraer el cuadro por la izquierda"></div>
             <div class="topo-resizer-bottom" id="topo-resizer-b" title="Arrastra el borde inferior para ajustar la altura del cuadro"></div>
             <div class="topo-resizer-right" id="topo-resizer-r" title="Arrastra el borde derecho para ajustar el ancho del cuadro"></div>
-            <div class="topo-resizer-corner" id="topo-resizer-c" title="Arrastra la esquina para ajustar el tamaño y resolución del cuadro libremente"></div>
+            <div class="topo-resizer-corner-bl" id="topo-resizer-bl" title="Arrastra la esquina inferior izquierda para redimensionar por la izquierda y abajo"></div>
+            <div class="topo-resizer-corner" id="topo-resizer-c" title="Arrastra la esquina inferior derecha para redimensionar libremente"></div>
             <div class="topo-resizing-badge" id="topo-resizing-badge">📐 1440 × 900 px</div>
 
             <!-- Tooltip flotante -->
@@ -3703,22 +3744,26 @@ function initTopoStageResizer() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
 
-    // Restaurar dimensiones previas guardadas por el usuario
+    // Restaurar dimensiones y desplazamiento izquierdo previos guardados por el usuario
     try {
         const savedH = localStorage.getItem('ag_topo_stage_height');
         const savedW = localStorage.getItem('ag_topo_stage_width');
+        const savedML = localStorage.getItem('ag_topo_stage_margin_left');
         if (savedH) stage.style.height = savedH;
         if (savedW && savedW !== '100%') stage.style.width = savedW;
+        if (savedML) stage.style.marginLeft = savedML;
     } catch (e) {}
 
+    const resizerL = document.getElementById('topo-resizer-l');
     const resizerB = document.getElementById('topo-resizer-b');
     const resizerR = document.getElementById('topo-resizer-r');
+    const resizerBL = document.getElementById('topo-resizer-bl');
     const resizerC = document.getElementById('topo-resizer-c');
     const badge = document.getElementById('topo-resizing-badge');
 
     let isResizing = false;
-    let resizeMode = '';
-    let startX = 0, startY = 0, startW = 0, startH = 0;
+    let resizeMode = ''; // 'l', 'b', 'r', 'bl', 'c'
+    let startX = 0, startY = 0, startW = 0, startH = 0, startML = 0;
 
     function startResize(e, mode) {
         e.preventDefault();
@@ -3730,6 +3775,8 @@ function initTopoStageResizer() {
         const rect = stage.getBoundingClientRect();
         startW = rect.width;
         startH = rect.height;
+        const computedStyle = window.getComputedStyle(stage);
+        startML = parseFloat(computedStyle.marginLeft) || 0;
         stage.classList.add('resizing');
         if (badge) {
             badge.style.display = 'block';
@@ -3737,8 +3784,10 @@ function initTopoStageResizer() {
         }
     }
 
+    if (resizerL) resizerL.addEventListener('mousedown', e => startResize(e, 'l'));
     if (resizerB) resizerB.addEventListener('mousedown', e => startResize(e, 'b'));
     if (resizerR) resizerR.addEventListener('mousedown', e => startResize(e, 'r'));
+    if (resizerBL) resizerBL.addEventListener('mousedown', e => startResize(e, 'bl'));
     if (resizerC) resizerC.addEventListener('mousedown', e => startResize(e, 'c'));
 
     window.addEventListener('mousemove', e => {
@@ -3746,15 +3795,27 @@ function initTopoStageResizer() {
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
-        if (resizeMode === 'b' || resizeMode === 'c') {
-            const newH = Math.max(380, startH + dy);
-            stage.style.height = newH + 'px';
+        // Expansión / Contracción por la izquierda ('l' o 'bl')
+        if (resizeMode === 'l' || resizeMode === 'bl') {
+            const newW = Math.max(480, startW - dx);
+            const actualDeltaW = newW - startW;
+            stage.style.width = newW + 'px';
+            stage.style.marginLeft = (startML - actualDeltaW) + 'px';
         }
+
+        // Expansión / Contracción por la derecha ('r' o 'c')
         if (resizeMode === 'r' || resizeMode === 'c') {
             const newW = Math.max(480, startW + dx);
             stage.style.width = newW + 'px';
         }
 
+        // Expansión / Contracción por abajo ('b', 'bl', 'c')
+        if (resizeMode === 'b' || resizeMode === 'bl' || resizeMode === 'c') {
+            const newH = Math.max(380, startH + dy);
+            stage.style.height = newH + 'px';
+        }
+
+        // Adaptar resolución de renderizado del canvas en tiempo real
         const dpr = window.devicePixelRatio || 1;
         const canvas = document.getElementById('topo-canvas');
         if (canvas) {
@@ -3777,6 +3838,9 @@ function initTopoStageResizer() {
             localStorage.setItem('ag_topo_stage_height', stage.style.height);
             if (stage.style.width) {
                 localStorage.setItem('ag_topo_stage_width', stage.style.width);
+            }
+            if (stage.style.marginLeft) {
+                localStorage.setItem('ag_topo_stage_margin_left', stage.style.marginLeft);
             }
         } catch (err) {}
 
