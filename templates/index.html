@@ -1401,9 +1401,6 @@
                         <button class="topo-ctrl-btn" onclick="document.getElementById('topo-import-file').click()" title="Cargar archivo JSON para restaurar el orden del mapa">
                             📂 Importar Mapa
                         </button>
-                        <button class="topo-ctrl-btn" onclick="resetTopoPositionsToDefault()" title="Restablecer el orden al diseño circular original predeterminado" style="opacity:0.75;">
-                            ↺ Reiniciar
-                        </button>
                         <input type="file" id="topo-import-file" accept=".json" style="display:none;" onchange="importTopoPositionsJson(event)">
                         <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refrescar estado de red">
                             🔄
@@ -3771,141 +3768,85 @@ window.addEventListener('keydown', function(e) {
 
 let _autoOrganizeCounter = 0;
 function smartAutoOrganizeTopology() {
-    // 1. Guardar el estado actual en el historial de deshacer
+    // 1. Guardar el estado actual en el historial de deshacer (Ctrl+Z)
     pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions)));
 
-    // 2. Extraer los hubs activos de los nodos actuales
-    const coreNode = topoState.nodes.find(n => n.type === 'core') || { x: 0, y: 0 };
     const hubNodes = topoState.nodes.filter(n => n.type === 'hub');
     if (hubNodes.length === 0) return;
 
-    // Identificar el maestro Mesh (si existe) y sus satélites
-    const masterHub = hubNodes.find(h => h.isMesh && h.parentId === '__core__') || hubNodes.find(h => h.isMesh) || null;
+    // Identificar nodos clave de infraestructura de la red
+    const masterHub = hubNodes.find(h => h.isMesh && (h.parentId === '__core__' || h.id.includes('halo1'))) || hubNodes.find(h => h.isMesh) || null;
     const meshSatellites = hubNodes.filter(h => h.isMesh && h !== masterHub);
-    const otherDirectHubs = hubNodes.filter(h => !h.isMesh);
-
-    const archetypes = [
-        { name: 'Constelación Radial', id: 'radial' },
-        { name: 'Bipolar en Dos Lóbulos', id: 'bipolar' },
-        { name: 'Cascada Jerárquica', id: 'cascade' },
-        { name: 'Vórtice Espiral', id: 'spiral' },
-        { name: 'Nebulosa Orgánica', id: 'nebula' }
-    ];
-
-    const currentArchetype = archetypes[_autoOrganizeCounter % archetypes.length];
-    _autoOrganizeCounter++;
+    const wr841n = hubNodes.find(h => h.id.includes('wr841n') || h.label.toLowerCase().includes('wr841n')) || null;
+    const lanHub = hubNodes.find(h => h.id.includes('lan')) || null;
+    const wifiHub = hubNodes.find(h => h.id.includes('wifi')) || null;
+    const otherHubs = hubNodes.filter(h => h !== masterHub && !meshSatellites.includes(h) && h !== wr841n && h !== lanHub && h !== wifiHub);
 
     const newPositions = {};
 
-    if (currentArchetype.id === 'radial') {
-        const rot = Math.random() * Math.PI * 2;
-        const coreX = Math.round((Math.random() - 0.5) * 40);
-        const coreY = Math.round((Math.random() - 0.5) * 40);
-        newPositions['__core__'] = { x: coreX, y: coreY };
+    // 1. Core en el centro absoluto
+    newPositions['__core__'] = { x: 0, y: 0 };
 
-        const angleMaster = rot;
-        const distMaster = 280 + Math.random() * 80;
-        const mx = coreX + Math.cos(angleMaster) * distMaster;
-        const my = coreY + Math.sin(angleMaster) * distMaster;
-        if (masterHub) newPositions[masterHub.id] = { x: Math.round(mx), y: Math.round(my) };
-
-        meshSatellites.forEach((sat, i) => {
-            const side = (i % 2 === 0) ? 1 : -1;
-            const branchAngle = angleMaster + side * (0.65 + Math.floor(i / 2) * 0.45 + (Math.random() - 0.5) * 0.2);
-            const branchDist = 320 + Math.random() * 90;
-            newPositions[sat.id] = {
-                x: Math.round(mx + Math.cos(branchAngle) * branchDist),
-                y: Math.round(my + Math.sin(branchAngle) * branchDist)
-            };
+    // 2. Sistema Mesh en el cuadrante superior derecho (amplio y expansivo)
+    if (masterHub) {
+        newPositions[masterHub.id] = { x: 300, y: -260 };
+    }
+    // Satélites Mesh ramificándose ordenadamente hacia el exterior de Halo 1
+    if (meshSatellites.length > 0) {
+        meshSatellites.forEach((sat, idx) => {
+            if (sat.id.includes('halo2') || idx === 0) {
+                // Halo 2 hacia la derecha
+                newPositions[sat.id] = { x: 690, y: -310 };
+            } else if (sat.id.includes('halo3') || idx === 1) {
+                // Halo 3 hacia arriba
+                newPositions[sat.id] = { x: 230, y: -650 };
+            } else {
+                // Satélites adicionales
+                const ang = -0.5 + idx * 0.55;
+                newPositions[sat.id] = {
+                    x: Math.round(300 + Math.cos(ang) * 420),
+                    y: Math.round(-260 + Math.sin(ang) * 420)
+                };
+            }
         });
+    }
 
-        const step = (Math.PI * 2 - 1.4) / Math.max(1, otherDirectHubs.length);
-        otherDirectHubs.forEach((h, i) => {
-            const ang = angleMaster + 1.2 + i * step + (Math.random() - 0.5) * 0.25;
-            const dist = 300 + Math.random() * 95;
+    // 3. Router Secundario / AP (TP-Link WR841N) en el cuadrante inferior derecho
+    // Con amplio espacio libre hacia abajo y a la derecha para sus clientes
+    if (wr841n) {
+        newPositions[wr841n.id] = { x: 390, y: 270 };
+    }
+
+    // 4. Router Principal / LAN en el cuadrante inferior izquierdo
+    if (lanHub) {
+        newPositions[lanHub.id] = { x: -300, y: 270 };
+    }
+
+    // 5. Router Principal / Wi-Fi en el sector izquierdo / superior izquierdo
+    if (wifiHub) {
+        newPositions[wifiHub.id] = { x: -400, y: -70 };
+    }
+
+    // 6. Nodos de red adicionales distribuidos uniformemente
+    if (otherHubs.length > 0) {
+        const step = (Math.PI * 2) / Math.max(1, otherHubs.length);
+        otherHubs.forEach((h, idx) => {
+            const ang = 1.8 + idx * step;
             newPositions[h.id] = {
-                x: Math.round(coreX + Math.cos(ang) * dist),
-                y: Math.round(coreY + Math.sin(ang) * dist)
-            };
-        });
-    } else if (currentArchetype.id === 'bipolar') {
-        const flip = Math.random() < 0.5 ? 1 : -1;
-        const coreX = Math.round((Math.random() - 0.5) * 30);
-        const coreY = Math.round((Math.random() - 0.5) * 30);
-        newPositions['__core__'] = { x: coreX, y: coreY };
-
-        const mx = coreX + flip * (270 + Math.random() * 80);
-        const my = coreY + (Math.random() - 0.5) * 80;
-        if (masterHub) newPositions[masterHub.id] = { x: Math.round(mx), y: Math.round(my) };
-
-        meshSatellites.forEach((sat, i) => {
-            const sy = my + (i === 0 ? -1 : 1) * (260 + Math.random() * 90);
-            const sx = mx + flip * (190 + Math.random() * 100);
-            newPositions[sat.id] = { x: Math.round(sx), y: Math.round(sy) };
-        });
-
-        const numDirect = otherDirectHubs.length;
-        otherDirectHubs.forEach((h, i) => {
-            const hx = coreX - flip * (270 + Math.random() * 90);
-            const hy = coreY + (i - (numDirect - 1) / 2) * (240 + Math.random() * 60);
-            newPositions[h.id] = { x: Math.round(hx), y: Math.round(hy) };
-        });
-    } else if (currentArchetype.id === 'cascade') {
-        const flipX = Math.random() < 0.5 ? 1 : -1;
-        const cx = flipX * (-420 - Math.random() * 80);
-        const cy = Math.round((Math.random() - 0.5) * 40);
-        newPositions['__core__'] = { x: Math.round(cx), y: Math.round(cy) };
-
-        const tier1 = (masterHub ? [masterHub] : []).concat(otherDirectHubs);
-        const nTier1 = tier1.length;
-        tier1.forEach((h, i) => {
-            const tx = cx - flipX * (320 + Math.random() * 80);
-            const ty = cy + (i - (nTier1 - 1) / 2) * (250 + Math.random() * 60);
-            newPositions[h.id] = { x: Math.round(tx), y: Math.round(ty) };
-        });
-
-        const mPos = masterHub && newPositions[masterHub.id] ? newPositions[masterHub.id] : { x: 0, y: 0 };
-        meshSatellites.forEach((sat, i) => {
-            const sx = mPos.x - flipX * (300 + Math.random() * 90);
-            const sy = mPos.y + (i === 0 ? -1 : 1) * (220 + Math.random() * 60);
-            newPositions[sat.id] = { x: Math.round(sx), y: Math.round(sy) };
-        });
-    } else if (currentArchetype.id === 'spiral') {
-        const rot = Math.random() * Math.PI * 2;
-        newPositions['__core__'] = { x: 0, y: 0 };
-        const allList = (masterHub ? [masterHub] : []).concat(meshSatellites, otherDirectHubs);
-        allList.forEach((h, i) => {
-            const ang = rot + i * 2.39996 + (Math.random() - 0.5) * 0.15;
-            const dist = 240 + i * 80 + (Math.random() - 0.5) * 35;
-            newPositions[h.id] = {
-                x: Math.round(Math.cos(ang) * dist),
-                y: Math.round(Math.sin(ang) * dist)
-            };
-        });
-    } else {
-        const rot = Math.random() * Math.PI * 2;
-        const coreX = Math.round((Math.random() - 0.5) * 40);
-        const coreY = Math.round((Math.random() - 0.5) * 40);
-        newPositions['__core__'] = { x: coreX, y: coreY };
-        const allList = (masterHub ? [masterHub] : []).concat(meshSatellites, otherDirectHubs);
-        const total = allList.length;
-        allList.forEach((h, i) => {
-            const ang = rot + (i / total) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
-            const dist = (h.isMesh && h !== masterHub ? 520 : 330) + (Math.random() - 0.5) * 70;
-            newPositions[h.id] = {
-                x: Math.round(coreX + Math.cos(ang) * dist),
-                y: Math.round(coreY + Math.sin(ang) * dist)
+                x: Math.round(Math.cos(ang) * 450),
+                y: Math.round(Math.sin(ang) * 450)
             };
         });
     }
 
-    // Asignar nuevas posiciones calculadas
+    // Asignar nuevas posiciones de los hubs y limpiar las posiciones fijadas de clientes
+    // para que se recalculen automáticamente según el abanico radial matemático perfecto
     topoState.customPositions = newPositions;
 
-    // Reconstruir el grafo: los clientes se proyectan automáticamente hacia el exterior
+    // Reconstruir el grafo: todos los clientes se proyectan hacia el exterior en abanicos despejados
     buildTopoGraph(false);
 
-    // Guardar todas las posiciones resultantes fijadas (hubs y clientes)
+    // Fijar y persistir las nuevas posiciones limpias
     topoState.nodes.forEach(n => {
         topoState.customPositions[n.id] = { x: n.baseX, y: n.baseY };
     });
@@ -3914,7 +3855,7 @@ function smartAutoOrganizeTopology() {
     fitTopoToScreen(true);
     triggerNeuralCascade();
     updateTopoUndoBtn();
-    showMessage(`🪄 Diseño aleatorio generado: ${currentArchetype.name} (haz clic de nuevo para probar otro).`);
+    showMessage('✨ Topología auto-organizada: distribución inteligente, despejada y equilibrada.');
 }
 
 function initTopoStageResizer() {
@@ -4368,15 +4309,15 @@ function relaxTopoPositions(nodes) {
         return Math.min(165, Math.max(72, txt.length * 6.4 + 28));
     };
 
-    for (let iter = 0; iter < 55; iter++) {
-        // 1. Separación mínima entre Hubs para que sus coronas tengan espacio propio
+    for (let iter = 0; iter < 40; iter++) {
+        // 1. Separación generosa entre Hubs para que sus abanicos no se toquen
         for (let i = 0; i < hubs.length; i++) {
             for (let j = i + 1; j < hubs.length; j++) {
                 const a = hubs[i], b = hubs[j];
                 const dx = b.baseX - a.baseX;
                 const dy = b.baseY - a.baseY;
                 const dist = Math.hypot(dx, dy) || 1;
-                const minDist = 370;
+                const minDist = 380;
                 if (dist < minDist) {
                     const push = (minDist - dist) * 0.35;
                     const ux = dx / dist, uy = dy / dist;
@@ -4386,55 +4327,51 @@ function relaxTopoPositions(nodes) {
             }
         }
 
-        // 2. Separación holgada Cliente <-> Cliente (tanto radial como por caja de etiqueta)
+        // 2. Separación entre Clientes
         for (let i = 0; i < clients.length; i++) {
             const a = clients[i];
             for (let j = i + 1; j < clients.length; j++) {
                 const b = clients[j];
                 const dx = b.baseX - a.baseX;
                 const dy = b.baseY - a.baseY;
-                const absDy = Math.abs(dy);
-                const absDx = Math.abs(dx);
-
-                // Distancia radial mínima de 66px entre puntos para que nunca se vean apelotonados
                 const d = Math.hypot(dx, dy) || 0.1;
-                const minDotDist = 66;
-                if (d < minDotDist) {
-                    const push = (minDotDist - d) * 0.42;
-                    const ux = dx / d, uy = dy / d;
-                    if (!topoState.customPositions[a.id]) { a.baseX -= ux * push; a.baseY -= uy * push; }
-                    if (!topoState.customPositions[b.id]) { b.baseX += ux * push; b.baseY += uy * push; }
-                }
 
-                // Separación de etiquetas cuando comparten franja horizontal (< 36px)
-                const sepY = 36;
-                const sepX = (getLabelWidth(a) + getLabelWidth(b)) * 0.58 + 30;
-                if (absDy < sepY && absDx < sepX) {
-                    const overlapY = sepY - absDy;
-                    const overlapX = sepX - absDx;
-                    const signY = dy === 0 ? (i % 2 === 0 ? -1 : 1) : (dy > 0 ? 1 : -1);
-                    const signX = dx === 0 ? (j % 2 === 0 ? -1 : 1) : (dx > 0 ? 1 : -1);
-                    const py = signY * overlapY * 0.40;
-                    const px = signX * Math.min(22, overlapX * 0.24);
-
-                    if (!topoState.customPositions[a.id]) { a.baseX -= px; a.baseY -= py; }
-                    if (!topoState.customPositions[b.id]) { b.baseX += px; b.baseY += py; }
-
-                    if (a.hubId !== b.hubId) {
-                        const ha = hubMap[a.hubId], hb = hubMap[b.hubId];
-                        if (ha && hb) {
-                            const hdx = hb.baseX - ha.baseX || 1;
-                            const hdy = hb.baseY - ha.baseY || 1;
-                            const hd = Math.hypot(hdx, hdy) || 1;
-                            if (!topoState.customPositions[ha.id]) { ha.baseX -= (hdx / hd) * 2.0; ha.baseY -= (hdy / hd) * 2.0; }
-                            if (!topoState.customPositions[hb.id]) { hb.baseX += (hdx / hd) * 2.0; hb.baseY += (hdy / hd) * 2.0; }
-                        }
+                if (a.hubId === b.hubId) {
+                    // Clientes del MISMO nodo: están distribuidos en abanico radial matemático perfecto.
+                    // Solo aplicamos una sutil repulsión radial si por algún motivo están a menos de 65px.
+                    // ¡NUNCA aplicar división por franja XY horizontal que aplaste el arco en líneas verticales!
+                    const minDotDist = 65;
+                    if (d < minDotDist) {
+                        const push = (minDotDist - d) * 0.35;
+                        const ux = dx / d, uy = dy / d;
+                        if (!topoState.customPositions[a.id]) { a.baseX -= ux * push; a.baseY -= uy * push; }
+                        if (!topoState.customPositions[b.id]) { b.baseX += ux * push; b.baseY += uy * push; }
+                    }
+                } else {
+                    // Clientes de DISTINTOS nodos: evitar que dos abanicos diferentes colisionen
+                    const minCrossDist = 80;
+                    if (d < minCrossDist) {
+                        const push = (minCrossDist - d) * 0.40;
+                        const ux = dx / d, uy = dy / d;
+                        if (!topoState.customPositions[a.id]) { a.baseX -= ux * push; a.baseY -= uy * push; }
+                        if (!topoState.customPositions[b.id]) { b.baseX += ux * push; b.baseY += uy * push; }
+                    }
+                    const absDy = Math.abs(dy);
+                    const absDx = Math.abs(dx);
+                    const sepY = 32;
+                    const sepX = (getLabelWidth(a) + getLabelWidth(b)) * 0.5 + 24;
+                    if (absDy < sepY && absDx < sepX) {
+                        const overlapY = sepY - absDy;
+                        const signY = dy >= 0 ? 1 : -1;
+                        const py = signY * overlapY * 0.35;
+                        if (!topoState.customPositions[a.id]) a.baseY -= py;
+                        if (!topoState.customPositions[b.id]) b.baseY += py;
                     }
                 }
             }
         }
 
-        // 3. Mantener despejado el espacio alrededor del Core y de cada Hub
+        // 3. Mantener despejado el espacio alrededor del Core y de los Hubs
         for (let i = 0; i < clients.length; i++) {
             const c = clients[i];
             if (topoState.customPositions[c.id]) continue;
@@ -4443,8 +4380,9 @@ function relaxTopoPositions(nodes) {
                 const dx = c.baseX - core.baseX;
                 const dy = c.baseY - core.baseY;
                 const d = Math.hypot(dx, dy) || 1;
-                if (d < 210) {
-                    const push = (210 - d) * 0.45;
+                const minCoreDist = 200;
+                if (d < minCoreDist) {
+                    const push = (minCoreDist - d) * 0.45;
                     c.baseX += (dx / d) * push;
                     c.baseY += (dy / d) * push;
                 }
@@ -4452,7 +4390,7 @@ function relaxTopoPositions(nodes) {
 
             for (let hIdx = 0; hIdx < hubs.length; hIdx++) {
                 const h = hubs[hIdx];
-                const minHubDist = (h.id === c.hubId) ? 132 : 165;
+                const minHubDist = (h.id === c.hubId) ? 140 : 180;
                 const dx = c.baseX - h.baseX;
                 const dy = c.baseY - h.baseY;
                 const d = Math.hypot(dx, dy) || 1;
@@ -4524,8 +4462,8 @@ function buildTopoGraph(fitView = false) {
             isMesh: true,
             isCable: false,
             color: '#00e5ff',
-            defaultX: 210,
-            defaultY: -290,
+            defaultX: 300,
+            defaultY: -260,
             outwardAngle: -0.95,
             dev: allDevices.find(d => d.ip === '192.168.1.11' || (d.hostname && d.hostname.includes('halo-1')))
         },
@@ -4537,8 +4475,8 @@ function buildTopoGraph(fitView = false) {
             isMesh: true,
             isCable: false,
             color: '#00e5ff',
-            defaultX: 620,
-            defaultY: -350,
+            defaultX: 680,
+            defaultY: -310,
             outwardAngle: -0.15,
             dev: allDevices.find(d => d.ip === '192.168.1.12' || (d.hostname && d.hostname.includes('halo-2')))
         },
@@ -4550,7 +4488,7 @@ function buildTopoGraph(fitView = false) {
             isMesh: true,
             isCable: false,
             color: '#00e5ff',
-            defaultX: 130,
+            defaultX: 230,
             defaultY: -650,
             outwardAngle: -Math.PI / 2,
             dev: allDevices.find(d => d.ip === '192.168.1.13' || (d.hostname && d.hostname.includes('halo-3')))
@@ -4563,8 +4501,8 @@ function buildTopoGraph(fitView = false) {
             isMesh: false,
             isCable: true,
             color: '#10b981',
-            defaultX: 310,
-            defaultY: 250,
+            defaultX: 390,
+            defaultY: 270,
             outwardAngle: 0.68,
             dev: allDevices.find(d => d.ip === '192.168.1.10' || (d.hostname && d.hostname.toLowerCase().includes('wr841n')))
         },
@@ -4576,8 +4514,8 @@ function buildTopoGraph(fitView = false) {
             isMesh: false,
             isCable: true,
             color: '#10b981',
-            defaultX: -220,
-            defaultY: 280,
+            defaultX: -300,
+            defaultY: 270,
             outwardAngle: 2.24,
             dev: allDevices.find(d => d.ip === '192.168.1.1' || d.ip === '192.168.1.249')
         },
@@ -4589,8 +4527,8 @@ function buildTopoGraph(fitView = false) {
             isMesh: false,
             isCable: false,
             color: '#00e5ff',
-            defaultX: -360,
-            defaultY: -30,
+            defaultX: -400,
+            defaultY: -70,
             outwardAngle: Math.PI,
             dev: null
         }
@@ -4711,9 +4649,13 @@ function buildTopoGraph(fitView = false) {
         if (clientCount === 0) return; // ¡Cero ramas si no tiene clientes!
 
         const parentNode = nodes.find(n => n.id === hubNode.parentId) || coreNode;
-        const outwardAngle = hubNode.outwardAngle !== undefined
-            ? hubNode.outwardAngle
-            : Math.atan2(hubNode.baseY - parentNode.baseY, hubNode.baseX - parentNode.baseX);
+        const dxFromParent = hubNode.baseX - parentNode.baseX;
+        const dyFromParent = hubNode.baseY - parentNode.baseY;
+        const distFromParent = Math.hypot(dxFromParent, dyFromParent);
+        // Ángulo de apertura siempre dinámico hacia el espacio exterior libre
+        const outwardAngle = distFromParent > 20
+            ? Math.atan2(dyFromParent, dxFromParent)
+            : (hubNode.outwardAngle !== undefined ? hubNode.outwardAngle : (idx * (Math.PI * 2 / Math.max(1, definedHubs.length))));
 
         const sortedDevs = [...devs].sort((a, b) => {
             const oa = isOnline(a) ? 1 : 0;
@@ -4722,18 +4664,43 @@ function buildTopoGraph(fitView = false) {
             return (a.hostname || '').localeCompare(b.hostname || '');
         });
 
-        const ringCount = clientCount > 16 ? 3 : (clientCount > 6 ? 2 : 1);
-        const ringRadii = [155, 230, 305];
-        const fanSpan = Math.min(Math.PI * 1.6, Math.max(0.85, clientCount * 0.28));
+        // Amplitud angular inteligente y holgada según el número de clientes
+        // Garantiza que NUNCA queden apelotonados en un cono estrecho ni se crucen
+        let fanSpan;
+        if (clientCount <= 1) fanSpan = 0;
+        else if (clientCount === 2) fanSpan = 1.05; // ~60 grados
+        else if (clientCount === 3) fanSpan = 1.55; // ~90 grados
+        else if (clientCount === 4) fanSpan = 1.95; // ~112 grados
+        else if (clientCount === 5) fanSpan = 2.30; // ~132 grados
+        else if (clientCount === 6) fanSpan = 2.55; // ~146 grados (ej. WR841N con 6 clientes: espaciado perfecto)
+        else if (clientCount <= 9) fanSpan = 2.85; // ~163 grados
+        else if (clientCount <= 14) fanSpan = 3.15; // ~180 grados
+        else fanSpan = Math.min(Math.PI * 1.5, 3.15 + (clientCount - 14) * 0.12);
+
         const startRad = outwardAngle - fanSpan / 2;
 
         sortedDevs.forEach((d, cIdx) => {
             const cid = 'dev:' + (d.mac || d.ip || cIdx);
             const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
             const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + t * fanSpan);
-            const rad = ringRadii[cIdx % ringCount] + (Math.sin(cIdx * 2.1) * 16);
-            const idealRelX = Math.cos(ang) * rad;
-            const idealRelY = Math.sin(ang) * rad;
+
+            // Radio amplio con respiración generosa para las etiquetas
+            // Si hay más de 6 clientes, se alternan de forma escalonada (intercalada)
+            // de modo que un cliente exterior NUNCA quede detrás de uno interior
+            let rad;
+            if (clientCount <= 6) {
+                rad = 220; // Radio constante perfecto para hasta 6 clientes
+            } else if (clientCount <= 14) {
+                // 2 niveles intercalados: par en 205px, impar en 285px
+                rad = (cIdx % 2 === 0) ? 205 : 285;
+            } else {
+                // 3 niveles intercalados
+                const tier = cIdx % 3;
+                rad = tier === 0 ? 195 : (tier === 1 ? 275 : 355);
+            }
+
+            const idealRelX = Math.round(Math.cos(ang) * rad);
+            const idealRelY = Math.round(Math.sin(ang) * rad);
 
             const savedClient = topoState.customPositions[cid];
             const cx = savedClient ? savedClient.x : (hubNode.baseX + idealRelX);
@@ -5439,49 +5406,53 @@ function drawTopoFrame(now) {
                 ctx.restore();
             }
 
-            // 1. MALLA POLIGONAL DE CONSTELACIÓN (PLEXUS) ENTRE VÉRTICES Y NODOS CERCANOS (Estilo Imagen 2)
+            // 1. MALLA POLIGONAL DE CONSTELACIÓN (PLEXUS): Silueta perimetral limpia y elegante (sin telarañas internas)
             if (usePlexus) {
-                const plexusPts = [];
-                topoState.nodes.forEach(n => {
-                    if (n.type !== 'core') {
-                        plexusPts.push({ x: n.x, y: n.y, hubId: n.hubId || n.id, online: n.online, isNode: true });
-                    }
-                });
-                topoState.links.forEach(lk => {
-                    const hId = lk.type === 'trunk' ? lk.to.id : lk.from.id;
-                    (lk.joints || []).forEach(j => {
-                        plexusPts.push({ x: j.x, y: j.y, hubId: hId, online: lk.online, isNode: false });
-                    });
-                });
-
-                const maxDist = 205;
-                const maxDistSq = maxDist * maxDist;
                 ctx.save();
                 ctx.lineWidth = 0.9;
-                for (let i = 0; i < plexusPts.length; i++) {
-                    const a = plexusPts[i];
-                    let linksCount = 0;
-                    for (let j = i + 1; j < plexusPts.length; j++) {
-                        if (linksCount >= 4) break;
-                        const b = plexusPts[j];
-                        const dx = b.x - a.x;
-                        if (Math.abs(dx) > maxDist) continue;
-                        const dy = b.y - a.y;
-                        if (Math.abs(dy) > maxDist) continue;
-                        const dSq = dx * dx + dy * dy;
-                        if (dSq < maxDistSq && dSq > 350) {
-                            linksCount++;
-                            const ratio = 1 - Math.sqrt(dSq) / maxDist;
-                            const dim = (hov || hasSearch) ? 0.18 : 1.0;
-                            const alpha = ratio * (a.online || b.online ? 0.36 : 0.14) * dim;
-                            ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
-                            ctx.beginPath();
-                            ctx.moveTo(a.x, a.y);
-                            ctx.lineTo(b.x, b.y);
-                            ctx.stroke();
+                const dim = (hov || hasSearch) ? 0.2 : 1.0;
+
+                // A. Contorno perimetral elegante para cada grupo de clientes (enlace solo entre vecinos inmediatos del abanico)
+                const hubs = topoState.nodes.filter(n => n.type === 'hub');
+                hubs.forEach(h => {
+                    const cNodes = topoState.nodes.filter(n => n.type === 'client' && n.hubId === h.id);
+                    if (cNodes.length >= 2) {
+                        // Ordenar por ángulo angular para enlazar solo vecinos adyacentes del abanico
+                        const sorted = [...cNodes].sort((a, b) => {
+                            const angA = Math.atan2(a.y - h.y, a.x - h.x);
+                            const angB = Math.atan2(b.y - h.y, b.x - h.x);
+                            return angA - angB;
+                        });
+                        for (let k = 0; k < sorted.length - 1; k++) {
+                            const a = sorted[k], b = sorted[k + 1];
+                            const dSq = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+                            if (dSq < 65000) { // < ~255px
+                                const alpha = 0.22 * (a.online || b.online ? 1.0 : 0.45) * dim;
+                                ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                                ctx.beginPath();
+                                ctx.moveTo(a.x, a.y);
+                                ctx.lineTo(b.x, b.y);
+                                ctx.stroke();
+                            }
                         }
                     }
-                }
+                });
+
+                // B. Enlaces sutiles entre articulaciones de enlaces de troncal
+                const trunkLinks = topoState.links.filter(lk => lk.type === 'trunk');
+                trunkLinks.forEach(lk => {
+                    const pts = [lk.from, ...(lk.joints || []), lk.to];
+                    for (let k = 0; k < pts.length - 1; k++) {
+                        const a = pts[k], b = pts[k + 1];
+                        const alpha = 0.18 * (lk.online ? 1.0 : 0.4) * dim;
+                        ctx.strokeStyle = `rgba(125, 211, 252, ${alpha.toFixed(3)})`;
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.stroke();
+                    }
+                });
+
                 ctx.restore();
             }
 
