@@ -1375,6 +1375,8 @@
                             <kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 4px; font-family:monospace; font-size:0.68rem; color:#e2e8f0;">Ctrl+Z</kbd> Revertir
                             <span style="opacity:0.35;">·</span>
                             <kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 4px; font-family:monospace; font-size:0.68rem; color:#e2e8f0;">Ctrl+Y</kbd> Rehacer
+                            <span style="opacity:0.35;">·</span>
+                            <kbd style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); border-radius:3px; padding:1px 4px; font-family:monospace; font-size:0.68rem; color:#38bdf8;" title="Arrastrar con Ctrl pulsado mueve solo el nodo manteniendo sus clientes estáticos">Ctrl+Arrastrar</kbd> Solo nodo
                         </span>
                     </div>
                     <div class="topo-controls-row">
@@ -5098,6 +5100,7 @@ function initTopoCanvas() {
         canvas.addEventListener('mousedown', e => {
             if (e.button !== 0) return;
             topoState.smoothCamera = false;
+            topoState.dragWithCtrl = Boolean(e.ctrlKey || e.metaKey);
             const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
             const hit = findNodeAt(wx, wy);
             topoState.movedDuringDrag = false;
@@ -5128,8 +5131,11 @@ function initTopoCanvas() {
                 n.y = wy;
                 topoState.customPositions[n.id] = { x: n.baseX, y: n.baseY };
 
-                // Si arrastras un Hub (Router/Mesh), toda su constelación de clientes le sigue
-                if (n.type === 'hub') {
+                const ctrlHeld = Boolean(e.ctrlKey || e.metaKey || topoState.dragWithCtrl);
+
+                // Si arrastras un Hub (o Core) y NO pulsas Ctrl, toda su constelación de clientes le sigue.
+                // Si pulsas Ctrl mientras haces clic o arrastras, solo se mueve el nodo y sus clientes se quedan estáticos.
+                if ((n.type === 'hub' || n.type === 'core') && !ctrlHeld) {
                     topoState.nodes.forEach(c => {
                         if (c.hubId === n.id) {
                             c.baseX += dx;
@@ -5139,7 +5145,17 @@ function initTopoCanvas() {
                             topoState.customPositions[c.id] = { x: c.baseX, y: c.baseY };
                         }
                     });
+                } else if ((n.type === 'hub' || n.type === 'core') && ctrlHeld) {
+                    // Fijar las posiciones estáticas de los clientes para que no dependan del nodo al refrescar
+                    topoState.nodes.forEach(c => {
+                        if (c.hubId === n.id) {
+                            topoState.customPositions[c.id] = { x: c.baseX, y: c.baseY };
+                            c.relX = c.baseX - n.baseX;
+                            c.relY = c.baseY - n.baseY;
+                        }
+                    });
                 }
+                canvas.style.cursor = 'grabbing';
                 saveCustomPositionsToStorage();
                 return;
             }
@@ -5183,6 +5199,7 @@ function initTopoCanvas() {
                 }
             }
             topoState.dragNode = null;
+            topoState.dragWithCtrl = false;
             topoState.isPanning = false;
         });
     }
@@ -5211,7 +5228,7 @@ function updateTopoTooltip(node, sx, sy) {
         tip.innerHTML = `
             <div style="font-weight:800; color:#00e5ff; font-size:0.88rem;">📡 ${escapeHtml(node.label)}</div>
             <div style="margin-top:3px; color:#cbd5e1;">Clientes conectados: <strong style="color:#86efac;">${node.onlineCount} online</strong> de <strong>${node.totalCount}</strong></div>
-            <div style="margin-top:5px; font-size:0.73rem; color:#7dd3fc;">⚡ <strong>Clic:</strong> Disparar sinapsis a sus clientes y enfocar<br>🖐️ <strong>Arrastrar:</strong> Mover toda su constelación circular</div>
+            <div style="margin-top:5px; font-size:0.73rem; color:#7dd3fc;">⚡ <strong>Clic:</strong> Disparar sinapsis a sus clientes y enfocar<br>🖐️ <strong>Arrastrar:</strong> Mover nodo y sus clientes<br>🎯 <strong>Ctrl + Arrastrar:</strong> Mover solo el nodo (clientes estáticos)</div>
         `;
     } else if (node.type === 'client' && node.dev) {
         const d = node.dev;
