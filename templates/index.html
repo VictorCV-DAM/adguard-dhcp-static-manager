@@ -1680,6 +1680,13 @@
                         <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Alternar entre el estilo Zigzag Flotante Constelación (Plexus), el estilo Impulsos Eléctricos actual, o la Fusión de ambos">
                             🕸️ Estilo: <span id="topo-style-txt">Zigzag Flotante</span>
                         </button>
+                        <!-- Control manual de nivel de entramado y densidad de la tela de araña -->
+                        <div class="topo-mesh-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Nivel de entramado y densidad de la tela de araña (- / +)">
+                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(-1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Reducir entramado de la tela de araña (−)">−</button>
+                            <span id="topo-mesh-density-txt" onclick="cycleTopoMeshDensity()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Clic para alternar nivel de entramado">🕸️ Malla: Densa (3x)</span>
+                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Aumentar entramado de la tela de araña (+)">+</button>
+                        </div>
+
                         <button id="topo-btn-telemetry" class="topo-ctrl-btn" onclick="toggleTopoTelemetryMode()" title="Alternar entre impulsos ambientales simulados o flujo continuo guiado por el Tráfico DNS real de AdGuard Home y la Latencia Ping de cada dispositivo">
                             📡 Lógica: <span id="topo-telemetry-txt">Simulada</span>
                         </button>
@@ -3797,6 +3804,10 @@ let topoState = {
     initialized: false,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
+        meshDensity: (function() {
+        const v = parseInt(localStorage.getItem('ag_topo_mesh_density'), 10);
+        return (!isNaN(v) && v >= 0 && v <= 4) ? v : 3;
+    })(), // 0=Off, 1=1x Sutil, 2=2x Media, 3=3x Densa, 4=4x Extrema
     visualStyle: (function() {
         const s = localStorage.getItem('ag_topo_style');
         return (s === 'straight' || s === 'synapse' || s === 'plexus') ? s : 'plexus';
@@ -4124,6 +4135,36 @@ function spawnAutoTopoImpulse() {
         isBlocked: false,
         spawnReply: false
     });
+}
+
+
+const TOPO_MESH_LEVELS = [
+    { level: 0, label: 'Desactivada (0x)', maxDist: 0, maxLinks: 0, lineWidth: 0, alphaOn: 0, alphaOff: 0 },
+    { level: 1, label: 'Sutil (1x)', maxDist: 220, maxLinks: 3, lineWidth: 0.45, alphaOn: 0.09, alphaOff: 0.04 },
+    { level: 2, label: 'Media (2x)', maxDist: 280, maxLinks: 5, lineWidth: 0.55, alphaOn: 0.13, alphaOff: 0.06 },
+    { level: 3, label: 'Densa (3x)', maxDist: 340, maxLinks: 7, lineWidth: 0.65, alphaOn: 0.17, alphaOff: 0.08 },
+    { level: 4, label: 'Extrema (4x)', maxDist: 430, maxLinks: 12, lineWidth: 0.82, alphaOn: 0.23, alphaOff: 0.11 }
+];
+
+function updateTopoMeshDensityUI() {
+    const txt = document.getElementById('topo-mesh-density-txt');
+    const cur = TOPO_MESH_LEVELS.find(l => l.level === topoState.meshDensity) || TOPO_MESH_LEVELS[3];
+    if (txt) {
+        txt.textContent = cur.label;
+    }
+}
+
+function adjustTopoMeshDensity(delta) {
+    let next = (topoState.meshDensity || 3) + delta;
+    if (next < 0) next = 4;
+    if (next > 4) next = 0;
+    topoState.meshDensity = next;
+    try { localStorage.setItem('ag_topo_mesh_density', String(next)); } catch (e) {}
+    updateTopoMeshDensityUI();
+}
+
+function cycleTopoMeshDensity() {
+    adjustTopoMeshDensity(1);
 }
 
 function cycleTopoVisualStyle() {
@@ -4801,22 +4842,42 @@ function nodeMatchesSearch(n) {
     if (!q) return false;
     const d = n.dev || {};
 
-    const ips = [d.ip, ...(d.live_ips || [])].filter(Boolean).map(x => String(x).trim().toLowerCase());
-    const mac = (d.mac || '').toLowerCase();
+    // Recopilar todas las IPs asociadas (incluyendo AdGuard Core 192.168.1.249, 192.168.1.1 y nodos hub)
+    const ips = [
+        d.ip,
+        ...(d.live_ips || []),
+        n.ip,
+        ...(n.ips || []),
+        ...(n.id === '__core__' ? ['192.168.1.1', '192.168.1.249'] : [])
+    ].filter(Boolean).map(x => String(x).trim().toLowerCase());
+
+    const mac = (d.mac || n.mac || '').toLowerCase();
     const hostname = (d.hostname || '').toLowerCase();
     const label = (n.label || '').toLowerCase();
+    const cleanLabel = label.replace(/\s*\([^)]*\)/g, '').trim(); // 'Halo 1 (Mi habitación)' -> 'Halo 1'
     const sub = (n.sub || '').toLowerCase();
+    const id = (n.id || '').toLowerCase();
+
+    // Tokens individuales del nombre para búsqueda exacta de hubs (ej: 'halo', 'wr841n', 'mercusys')
+    const labelTokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
 
     // Solo se aplica coincidencia exacta si se ha pulsado Enter (o activado Exacto explícitamente)
     if (topoState.searchExact) {
         if (ips.some(ip => ip === q)) return true;
-        if (mac === q) return true;
-        if (hostname === q || label === q || sub === q) return true;
+        if (mac && mac === q) return true;
+        if (hostname && hostname === q) return true;
+        if (label === q || cleanLabel === q) return true;
+        if (id === q || id === 'hub:' + q || id === 'dev:' + q) return true;
+        if (labelTokens.includes(q)) return true;
+        // Si el término es una IP (ej: 192.168.1.249 o 192.168.1.1) y aparece en ips o sub
+        if (/^(\d{1,3}\.){3}\d{1,3}$/.test(q)) {
+            if (ips.includes(q) || sub.includes(q)) return true;
+        }
         return false;
     }
 
     // Coincidencia estándar mientras se escribe antes de pulsar Enter
-    const hay = `${label} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
+    const hay = `${label} ${cleanLabel} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${id} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
     return hay.includes(q);
 }
 
@@ -5242,7 +5303,9 @@ function buildTopoGraph(fitView = false) {
         id: '__core__',
         type: 'core',
         label: 'Router Principal · AdGuard Core',
-        sub: `192.168.1.1 · ${totalOnline} online`,
+        sub: `192.168.1.1 / 192.168.1.249 · ${totalOnline} online`,
+        ip: '192.168.1.1',
+        ips: ['192.168.1.1', '192.168.1.249'],
         x: corePos.x,
         y: corePos.y,
         baseX: corePos.x,
@@ -5267,11 +5330,15 @@ function buildTopoGraph(fitView = false) {
         const hy = savedPos ? savedPos.y : (h.defaultY !== undefined ? h.defaultY : (Math.sin(idx * 1.2) * 380));
         const onlineDevs = devs.filter(isOnline).length;
 
+        const hubIp = h.ip || (h.dev && h.dev.ip) || '';
+        const hubIps = [h.ip, (h.dev && h.dev.ip), ...(h.dev && h.dev.live_ips ? h.dev.live_ips : [])].filter(Boolean);
         const hubNode = {
             id: h.id,
             type: 'hub',
             label: h.label,
-            sub: `${onlineDevs}/${devs.length} online`,
+            sub: (hubIp ? `${hubIp} · ` : '') + `${onlineDevs}/${devs.length} online`,
+            ip: hubIp,
+            ips: hubIps,
             x: hx,
             y: hy,
             baseX: hx,
@@ -6225,38 +6292,40 @@ function drawTopoFrame(now) {
                     }
                 });
 
-                // Tela de araña más transparente y entramada (líneas finas, alta conectividad y opacidad sutil)
-                const maxDist = 310;
-                const maxDistSq = maxDist * maxDist;
-                ctx.save();
-                ctx.lineWidth = 0.6;
-                for (let i = 0; i < plexusPts.length; i++) {
-                    const a = plexusPts[i];
-                    let linksCount = 0;
-                    for (let j = i + 1; j < plexusPts.length; j++) {
-                        if (linksCount >= 7) break;
-                        const b = plexusPts[j];
-                        if (a.hubId && b.hubId && a.hubId !== b.hubId) continue;
-                        const dx = b.x - a.x;
-                        if (Math.abs(dx) > maxDist) continue;
-                        const dy = b.y - a.y;
-                        if (Math.abs(dy) > maxDist) continue;
-                        const dSq = dx * dx + dy * dy;
-                        if (dSq < maxDistSq && dSq > 750) {
-                            linksCount++;
-                            const ratio = 1 - Math.sqrt(dSq) / maxDist;
-                            const dim = (hov || hasSearch || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
-                            // Más transparente, tenue y elegante
-                            const alpha = ratio * (a.online || b.online ? 0.16 : 0.07) * dim;
-                            ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
-                            ctx.beginPath();
-                            ctx.moveTo(a.x, a.y);
-                            ctx.lineTo(b.x, b.y);
-                            ctx.stroke();
+                // Tela de araña con control manual de entramado y densidad (topoState.meshDensity)
+                if (topoState.meshDensity > 0) {
+                    const meshCfg = TOPO_MESH_LEVELS.find(l => l.level === topoState.meshDensity) || TOPO_MESH_LEVELS[3];
+                    const maxDist = meshCfg.maxDist;
+                    const maxDistSq = maxDist * maxDist;
+                    ctx.save();
+                    ctx.lineWidth = meshCfg.lineWidth;
+                    for (let i = 0; i < plexusPts.length; i++) {
+                        const a = plexusPts[i];
+                        let linksCount = 0;
+                        for (let j = i + 1; j < plexusPts.length; j++) {
+                            if (linksCount >= meshCfg.maxLinks) break;
+                            const b = plexusPts[j];
+                            if (a.hubId && b.hubId && a.hubId !== b.hubId) continue;
+                            const dx = b.x - a.x;
+                            if (Math.abs(dx) > maxDist) continue;
+                            const dy = b.y - a.y;
+                            if (Math.abs(dy) > maxDist) continue;
+                            const dSq = dx * dx + dy * dy;
+                            if (dSq < maxDistSq && dSq > 700) {
+                                linksCount++;
+                                const ratio = 1 - Math.sqrt(dSq) / maxDist;
+                                const dim = (hov || hasSearch || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
+                                const alpha = ratio * (a.online || b.online ? meshCfg.alphaOn : meshCfg.alphaOff) * dim;
+                                ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                                ctx.beginPath();
+                                ctx.moveTo(a.x, a.y);
+                                ctx.lineTo(b.x, b.y);
+                                ctx.stroke();
+                            }
                         }
                     }
+                    ctx.restore();
                 }
-                ctx.restore();
             }
 
             // 2. Dibujar enlaces principales (En modo Plexus: Zigzag articulado flotante con micro-estrellas en cada vértice; En modo Synapse: líneas directas)
@@ -6567,7 +6636,8 @@ function drawTopoFrame(now) {
 
                 if (n.type === 'core') {
                     // === NODO CENTRAL PROTAGONISTA: ROUTER PRINCIPAL / ADGUARD CORE ===
-                    const rad = isDirectHover ? n.r + 4 : n.r;
+                    const isTargetOrMatched = isTarget || matched;
+                    const rad = isDirectHover || isTargetOrMatched ? n.r + (isTargetOrMatched ? 5 + heartbeat * 4 : 4) : n.r;
 
                     ctx.save();
                     ctx.translate(n.x, n.y);
@@ -6575,10 +6645,10 @@ function drawTopoFrame(now) {
                     ctx.beginPath();
                     ctx.setLineDash([16, 10]);
                     ctx.arc(0, 0, rad + 18, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#00e5ff';
-                    ctx.lineWidth = 2.4;
-                    ctx.shadowColor = '#00e5ff';
-                    ctx.shadowBlur = 16;
+                    ctx.strokeStyle = isTargetOrMatched ? '#fbbf24' : '#00e5ff';
+                    ctx.lineWidth = isTargetOrMatched ? 3.4 : 2.4;
+                    ctx.shadowColor = isTargetOrMatched ? '#f59e0b' : '#00e5ff';
+                    ctx.shadowBlur = isTargetOrMatched ? 32 : 16;
                     ctx.stroke();
                     ctx.restore();
 
@@ -6588,24 +6658,30 @@ function drawTopoFrame(now) {
                     ctx.beginPath();
                     ctx.setLineDash([7, 13]);
                     ctx.arc(0, 0, rad + 9, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#38bdf8';
-                    ctx.lineWidth = 1.7;
+                    ctx.strokeStyle = isTargetOrMatched ? '#f59e0b' : '#38bdf8';
+                    ctx.lineWidth = isTargetOrMatched ? 2.5 : 1.7;
                     ctx.stroke();
                     ctx.restore();
 
                     ctx.save();
                     const grad = ctx.createRadialGradient(n.x - 7, n.y - 7, 5, n.x, n.y, rad);
-                    grad.addColorStop(0, '#ffffff');
-                    grad.addColorStop(0.35, '#00e5ff');
-                    grad.addColorStop(1, '#0284c7');
+                    if (isTargetOrMatched) {
+                        grad.addColorStop(0, '#ffffff');
+                        grad.addColorStop(0.35, '#fbbf24');
+                        grad.addColorStop(1, '#d97706');
+                    } else {
+                        grad.addColorStop(0, '#ffffff');
+                        grad.addColorStop(0.35, '#00e5ff');
+                        grad.addColorStop(1, '#0284c7');
+                    }
                     ctx.fillStyle = grad;
-                    ctx.shadowColor = '#00e5ff';
-                    ctx.shadowBlur = (isDirectHover || n.flash > 0.2) ? 42 : 28;
+                    ctx.shadowColor = isTargetOrMatched ? '#f59e0b' : '#00e5ff';
+                    ctx.shadowBlur = isTargetOrMatched ? (38 + heartbeat * 22) : ((isDirectHover || n.flash > 0.2) ? 42 : 28);
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, rad, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.lineWidth = 2.6;
-                    ctx.strokeStyle = '#e0f2fe';
+                    ctx.lineWidth = isTargetOrMatched ? 3.2 : 2.6;
+                    ctx.strokeStyle = isTargetOrMatched ? '#fef3c7' : '#e0f2fe';
                     ctx.stroke();
                     ctx.restore();
 
@@ -6633,28 +6709,31 @@ function drawTopoFrame(now) {
                     ctx.restore();
                 } else if (n.type === 'hub') {
                     // === NODOS SECUNDARIOS: ROUTERS / HALO / TP-LINK / SWITCH ===
-                    const rad = isDirectHover ? n.r + 2.5 : n.r;
+                    const isTargetOrMatched = isTarget || matched;
+                    const rad = isDirectHover || isTargetOrMatched ? n.r + (isTargetOrMatched ? 4.5 + heartbeat * 3.8 : 2.5) : n.r;
 
                     ctx.save();
                     ctx.translate(n.x, n.y);
                     ctx.rotate(tNow * 0.0009 + n.phase);
                     ctx.beginPath();
                     ctx.setLineDash([6, 5]);
-                    ctx.arc(0, 0, rad + 5, 0, Math.PI * 2);
-                    ctx.strokeStyle = n.color;
-                    ctx.lineWidth = 1.2;
-                    ctx.globalAlpha = (hi ? 0.65 : 0.15);
+                    ctx.arc(0, 0, rad + 6, 0, Math.PI * 2);
+                    ctx.strokeStyle = isTargetOrMatched ? '#fbbf24' : n.color;
+                    ctx.lineWidth = isTargetOrMatched ? 2.4 : 1.2;
+                    ctx.globalAlpha = isTargetOrMatched ? 1.0 : (hi ? 0.65 : 0.15);
+                    ctx.shadowColor = isTargetOrMatched ? '#f59e0b' : n.color;
+                    ctx.shadowBlur = isTargetOrMatched ? 20 : 0;
                     ctx.stroke();
                     ctx.restore();
 
                     ctx.save();
-                    ctx.shadowColor = n.color;
-                    ctx.shadowBlur = (isDirectHover || n.flash > 0.1) ? 24 : 14;
-                    ctx.fillStyle = n.flash > 0.3 ? '#ffffff' : n.color;
+                    ctx.shadowColor = isTargetOrMatched ? '#f59e0b' : n.color;
+                    ctx.shadowBlur = isTargetOrMatched ? (32 + heartbeat * 20) : ((isDirectHover || n.flash > 0.1) ? 24 : 14);
+                    ctx.fillStyle = isTargetOrMatched ? '#fbbf24' : (n.flash > 0.3 ? '#ffffff' : n.color);
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, rad, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.lineWidth = 1.6;
+                    ctx.lineWidth = isTargetOrMatched ? 2.4 : 1.6;
                     ctx.strokeStyle = '#ffffff';
                     ctx.stroke();
                     ctx.restore();
