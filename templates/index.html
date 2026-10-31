@@ -2878,7 +2878,11 @@ async function refreshWifiPluginUi(logIt = false) {
     try {
         const res = await fetch('/api/wifi/status');
         const data = await res.json();
-        wifiPluginState = data;
+        const prevClients = (wifiPluginState && wifiPluginState.scanned_clients) || {};
+        wifiPluginState = {
+            ...data,
+            scanned_clients: { ...prevClients, ...(data.scanned_clients || {}) }
+        };
         updateWifiTabVisibility(data.enabled);
 
         // Actualizar badges
@@ -3019,7 +3023,8 @@ async function scanWifiSpectrum() {
 
                 let statusBadge = '';
                 if (d.is_static) {
-                    statusBadge = `<span class="badge" style="background:rgba(34,197,94,0.18); color:#86efac; border:1px solid rgba(34,197,94,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">📌 IP Estática Fija</span>`;
+                    const ordTxt = d.static_order ? ` (#${d.static_order})` : '';
+                    statusBadge = `<span class="badge" style="background:rgba(34,197,94,0.18); color:#86efac; border:1px solid rgba(34,197,94,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">📌 IP Estática Fija${ordTxt}</span>`;
                 } else if (d.ip) {
                     statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.18); color:#fcd34d; border:1px solid rgba(245,158,11,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">⚡ IP Dinámica (DHCP)</span>`;
                 } else {
@@ -3031,7 +3036,10 @@ async function scanWifiSpectrum() {
                          onclick="prefillStaticFromRadar('${d.client}', '${escapeHtml(d.hostname || '')}', '${d.ip || ''}')" title="Cargar en formulario de IP Fija">
                          📌 Fijar IP
                        </button>`
-                    : '';
+                    : `<button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; font-weight:600; border-radius:6px; margin-right:6px; border-color:rgba(56,189,248,0.4); color:#38bdf8;"
+                         onclick="openDeviceSheet('${d.client}', '${d.ip || ''}')" title="Abrir ficha del dispositivo">
+                         👁️ Ver Ficha
+                       </button>`;
 
                 html += `
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -8179,7 +8187,7 @@ async function openDeviceSheet(mac, ipHint = '') {
         const isOffline = dev.conn_medium === 'offline';
         const rfEnabled = !!(wifiPluginState && wifiPluginState.enabled);
         const scannedMap = (wifiPluginState && wifiPluginState.scanned_clients) || {};
-        const rfClient = scannedMap[mac.toLowerCase()];
+        const rfClient = scannedMap[mac.toLowerCase()] || (dev.rf_detected ? { channel: dev.rf_channel, bssid: dev.rf_bssid } : null);
 
         if (!rfEnabled) {
             rfChk.disabled = true;
@@ -8192,7 +8200,7 @@ async function openDeviceSheet(mac, ipHint = '') {
         } else if (rfClient) {
             rfChk.disabled = false;
             rfChk.checked = true;
-            const chan = rfClient.channel ? `Canal ${rfClient.channel}` : 'Canal detectado';
+            const chan = (rfClient.channel || dev.rf_channel) ? `Canal ${rfClient.channel || dev.rf_channel}` : 'Canal detectado';
             rfHint.innerHTML = `<span style="color:#86efac; font-weight:700;">(🟢 En cobertura RF · ${chan})</span>`;
         } else {
             rfChk.disabled = false;

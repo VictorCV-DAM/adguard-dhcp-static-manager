@@ -25,6 +25,27 @@ CANAL_SCAN_SECONDS = 10
 
 _context = {}
 _CACHE_CLIENTES_RF = {}
+CACHE_RF_FILE = os.path.join(os.path.dirname(__file__), 'wifi_rf_cache.json')
+
+def _cargar_cache_rf():
+    global _CACHE_CLIENTES_RF
+    if os.path.exists(CACHE_RF_FILE):
+        try:
+            with open(CACHE_RF_FILE, 'r', encoding='utf-8') as f:
+                _CACHE_CLIENTES_RF = json.load(f) or {}
+        except Exception:
+            _CACHE_CLIENTES_RF = {}
+
+def _guardar_cache_rf():
+    try:
+        tmp = CACHE_RF_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(_CACHE_CLIENTES_RF, f, indent=2)
+        os.replace(tmp, CACHE_RF_FILE)
+    except Exception:
+        pass
+
+_cargar_cache_rf()
 
 
 def sh(cmd, timeout=25):
@@ -166,10 +187,13 @@ def _mapa_ips_y_nombres():
             for d in st.get('devices', []):
                 mac = (d.get('mac') or '').strip().lower()
                 if mac and mac != '00:00:00:00:00:00':
+                    is_st = bool(d.get('static') or d.get('is_static', False))
                     res[mac] = {
                         'ip': d.get('ip') or '',
                         'hostname': d.get('custom_name') or d.get('hostname') or '',
-                        'is_static': bool(d.get('is_static', False)),
+                        'is_static': is_st,
+                        'static_order': d.get('static_order_idx'),
+                        'manual_static': bool(d.get('manual_static')),
                         'vendor': d.get('dev_vendor') or '',
                         'icon': d.get('dev_icon') or '📱',
                         'cat': d.get('dev_cat') or 'dispositivo'
@@ -271,11 +295,7 @@ def _parsear_csv(ruta):
 
 def _captura_csv(prefijo, segundos, logs):
     """Lanza airodump-ng sobre mon0 y devuelve la ruta del CSV o None."""
-    for f in glob.glob(prefijo + '*'):
-        try:
-            os.remove(f)
-        except Exception:
-            pass
+    sh(['bash', '-c', f"rm -f {prefijo}*"])
 
     proc = subprocess.Popen(
         ['sudo', 'airodump-ng', '-w', prefijo, '--output-format', 'csv',
@@ -292,7 +312,7 @@ def _captura_csv(prefijo, segundos, logs):
         pass
     time.sleep(0.5)
 
-    ficheros = glob.glob(prefijo + '-01.csv')
+    ficheros = sorted(glob.glob(prefijo + '*.csv'), key=os.path.getmtime, reverse=True)
     return ficheros[0] if ficheros else None
 
 
@@ -377,7 +397,9 @@ def init_app(app, context):
             'mode': mode,
             'has_aircrack': has_aircrack,
             'has_nexutil': has_nexutil,
-            'pi_ip': _ip_propia()
+            'pi_ip': _ip_propia(),
+            'scanned_clients': _CACHE_CLIENTES_RF,
+            'scanned_count': len(_CACHE_CLIENTES_RF)
         })
 
     @app.route('/api/wifi/toggle-plugin', methods=['POST'])
@@ -492,6 +514,8 @@ def init_app(app, context):
                 est["ip"] = dev_info.get("ip", "")
                 est["hostname"] = dev_info.get("hostname", "")
                 est["is_static"] = bool(dev_info.get("is_static", False))
+                est["static_order"] = dev_info.get("static_order")
+                est["manual_static"] = bool(dev_info.get("manual_static", False))
                 est["vendor"] = dev_info.get("vendor", "")
                 est["icon"] = dev_info.get("icon", "📱")
                 est["cat"] = dev_info.get("cat", "dispositivo")
@@ -499,10 +523,14 @@ def init_app(app, context):
                     'bssid': est.get('bssid'),
                     'channel': est.get('channel'),
                     'essid': est.get('essid'),
+                    'hostname': est["hostname"],
+                    'ip': est["ip"],
                     'ts': time.time()
                 }
                 if est["ip"]:
                     resueltas += 1
+
+            _guardar_cache_rf()
 
             logs.append(f"[+] Escaneo completado. Clientes detectados en el aire: {len(estaciones)}")
             logs.append(f"[+] IP y nombre resueltos para {resueltas} de {len(estaciones)} clientes (DHCP/ARP).")

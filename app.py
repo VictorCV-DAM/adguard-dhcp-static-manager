@@ -2061,11 +2061,28 @@ def build_state(force_refresh=False):
 
     mac_to_order = {m: idx + 1 for idx, m in enumerate(updated_order)}
 
+    try:
+        import wifi_plugin
+        rf_cache = getattr(wifi_plugin, '_CACHE_CLIENTES_RF', {})
+    except Exception:
+        rf_cache = {}
+
     for d in devices:
         if d.get('static'):
             d['static_order_idx'] = mac_to_order.get(d['mac'])
         else:
             d['static_order_idx'] = None
+
+        m_low = (d.get('mac') or '').lower()
+        if m_low in rf_cache:
+            d['rf_detected'] = True
+            d['rf_channel'] = rf_cache[m_low].get('channel')
+            d['rf_bssid'] = rf_cache[m_low].get('bssid')
+            d['rf_essid'] = rf_cache[m_low].get('essid')
+            d['rf_ts'] = rf_cache[m_low].get('ts')
+        else:
+            d['rf_detected'] = False
+            d['rf_channel'] = None
 
     ordered_statics_list = []
     for m in updated_order:
