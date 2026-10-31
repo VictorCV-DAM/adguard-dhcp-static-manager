@@ -1688,7 +1688,7 @@
             <div class="topo-overlay-top">
                 <div class="topo-search-box">
                     <span style="color:#94a3b8; font-size:0.85rem;">🔍</span>
-                    <input type="text" id="topo-search" placeholder="Buscar nodo, host, IP o MAC..." oninput="onTopoSearchInput()" onkeydown="if(event.key==='Enter') focusFirstTopoMatch()">
+                    <input type="text" id="topo-search" placeholder="Buscar nodo, host, IP o MAC..." oninput="onTopoSearchInput()" onkeydown="onTopoSearchKeyDown(event)">
                     <button id="topo-search-exact-btn" onclick="toggleTopoExactSearch()" class="topo-search-exact-btn" title="Alternar coincidencia exacta de IP / Host / MAC">🎯 Exacto</button>
                     <button id="topo-search-clear" onclick="clearTopoSearch()" style="display:none; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem; padding:0;">✕</button>
                     <button id="topo-mobile-toggle-btn" onclick="toggleMobileTopoControls()" class="topo-mobile-toggle-btn" title="Mostrar/Ocultar controles">🎛️ Opciones</button>
@@ -4867,12 +4867,22 @@ function onTopoSearchInput() {
     topoState.searchQuery = (inp ? inp.value : '').trim().toLowerCase();
     if (clr) clr.style.display = topoState.searchQuery ? 'inline' : 'none';
 
-    // Al teclear, desactivar Exacto para permitir búsqueda progresiva en vivo
+    // Al escribir o borrar texto, desactivar Exacto para permitir búsqueda progresiva
     topoState.searchExact = false;
     if (exactBtn) exactBtn.classList.remove('active');
 
-    // Limpiar pin fijado al escribir para que la cámara y el mapa no se queden trabados
+    // Limpiar pin fijado al escribir para que la cámara y el mapa respondan con libertad
     clearTopoPin();
+}
+
+function onTopoSearchKeyDown(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        focusFirstTopoMatch();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        clearTopoSearch();
+    }
 }
 
 function toggleTopoExactSearch() {
@@ -4899,13 +4909,39 @@ function clearTopoSearch() {
     clearTopoPin();
 }
 
+function fitNodesInView(nodesList, smooth = true) {
+    const canvas = document.getElementById('topo-canvas');
+    if (!canvas || !nodesList || nodesList.length === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.width / dpr;
+    const ch = canvas.height / dpr;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodesList.forEach(n => {
+        const x = (n.x != null) ? n.x : (n.baseX || 0);
+        const y = (n.y != null) ? n.y : (n.baseY || 0);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    });
+
+    const pad = 120;
+    const bw = Math.max(260, (maxX - minX) + pad * 2);
+    const bh = Math.max(260, (maxY - minY) + pad * 2);
+    const sc = Math.max(0.35, Math.min(1.25, Math.min(cw / bw, ch / bh)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    centerOnPoint(cx, cy, sc, smooth);
+}
+
 function focusFirstTopoMatch() {
     if (!topoState.searchQuery) return;
     topoState.searchExact = true;
     const exactBtn = document.getElementById('topo-search-exact-btn');
     if (exactBtn) exactBtn.classList.add('active');
 
-    // Buscar todos los nodos que coinciden
+    // Buscar todos los nodos que coinciden con el término
     let matches = topoState.nodes.filter(n => nodeMatchesSearch(n));
 
     // Si con búsqueda exacta estricta no hay resultados, reintentar con búsqueda amplia
@@ -4916,14 +4952,16 @@ function focusFirstTopoMatch() {
     }
 
     if (matches.length === 1) {
-        // Coincidencia única: enfocar y clavar baliza palpitante
+        // Coincidencia única: enfocar de cerca y clavar baliza palpitante
         focusTopoNode(matches[0], 1.35);
         showMessage(`🎯 Coincidencia: ${matches[0].label || matches[0].sub || 'Dispositivo'} enfocado`);
     } else if (matches.length > 1) {
-        // Múltiples coincidencias (ej: '192.168.1' o 'halo'): mantenerlas todas resaltadas sin bloquear la cámara en una sola
+        // Múltiples coincidencias: encuadrar todas en la vista y mantenerlas destacadas
         clearTopoPin();
-        showMessage(`🎯 ${matches.length} nodos encontrados resaltados en el mapa`);
+        fitNodesInView(matches, true);
+        showMessage(`🎯 ${matches.length} nodos encontrados y destacados en el mapa`);
     } else {
+        clearTopoPin();
         showMessage(`⚠️ Sin resultados para "${topoState.searchQuery}"`);
     }
 }
@@ -4933,7 +4971,7 @@ function nodeMatchesSearch(n) {
     if (!q) return false;
     const d = n.dev || {};
 
-    // Recopilar todas las IPs asociadas (incluyendo AdGuard Core 192.168.1.249, 192.168.1.1 y nodos hub)
+    // Recopilar todas las IPs asociadas
     const ips = [
         d.ip,
         ...(d.live_ips || []),
@@ -4945,39 +4983,54 @@ function nodeMatchesSearch(n) {
     const mac = (d.mac || n.mac || '').toLowerCase();
     const hostname = (d.hostname || '').toLowerCase();
     const label = (n.label || '').toLowerCase();
-    const cleanLabel = label.replace(/\s*\([^)]*\)/g, '').trim(); // 'Halo 1 (Mi habitación)' -> 'Halo 1'
+    const cleanLabel = label.replace(/\s*\([^)]*\)/g, '').trim();
     const sub = (n.sub || '').toLowerCase();
     const id = (n.id || '').toLowerCase();
 
-    // Tokens individuales del nombre para búsqueda exacta de hubs (ej: 'halo', 'wr841n', 'mercusys')
-    const labelTokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
+    // 1. Coincidencia por IP inteligente (aplica tanto en exacto como en progresivo):
+    // A) IP completa exacta (ej. '192.168.1.14')
+    if (ips.some(ip => ip === q)) return true;
 
-    // Modo coincidencia exacta (pulsando Enter o botón Exacto)
-    if (topoState.searchExact) {
-        // 1. IP completa exacta (ej. '192.168.1.14' NO coincide con '.144' ni '.148')
-        if (ips.some(ip => ip === q)) return true;
-        
-        // 2. Si el usuario buscó un prefijo de subred (ej: '192.168.1' o '192.168.1.')
-        if (/^(\d{1,3}\.){1,3}\d{0,3}$/.test(q)) {
-            const prefix = q.endsWith('.') ? q : q + '.';
-            if (ips.some(ip => ip === q || ip.startsWith(prefix))) return true;
+    // B) Host number o último octeto (ej. '1' -> 192.168.1.1, '14' -> 192.168.1.14, '249' -> 192.168.1.249)
+    if (/^\d{1,3}$/.test(q)) {
+        const num = parseInt(q, 10);
+        if (num >= 1 && num <= 254) {
+            if (ips.some(ip => ip.endsWith('.' + q))) return true;
         }
+    }
 
-        // 3. MAC exacta
+    // C) Notación con punto (ej. '.1', '.14', '.249')
+    if (q.startsWith('.') && /^\.\d{1,3}$/.test(q)) {
+        if (ips.some(ip => ip.endsWith(q))) return true;
+    }
+
+    // D) Prefijo de subred (ej. '192.168.1' o '192.168.1.' o '192.168')
+    if (/^(\d{1,3}\.){1,3}\d{0,3}$/.test(q)) {
+        const prefix = q.endsWith('.') ? q : q + '.';
+        if (ips.some(ip => ip === q || ip.startsWith(prefix))) return true;
+    }
+
+    // 2. Si es modo Exacto (Enter pulsado o botón Exacto activo):
+    if (topoState.searchExact) {
         if (mac && mac === q) return true;
-
-        // 4. Hostname exacto
         if (hostname && hostname === q) return true;
-
-        // 5. Nombre de nodo exacto o token exacto
         if (label === q || cleanLabel === q) return true;
         if (id === q || id === 'hub:' + q || id === 'dev:' + q) return true;
-        if (labelTokens.includes(q)) return true;
+        
+        // Tokens de palabras exactas (ej: buscar 'halo', 'switch', 'wr841n', 'deco')
+        // Ignorar tokens numéricos puros si ya no coincidió en IP (para que '1' no coincida con 'Halo 1')
+        if (!/^\d+$/.test(q)) {
+            const labelTokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
+            if (labelTokens.includes(q)) return true;
+        }
+
+        // Términos clave de infraestructura
+        if ((q === 'router' || q === 'core' || q === 'adguard' || q === 'gateway') && (n.type === 'core' || n.id === '__core__' || n.id === 'hub:lan')) return true;
 
         return false;
     }
 
-    // Coincidencia estándar mientras se escribe
+    // 3. Modo progresivo mientras se escribe (sin Enter):
     const hay = `${label} ${cleanLabel} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${id} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
     return hay.includes(q);
 }
@@ -6731,19 +6784,19 @@ function drawTopoFrame(now) {
                 const matched = (hasSearch && nodeMatchesSearch(n)) || isTarget;
                 const hi = isNodeHighlighted(n) || isTarget;
 
-                // Dejar el resto del mapa atenuado SOLO si hay coincidencias reales (¡NUNCA hacer desaparecer el mapa si hay 0 coincidencias!)
+                // Atenuación suave y equilibrada durante la búsqueda
                 let nodeAlpha = 1.0;
                 if (pinned) {
-                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.35 : 0.08);
+                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.45 : 0.20);
                 } else if (hasSearch) {
                     if (hasMatches) {
-                        nodeAlpha = matched ? 1.0 : 0.12;
+                        nodeAlpha = matched ? 1.0 : 0.38;
                     } else {
-                        // Cero coincidencias: mantener el mapa visible y no desaparecer
-                        nodeAlpha = 0.85;
+                        // Si no hay coincidencias, el mapa NUNCA se oculta
+                        nodeAlpha = 1.0;
                     }
                 } else if (hov) {
-                    nodeAlpha = hi ? 1.0 : 0.22;
+                    nodeAlpha = hi ? 1.0 : 0.35;
                 }
                 ctx.globalAlpha = nodeAlpha;
 
@@ -6856,7 +6909,7 @@ function drawTopoFrame(now) {
                     ctx.shadowColor = 'rgba(2, 6, 23, 0.98)';
                     ctx.shadowBlur = 5;
                     ctx.font = isDirectHover ? '700 10.6px system-ui, -apple-system, sans-serif' : '600 9.8px system-ui, -apple-system, sans-serif';
-                    ctx.fillStyle = isDirectHover ? '#ffffff' : '#cbd5e1';
+                    ctx.fillStyle = isTargetOrMatched ? '#fbbf24' : (isDirectHover ? '#ffffff' : '#cbd5e1');
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(n.label, n.x + rad + 9, n.y - 4);
@@ -6922,7 +6975,7 @@ function drawTopoFrame(now) {
                         ctx.font = (isDirectHover || matched || hasLiveTraffic)
                             ? '600 11.2px system-ui, -apple-system, sans-serif'
                             : '500 10.5px system-ui, -apple-system, sans-serif';
-                        ctx.fillStyle = (isDirectHover || matched) ? '#ffffff' : (n.online ? '#f1f5f9' : '#94a3b8');
+                        ctx.fillStyle = (isDirectHover || matched || isTarget) ? '#fbbf24' : (n.online ? '#f1f5f9' : '#94a3b8');
                         ctx.textAlign = isLeftSide ? 'right' : 'left';
                         ctx.textBaseline = 'middle';
                         const offsetX = isLeftSide ? -(rNode + 8) : (rNode + 8);
