@@ -3736,23 +3736,21 @@ function buildTopoGraph(fitView = false) {
         const c = (d.dev_class || '').toLowerCase();
         const rt = d.router_type || '';
         return ip === '192.168.1.1' || ip === '192.168.1.249' ||
-               ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' ||
+               ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' || ip === '192.168.1.14' ||
                ip === '192.168.1.10' || ip === '192.168.1.9' ||
                h.includes('mercusys-halo') || h.includes('wr841n') || h.includes('em4590') ||
                h.includes('xgb430v') || h.includes('xg-pon') || h.includes('router-principal') ||
                rt === 'infra';
     };
 
-    // Mapeo unificado e inequívoco a los Nodos de Red físicos reales
+    // Mapeo dinámico y universal a los Nodos de Red físicos reales (limpiando sufijos de banda o modo)
     const normalizeHubKey = d => {
-        const raw = (d.router_node || '').trim();
-        const l = raw.toLowerCase();
-        if (l.includes('halo 1') || l.includes('halo-1')) return 'Halo 1 (Mi habitación)';
-        if (l.includes('halo 2') || l.includes('halo-2')) return 'Halo 2 (Estudio)';
-        if (l.includes('halo 3') || l.includes('halo-3')) return 'Halo 3 (Pasillo)';
-        if (l.includes('wr841n') || l.includes('tplink')) return 'TP-Link WR841N';
-        if (l.includes('lan') || l.includes('cable') || d.conn_medium === 'cable') return 'Router Principal / LAN';
-        return 'Router Principal / Wi-Fi';
+        let raw = (d.router_node || '').trim();
+        let k = raw.replace(/[\s·\-]+(?:2\.4G|5G|band[25].*)$/i, '').trim();
+        if (!k || k === 'Punto de Acceso / Repetidor Wi-Fi' || k === 'Punto de Acceso / Router') {
+            return d.conn_medium === 'cable' ? 'Router Principal / LAN' : 'Router Principal / Wi-Fi';
+        }
+        return k;
     };
 
     // Agrupar solo dispositivos CLIENTES reales (excluyendo equipos de infraestructura que son nodos)
@@ -3766,10 +3764,11 @@ function buildTopoGraph(fitView = false) {
         groups[key].push(d);
     });
 
+    // Definición de Nodos de Infraestructura base
     const definedHubs = [
         {
             id: 'hub:halo1',
-            label: 'Halo 1 (Master)',
+            label: 'Halo 1 (Mi habitación)',
             ip: '192.168.1.11',
             parent: '__core__',
             isMesh: true,
@@ -3782,9 +3781,9 @@ function buildTopoGraph(fitView = false) {
         },
         {
             id: 'hub:halo2',
-            label: 'Halo 2 (Satellite)',
+            label: 'Halo 2 (Estudio)',
             ip: '192.168.1.12',
-            parent: 'hub:halo1', // Mesh satélite de Halo 1
+            parent: 'hub:halo1', // Satélite Mesh conectado a Halo 1
             isMesh: true,
             isCable: false,
             color: '#00e5ff',
@@ -3795,9 +3794,9 @@ function buildTopoGraph(fitView = false) {
         },
         {
             id: 'hub:halo3',
-            label: 'Halo 3 (Satellite)',
+            label: 'Halo 3 (Pasillo)',
             ip: '192.168.1.13',
-            parent: 'hub:halo1', // Mesh satélite de Halo 1
+            parent: 'hub:halo1', // Satélite Mesh conectado a Halo 1
             isMesh: true,
             isCable: false,
             color: '#00e5ff',
@@ -3821,7 +3820,7 @@ function buildTopoGraph(fitView = false) {
         },
         {
             id: 'hub:lan',
-            label: 'Gateway / LAN',
+            label: 'Router Principal / LAN',
             ip: '192.168.1.1',
             parent: '__core__',
             isMesh: false,
@@ -3834,7 +3833,7 @@ function buildTopoGraph(fitView = false) {
         },
         {
             id: 'hub:wifi',
-            label: 'Gateway / Wi-Fi',
+            label: 'Router Principal / Wi-Fi',
             ip: '192.168.1.1',
             parent: '__core__',
             isMesh: false,
@@ -3847,16 +3846,42 @@ function buildTopoGraph(fitView = false) {
         }
     ];
 
-    // Añadir otros grupos dinámicos si existen clientes asociados (ej. Repetidor EM4590 o Wi-Fi directo del router)
+    // Detección dinámica y automática de nuevos nodos Mesh (ej. Halo 4, Deco, nuevo AP, o cualquier otro sistema Mesh)
+    const masterMeshHub = definedHubs.find(h => h.isMesh && h.parent === '__core__') || definedHubs[0];
+
+    // 1. Descubrir equipos físicos de infraestructura adicionales (incluso si tienen 0 clientes conectados)
+    allDevices.filter(isInfraDev).forEach(d => {
+        if (d.ip === '192.168.1.1' || d.ip === '192.168.1.249') return;
+        const normName = normalizeHubKey(d);
+        if (!definedHubs.some(h => h.label === normName || h.id === 'hub:' + normName || (h.ip && h.ip === d.ip))) {
+            const hLow = (d.hostname || '').toLowerCase();
+            const isMesh = hLow.includes('halo') || hLow.includes('mesh') || hLow.includes('deco') || d.router_type === 'halo';
+            const isCable = d.conn_medium === 'cable';
+            definedHubs.push({
+                id: 'hub:' + normName,
+                label: normName,
+                ip: d.ip || '',
+                parent: isMesh ? masterMeshHub.id : '__core__',
+                isMesh: isMesh,
+                isCable: isCable,
+                color: isCable ? '#10b981' : '#00e5ff',
+                dev: d
+            });
+        }
+    });
+
+    // 2. Añadir cualquier grupo con clientes activos que no esté ya registrado
     Object.keys(groups).forEach(gKey => {
         if (!definedHubs.some(h => h.label === gKey || h.id === 'hub:' + gKey)) {
-            const isCable = gKey.toLowerCase().includes('cable') || gKey.toLowerCase().includes('lan');
+            const kLow = gKey.toLowerCase();
+            const isCable = kLow.includes('cable') || kLow.includes('lan');
+            const isMesh = kLow.includes('halo') || kLow.includes('mesh') || kLow.includes('deco');
             definedHubs.push({
                 id: 'hub:' + gKey,
                 label: gKey,
                 ip: '',
-                parent: '__core__',
-                isMesh: false,
+                parent: isMesh ? masterMeshHub.id : '__core__',
+                isMesh: isMesh,
                 isCable: isCable,
                 color: isCable ? '#10b981' : '#00e5ff',
                 dev: null
@@ -3891,11 +3916,13 @@ function buildTopoGraph(fitView = false) {
 
     // 2. Colocar los Nodos de Infraestructura (Hubs) en sectores espaciosos con jerarquía Mesh
     definedHubs.forEach((h, idx) => {
+        const devs = groups[h.label] || [];
+        // Si es un hub predefinido pero en la red del usuario no existe el equipo físico ni tiene clientes, se omite
+        if (!h.dev && devs.length === 0 && h.id !== 'hub:lan' && h.id !== 'hub:wifi') return;
+
         const savedPos = topoState.customPositions[h.id];
         const hx = savedPos ? savedPos.x : (h.defaultX !== undefined ? h.defaultX : (Math.cos(idx * 1.2) * 380));
         const hy = savedPos ? savedPos.y : (h.defaultY !== undefined ? h.defaultY : (Math.sin(idx * 1.2) * 380));
-
-        const devs = groups[h.label] || [];
         const onlineDevs = devs.filter(isOnline).length;
 
         const hubNode = {
