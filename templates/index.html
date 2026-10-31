@@ -4954,15 +4954,12 @@ function focusFirstTopoMatch(preserveExactMode = false) {
     if (matches.length === 1) {
         // Coincidencia única: enfocar de cerca y clavar baliza palpitante
         focusTopoNode(matches[0], 1.35);
-        showMessage(`🎯 Coincidencia: ${matches[0].label || matches[0].sub || 'Dispositivo'} enfocado`);
     } else if (matches.length > 1) {
         // Múltiples coincidencias: encuadrar todas en la vista y mantenerlas destacadas
         clearTopoPin();
         fitNodesInView(matches, true);
-        showMessage(`🎯 ${matches.length} nodos encontrados y destacados en el mapa`);
     } else {
         clearTopoPin();
-        showMessage(`⚠️ Sin resultados para "${topoState.searchQuery}"`);
     }
 }
 
@@ -7525,12 +7522,8 @@ function locateDeviceInTopology(mac, ip) {
             if (exactBtn) exactBtn.classList.add('active');
 
             focusTopoNode(targetNode, 1.35);
-            const name = targetNode.label || targetNode.sub || mac;
-            showMessage(`🎯 Localizado y Enfocado: ${name} (${ip || mac})`);
         } else if (attempts < 4) {
             setTimeout(() => tryLocate(attempts + 1), 100);
-        } else {
-            showMessage(`Dispositivo localizado en topología (${mac || ip}).`);
         }
     };
 
