@@ -3551,20 +3551,143 @@ function undoLastTopoAction() {
     showMessage('Paso anterior revertido.');
 }
 
+let _autoOrganizeCounter = 0;
 function smartAutoOrganizeTopology() {
-    // Guardar el estado actual en el historial de deshacer
+    // 1. Guardar el estado actual en el historial de deshacer
     pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions)));
 
-    // Limpiar posiciones manuales para permitir cálculo automático limpio
-    topoState.customPositions = {};
-    try {
-        localStorage.removeItem('ag_topo_custom_positions_v3');
-    } catch (e) {}
+    // 2. Extraer los hubs activos de los nodos actuales
+    const coreNode = topoState.nodes.find(n => n.type === 'core') || { x: 0, y: 0 };
+    const hubNodes = topoState.nodes.filter(n => n.type === 'hub');
+    if (hubNodes.length === 0) return;
 
-    // Reconstruir grafo con algoritmo de sectores óptimos
-    buildTopoGraph(true);
+    // Identificar el maestro Mesh (si existe) y sus satélites
+    const masterHub = hubNodes.find(h => h.isMesh && h.parentId === '__core__') || hubNodes.find(h => h.isMesh) || null;
+    const meshSatellites = hubNodes.filter(h => h.isMesh && h !== masterHub);
+    const otherDirectHubs = hubNodes.filter(h => !h.isMesh);
 
-    // Fijar la nueva distribución calculada como posiciones personalizadas
+    const archetypes = [
+        { name: 'Constelación Radial', id: 'radial' },
+        { name: 'Bipolar en Dos Lóbulos', id: 'bipolar' },
+        { name: 'Cascada Jerárquica', id: 'cascade' },
+        { name: 'Vórtice Espiral', id: 'spiral' },
+        { name: 'Nebulosa Orgánica', id: 'nebula' }
+    ];
+
+    const currentArchetype = archetypes[_autoOrganizeCounter % archetypes.length];
+    _autoOrganizeCounter++;
+
+    const newPositions = {};
+
+    if (currentArchetype.id === 'radial') {
+        const rot = Math.random() * Math.PI * 2;
+        const coreX = Math.round((Math.random() - 0.5) * 40);
+        const coreY = Math.round((Math.random() - 0.5) * 40);
+        newPositions['__core__'] = { x: coreX, y: coreY };
+
+        const angleMaster = rot;
+        const distMaster = 280 + Math.random() * 80;
+        const mx = coreX + Math.cos(angleMaster) * distMaster;
+        const my = coreY + Math.sin(angleMaster) * distMaster;
+        if (masterHub) newPositions[masterHub.id] = { x: Math.round(mx), y: Math.round(my) };
+
+        meshSatellites.forEach((sat, i) => {
+            const side = (i % 2 === 0) ? 1 : -1;
+            const branchAngle = angleMaster + side * (0.65 + Math.floor(i / 2) * 0.45 + (Math.random() - 0.5) * 0.2);
+            const branchDist = 320 + Math.random() * 90;
+            newPositions[sat.id] = {
+                x: Math.round(mx + Math.cos(branchAngle) * branchDist),
+                y: Math.round(my + Math.sin(branchAngle) * branchDist)
+            };
+        });
+
+        const step = (Math.PI * 2 - 1.4) / Math.max(1, otherDirectHubs.length);
+        otherDirectHubs.forEach((h, i) => {
+            const ang = angleMaster + 1.2 + i * step + (Math.random() - 0.5) * 0.25;
+            const dist = 300 + Math.random() * 95;
+            newPositions[h.id] = {
+                x: Math.round(coreX + Math.cos(ang) * dist),
+                y: Math.round(coreY + Math.sin(ang) * dist)
+            };
+        });
+    } else if (currentArchetype.id === 'bipolar') {
+        const flip = Math.random() < 0.5 ? 1 : -1;
+        const coreX = Math.round((Math.random() - 0.5) * 30);
+        const coreY = Math.round((Math.random() - 0.5) * 30);
+        newPositions['__core__'] = { x: coreX, y: coreY };
+
+        const mx = coreX + flip * (270 + Math.random() * 80);
+        const my = coreY + (Math.random() - 0.5) * 80;
+        if (masterHub) newPositions[masterHub.id] = { x: Math.round(mx), y: Math.round(my) };
+
+        meshSatellites.forEach((sat, i) => {
+            const sy = my + (i === 0 ? -1 : 1) * (260 + Math.random() * 90);
+            const sx = mx + flip * (190 + Math.random() * 100);
+            newPositions[sat.id] = { x: Math.round(sx), y: Math.round(sy) };
+        });
+
+        const numDirect = otherDirectHubs.length;
+        otherDirectHubs.forEach((h, i) => {
+            const hx = coreX - flip * (270 + Math.random() * 90);
+            const hy = coreY + (i - (numDirect - 1) / 2) * (240 + Math.random() * 60);
+            newPositions[h.id] = { x: Math.round(hx), y: Math.round(hy) };
+        });
+    } else if (currentArchetype.id === 'cascade') {
+        const flipX = Math.random() < 0.5 ? 1 : -1;
+        const cx = flipX * (-420 - Math.random() * 80);
+        const cy = Math.round((Math.random() - 0.5) * 40);
+        newPositions['__core__'] = { x: Math.round(cx), y: Math.round(cy) };
+
+        const tier1 = (masterHub ? [masterHub] : []).concat(otherDirectHubs);
+        const nTier1 = tier1.length;
+        tier1.forEach((h, i) => {
+            const tx = cx - flipX * (320 + Math.random() * 80);
+            const ty = cy + (i - (nTier1 - 1) / 2) * (250 + Math.random() * 60);
+            newPositions[h.id] = { x: Math.round(tx), y: Math.round(ty) };
+        });
+
+        const mPos = masterHub && newPositions[masterHub.id] ? newPositions[masterHub.id] : { x: 0, y: 0 };
+        meshSatellites.forEach((sat, i) => {
+            const sx = mPos.x - flipX * (300 + Math.random() * 90);
+            const sy = mPos.y + (i === 0 ? -1 : 1) * (220 + Math.random() * 60);
+            newPositions[sat.id] = { x: Math.round(sx), y: Math.round(sy) };
+        });
+    } else if (currentArchetype.id === 'spiral') {
+        const rot = Math.random() * Math.PI * 2;
+        newPositions['__core__'] = { x: 0, y: 0 };
+        const allList = (masterHub ? [masterHub] : []).concat(meshSatellites, otherDirectHubs);
+        allList.forEach((h, i) => {
+            const ang = rot + i * 2.39996 + (Math.random() - 0.5) * 0.15;
+            const dist = 240 + i * 80 + (Math.random() - 0.5) * 35;
+            newPositions[h.id] = {
+                x: Math.round(Math.cos(ang) * dist),
+                y: Math.round(Math.sin(ang) * dist)
+            };
+        });
+    } else {
+        const rot = Math.random() * Math.PI * 2;
+        const coreX = Math.round((Math.random() - 0.5) * 40);
+        const coreY = Math.round((Math.random() - 0.5) * 40);
+        newPositions['__core__'] = { x: coreX, y: coreY };
+        const allList = (masterHub ? [masterHub] : []).concat(meshSatellites, otherDirectHubs);
+        const total = allList.length;
+        allList.forEach((h, i) => {
+            const ang = rot + (i / total) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+            const dist = (h.isMesh && h !== masterHub ? 520 : 330) + (Math.random() - 0.5) * 70;
+            newPositions[h.id] = {
+                x: Math.round(coreX + Math.cos(ang) * dist),
+                y: Math.round(coreY + Math.sin(ang) * dist)
+            };
+        });
+    }
+
+    // Asignar nuevas posiciones calculadas
+    topoState.customPositions = newPositions;
+
+    // Reconstruir el grafo: los clientes se proyectan automáticamente hacia el exterior
+    buildTopoGraph(false);
+
+    // Guardar todas las posiciones resultantes fijadas (hubs y clientes)
     topoState.nodes.forEach(n => {
         topoState.customPositions[n.id] = { x: n.baseX, y: n.baseY };
     });
@@ -3573,7 +3696,7 @@ function smartAutoOrganizeTopology() {
     fitTopoToScreen(true);
     triggerNeuralCascade();
     updateTopoUndoBtn();
-    showMessage('🪄 Topología auto-organizada inteligentemente.');
+    showMessage(`🪄 Diseño aleatorio generado: ${currentArchetype.name} (haz clic de nuevo para probar otro).`);
 }
 
 function initTopoStageResizer() {
