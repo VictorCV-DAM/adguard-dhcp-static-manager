@@ -889,15 +889,42 @@
             pointer-events: auto;
             display: flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(15, 23, 42, 0.85);
+            gap: 7px;
+            background: rgba(15, 23, 42, 0.88);
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(148, 163, 184, 0.28);
+            border: 1px solid rgba(148, 163, 184, 0.32);
             border-radius: 8px;
-            padding: 6px 12px;
-            width: 260px;
+            padding: 5px 10px;
+            width: 320px;
+            max-width: 100%;
             flex-shrink: 0;
             transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .topo-search-exact-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            color: #94a3b8;
+            border-radius: 6px;
+            padding: 2px 7px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .topo-search-exact-btn:hover {
+            color: #f8fafc;
+            border-color: #38bdf8;
+        }
+        .topo-search-exact-btn.active {
+            background: rgba(245, 158, 11, 0.25) !important;
+            border-color: #f59e0b !important;
+            color: #fbbf24 !important;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
         }
         .topo-search-box:focus-within {
             border-color: #38bdf8;
@@ -1590,6 +1617,7 @@
                 <div class="topo-search-box">
                     <span style="color:#94a3b8; font-size:0.85rem;">🔍</span>
                     <input type="text" id="topo-search" placeholder="Buscar nodo, host, IP o MAC..." oninput="onTopoSearchInput()" onkeydown="if(event.key==='Enter') focusFirstTopoMatch()">
+                    <button id="topo-search-exact-btn" onclick="toggleTopoExactSearch()" class="topo-search-exact-btn" title="Alternar coincidencia exacta de IP / Host / MAC (evita seleccionar 192.168.1.144 al buscar .14) y fijar nodo palpitante">🎯 Exacto</button>
                     <button id="topo-search-clear" onclick="clearTopoSearch()" style="display:none; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem; padding:0;">✕</button>
                 </div>
 
@@ -3734,6 +3762,7 @@ let topoState = {
     showCards: localStorage.getItem('ag_topo_show_cards') === '1',
     pinnedTargetNode: null,
     searchQuery: '',
+    searchExact: false,
     panX: 0,
     panY: 0,
     scale: 0.55,
@@ -4626,33 +4655,120 @@ document.addEventListener('fullscreenchange', () => {
     setTimeout(() => fitTopoToScreen(true), 280);
 });
 
+function isFullIpv4(str) {
+    if (!str) return false;
+    const parts = str.trim().split('.');
+    if (parts.length !== 4) return false;
+    return parts.every(p => {
+        if (!/^\d{1,3}$/.test(p)) return false;
+        const n = parseInt(p, 10);
+        return n >= 0 && n <= 255;
+    });
+}
+
 function onTopoSearchInput() {
     const inp = document.getElementById('topo-search');
     const clr = document.getElementById('topo-search-clear');
     topoState.searchQuery = (inp ? inp.value : '').trim().toLowerCase();
     if (clr) clr.style.display = topoState.searchQuery ? 'inline' : 'none';
+
+    // Si la consulta es una IP completa de 4 octetos (ej: 192.168.1.14), activar modo exacto
+    // automáticamente para evitar seleccionar .144 o .148 y fijar el nodo palpitante de inmediato
+    if (isFullIpv4(topoState.searchQuery)) {
+        topoState.searchExact = true;
+        const exactBtn = document.getElementById('topo-search-exact-btn');
+        if (exactBtn) exactBtn.classList.add('active');
+        const m = topoState.nodes.find(n => nodeMatchesSearch(n));
+        if (m) {
+            focusTopoNode(m, 1.35);
+        }
+    } else if (!topoState.searchQuery) {
+        topoState.searchExact = false;
+        const exactBtn = document.getElementById('topo-search-exact-btn');
+        if (exactBtn) exactBtn.classList.remove('active');
+        clearTopoPin();
+    }
+}
+
+function toggleTopoExactSearch() {
+    topoState.searchExact = !topoState.searchExact;
+    const exactBtn = document.getElementById('topo-search-exact-btn');
+    if (exactBtn) {
+        if (topoState.searchExact) {
+            exactBtn.classList.add('active');
+        } else {
+            exactBtn.classList.remove('active');
+        }
+    }
+    if (topoState.searchQuery) {
+        const m = topoState.nodes.find(n => nodeMatchesSearch(n));
+        if (m) {
+            focusTopoNode(m, 1.35);
+        }
+    }
 }
 
 function clearTopoSearch() {
     const inp = document.getElementById('topo-search');
     if (inp) inp.value = '';
-    onTopoSearchInput();
+    topoState.searchQuery = '';
+    topoState.searchExact = false;
+    const exactBtn = document.getElementById('topo-search-exact-btn');
+    if (exactBtn) exactBtn.classList.remove('active');
+    const clr = document.getElementById('topo-search-clear');
+    if (clr) clr.style.display = 'none';
+    clearTopoPin();
 }
 
 function focusFirstTopoMatch() {
     if (!topoState.searchQuery) return;
-    const m = topoState.nodes.find(n => nodeMatchesSearch(n));
+    // Terminar la búsqueda: fijar coincidencia exacta y dejar el dispositivo seleccionado palpitante
+    topoState.searchExact = true;
+    const exactBtn = document.getElementById('topo-search-exact-btn');
+    if (exactBtn) exactBtn.classList.add('active');
+
+    let m = topoState.nodes.find(n => nodeMatchesSearch(n));
+    if (!m) {
+        topoState.searchExact = false;
+        if (exactBtn) exactBtn.classList.remove('active');
+        m = topoState.nodes.find(n => nodeMatchesSearch(n));
+    }
+
     if (m) {
-        centerOnPoint(m.x, m.y, 1.05, true);
-        spawnNodeShockwave(m.x, m.y, '#fbbf24', 110);
+        focusTopoNode(m, 1.35);
+        showMessage(`🎯 Búsqueda terminada: ${m.label || m.sub || 'Dispositivo'} enfocado y palpitante`);
     }
 }
 
 function nodeMatchesSearch(n) {
-    const q = topoState.searchQuery;
+    const q = (topoState.searchQuery || '').trim().toLowerCase();
     if (!q) return false;
     const d = n.dev || {};
-    const hay = `${n.label || ''} ${n.sub || ''} ${d.hostname || ''} ${d.ip || ''} ${(d.live_ips || []).join(' ')} ${d.mac || ''} ${d.dev_vendor || ''} ${d.room || ''}`.toLowerCase();
+
+    const ips = [d.ip, ...(d.live_ips || [])].filter(Boolean).map(x => String(x).trim().toLowerCase());
+    const mac = (d.mac || '').toLowerCase();
+    const hostname = (d.hostname || '').toLowerCase();
+    const label = (n.label || '').toLowerCase();
+    const sub = (n.sub || '').toLowerCase();
+
+    // 1. Si la opción de coincidencia exacta está activa (o búsqueda finalizada con Enter)
+    if (topoState.searchExact) {
+        if (ips.some(ip => ip === q)) return true;
+        if (mac === q) return true;
+        if (hostname === q || label === q || sub === q) return true;
+        return false;
+    }
+
+    // 2. Si la consulta es una IP completa de 4 octetos (ej: 192.168.1.14)
+    // REGLA CRÍTICA: Coincidencia de IP exacta para que nunca seleccione .144 o .148
+    if (isFullIpv4(q)) {
+        if (ips.some(ip => ip === q)) return true;
+        if (hostname === q || label === q) return true;
+        return false;
+    }
+
+    // 3. Coincidencia general de subcadena durante la escritura
+    const hay = `${label} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
     return hay.includes(q);
 }
 
@@ -6001,6 +6117,8 @@ function drawTopoFrame(now) {
                 ctx.restore();
             }
 
+            const heartbeat = Math.pow(Math.max(0, Math.sin(tNow * 0.007)), 2.5);
+
             // 2. Dibujar enlaces principales (En modo Plexus: Zigzag articulado flotante con micro-estrellas en cada vértice; En modo Synapse: líneas directas)
             topoState.links.forEach(lk => {
                 const hi = isLinkHighlighted(lk);
@@ -6026,11 +6144,11 @@ function drawTopoFrame(now) {
 
                     if (hi) {
                         const isPinnedSpoke = Boolean(pinned && (lk.to?.id === pinned.id || lk.from?.id === pinned.id));
-                        ctx.strokeStyle = isPinnedSpoke ? '#00f5d4' : '#ffffff';
-                        ctx.lineWidth = isPinnedSpoke ? 3.6 : (lk.type === 'trunk' ? 2.6 : 1.8);
-                        ctx.shadowColor = isPinnedSpoke ? '#00f5d4' : '#00e5ff';
-                        ctx.shadowBlur = isPinnedSpoke ? 26 : 14;
-                        ctx.globalAlpha = 1.0;
+                        ctx.strokeStyle = isPinnedSpoke ? '#fbbf24' : '#ffffff';
+                        ctx.lineWidth = isPinnedSpoke ? (3.8 + heartbeat * 1.6) : (lk.type === 'trunk' ? 2.6 : 1.8);
+                        ctx.shadowColor = isPinnedSpoke ? '#f59e0b' : '#00e5ff';
+                        ctx.shadowBlur = isPinnedSpoke ? (24 + heartbeat * 16) : 14;
+                        ctx.globalAlpha = isPinnedSpoke ? 1.0 : (pinned ? 0.35 : 1.0);
                     } else if (topoState.telemetryMode && lk.type === 'spoke') {
                         ctx.strokeStyle = telBlocked
                             ? 'rgba(244, 63, 94, 0.72)'
@@ -6291,10 +6409,21 @@ function drawTopoFrame(now) {
 
             // 4. Dibujar nodos y etiquetas de texto
             topoState.nodes.forEach(n => {
-                const hi = isNodeHighlighted(n);
+                const isTarget = Boolean(pinned && pinned.id === n.id);
                 const isDirectHover = hov && hov.id === n.id;
-                const matched = hasSearch && nodeMatchesSearch(n);
-                ctx.globalAlpha = hi ? 1 : (pinned ? 0.06 : 0.15);
+                const matched = (hasSearch && nodeMatchesSearch(n)) || isTarget;
+                const hi = isNodeHighlighted(n) || isTarget;
+
+                // Dejar el resto del mapa fuertemente atenuado si hay un dispositivo enfocado o búsqueda
+                let nodeAlpha = 1.0;
+                if (pinned) {
+                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.25 : 0.04);
+                } else if (hasSearch) {
+                    nodeAlpha = matched ? 1.0 : 0.04;
+                } else if (hov) {
+                    nodeAlpha = hi ? 1.0 : 0.15;
+                }
+                ctx.globalAlpha = nodeAlpha;
 
                 if (n.type === 'core') {
                     // === NODO CENTRAL PROTAGONISTA: ROUTER PRINCIPAL / ADGUARD CORE ===
@@ -6408,7 +6537,10 @@ function drawTopoFrame(now) {
                     const telClient = (topoState.telemetryMode && n.dev) ? getClientTelemetry(n.dev) : null;
                     const hasLiveTraffic = Boolean(telClient && telClient.queries > 0);
                     const hasBlockedTraffic = Boolean((n.dev && n.dev.blocked) || (telClient && telClient.blocked > 0));
-                    const rNode = (isDirectHover || matched) ? n.r + 2.8 : (hasLiveTraffic ? n.r + 1.2 : n.r);
+                    // Radio palpitante dinámico para el nodo enfocado o coincidente
+                    const rNode = isTarget
+                        ? (n.r + 3.8 + heartbeat * 4.6)
+                        : ((isDirectHover || matched) ? n.r + 2.8 : (hasLiveTraffic ? n.r + 1.2 : n.r));
 
                     ctx.save();
                     if (topoState.telemetryMode && !hasLiveTraffic && !isDirectHover && !matched && n.online) {
@@ -6416,7 +6548,7 @@ function drawTopoFrame(now) {
                     }
 
                     // Halo respiratorio en clientes con tráfico DNS real activo
-                    if (topoState.telemetryMode && hasLiveTraffic) {
+                    if (topoState.telemetryMode && hasLiveTraffic && !isTarget) {
                         const haloPulse = 0.5 + 0.5 * Math.sin(tNow * 0.004 + n.phase);
                         ctx.beginPath();
                         ctx.arc(n.x, n.y, rNode + 4 + haloPulse * 4.5, 0, Math.PI * 2);
@@ -6425,17 +6557,21 @@ function drawTopoFrame(now) {
                         ctx.stroke();
                     }
 
-                    if (n.online || matched || isDirectHover || n.flash > 0.1) {
-                        ctx.shadowColor = matched ? '#f59e0b' : (hasBlockedTraffic && topoState.telemetryMode ? '#f43f5e' : (usePlexus ? '#38bdf8' : n.color));
-                        ctx.shadowBlur = (matched || isDirectHover || n.flash > 0.2 || hasLiveTraffic) ? 18 : 10;
+                    if (isTarget || matched) {
+                        ctx.shadowColor = '#f59e0b';
+                        ctx.shadowBlur = isTarget ? (26 + heartbeat * 24) : 22;
+                    } else if (n.online || isDirectHover || n.flash > 0.1) {
+                        ctx.shadowColor = hasBlockedTraffic && topoState.telemetryMode ? '#f43f5e' : (usePlexus ? '#38bdf8' : n.color);
+                        ctx.shadowBlur = (isDirectHover || n.flash > 0.2 || hasLiveTraffic) ? 18 : 10;
                     }
-                    ctx.fillStyle = matched ? '#fbbf24' : (n.flash > 0.4 ? '#ffffff' : n.color);
+
+                    ctx.fillStyle = (isTarget || matched) ? '#fbbf24' : (n.flash > 0.4 ? '#ffffff' : n.color);
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, rNode, 0, Math.PI * 2);
                     ctx.fill();
 
-                    // Punto central brillante blanco estilo estrella/constelación cuando está activo en modo Plexus
-                    if (usePlexus && n.online) {
+                    // Punto central brillante blanco estilo estrella/constelación
+                    if (isTarget || (usePlexus && n.online)) {
                         ctx.beginPath();
                         ctx.arc(n.x, n.y, rNode * 0.45, 0, Math.PI * 2);
                         ctx.fillStyle = '#ffffff';
@@ -6475,79 +6611,90 @@ function drawTopoFrame(now) {
                 }
             });
 
-            // 4. BALIZA LUMINOSA TÁCTICA, RADAR SÓNAR CONTINUO Y DIANA RETICULAR PARA EL DISPOSITIVO ENFOCADO
+            // 4. BALIZA LUMINOSA TÁCTICA, RADAR SÓNAR CONTINUO Y DIANA RETICULAR PALPITANTE
             if (pinned) {
                 const target = topoState.nodes.find(n => n.id === pinned.id) || pinned;
                 if (target) {
                     ctx.save();
-                    // IMPORTANTE: Restaurar opacidad completa (globalAlpha = 1.0) para que la baliza no quede atenuada al 0.06
                     ctx.globalAlpha = 1.0;
                     const n = target;
+                    const heartbeat = Math.pow(Math.max(0, Math.sin(tNow * 0.007)), 2.5);
+                    const pulse = Math.sin(tNow * 0.009);
 
-                    // A. Ondas continuas de radar sónar expansivo (3 anillos concéntricos fluorescentes)
-                    const radarSpeed = 0.045;
+                    // A. Ondas continuas de radar sónar expansivo (3 anillos concéntricos fluorescentes ámbar/oro)
+                    const radarSpeed = 0.042;
                     for (let rIdx = 0; rIdx < 3; rIdx++) {
                         const prog = ((tNow * radarSpeed + rIdx * 28) % 84) / 84; // 0..1
-                        const rWave = n.r + 4 + prog * 78;
+                        const rWave = n.r + 5 + prog * 92;
                         const alpha = (1 - prog) * 0.95;
                         ctx.beginPath();
                         ctx.arc(n.x, n.y, rWave, 0, Math.PI * 2);
-                        ctx.strokeStyle = `rgba(0, 245, 212, ${alpha.toFixed(3)})`;
-                        ctx.lineWidth = 2.6 * (1 - prog * 0.5);
-                        ctx.shadowColor = '#00f5d4';
-                        ctx.shadowBlur = 22 * (1 - prog);
+                        ctx.strokeStyle = `rgba(251, 191, 36, ${alpha.toFixed(3)})`;
+                        ctx.lineWidth = 2.8 * (1 - prog * 0.5);
+                        ctx.shadowColor = '#f59e0b';
+                        ctx.shadowBlur = 24 * (1 - prog);
                         ctx.stroke();
                     }
 
-                    // B. Retícula táctica giratoria con 4 cuadrantes y marcas de mira
+                    // B. Aura palpitante inmediata (parpadeo de halo de alta visibilidad)
+                    const rAura = n.r + 12 + 6 * heartbeat;
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, rAura, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(251, 191, 36, ${(0.6 + 0.4 * heartbeat).toFixed(2)})`;
+                    ctx.lineWidth = 2.4;
+                    ctx.shadowColor = '#fbbf24';
+                    ctx.shadowBlur = 28;
+                    ctx.stroke();
+
+                    // C. Retícula táctica giratoria con 4 esquinas de mira
                     ctx.save();
                     ctx.translate(n.x, n.y);
-                    ctx.rotate(tNow * 0.0018);
-                    const reticleR = n.r + 16;
-                    ctx.strokeStyle = '#38bdf8';
+                    ctx.rotate(tNow * 0.002);
+                    const reticleR = n.r + 20 + 3 * pulse;
+                    ctx.strokeStyle = '#00f5d4';
                     ctx.lineWidth = 2.2;
-                    ctx.shadowColor = '#00e5ff';
-                    ctx.shadowBlur = 16;
+                    ctx.shadowColor = '#00f5d4';
+                    ctx.shadowBlur = 18;
                     for (let a = 0; a < 4; a++) {
                         ctx.beginPath();
-                        ctx.arc(0, 0, reticleR, a * Math.PI / 2 + 0.24, (a + 1) * Math.PI / 2 - 0.24);
+                        ctx.arc(0, 0, reticleR, a * Math.PI / 2 + 0.22, (a + 1) * Math.PI / 2 - 0.22);
                         ctx.stroke();
                     }
                     for (let a = 0; a < 4; a++) {
                         const ang = a * Math.PI / 2;
                         ctx.beginPath();
-                        ctx.moveTo(Math.cos(ang) * (reticleR - 4), Math.sin(ang) * (reticleR - 4));
-                        ctx.lineTo(Math.cos(ang) * (reticleR + 9), Math.sin(ang) * (reticleR + 9));
+                        ctx.moveTo(Math.cos(ang) * (reticleR - 5), Math.sin(ang) * (reticleR - 5));
+                        ctx.lineTo(Math.cos(ang) * (reticleR + 10), Math.sin(ang) * (reticleR + 10));
                         ctx.stroke();
                     }
                     ctx.restore();
 
-                    // C. Núcleo resplandeciente del nodo con pulsación continua
+                    // D. Núcleo central resplandeciente blanco
                     ctx.beginPath();
-                    ctx.arc(n.x, n.y, n.r + 4 + 1.5 * Math.sin(tNow * 0.007), 0, Math.PI * 2);
-                    ctx.strokeStyle = '#00f5d4';
-                    ctx.lineWidth = 2.8;
-                    ctx.shadowColor = '#00f5d4';
-                    ctx.shadowBlur = 26;
-                    ctx.stroke();
+                    ctx.arc(n.x, n.y, n.r * 0.55 + 2 * heartbeat, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ffffff';
+                    ctx.shadowBlur = 16;
+                    ctx.fill();
 
-                    // D. Cartel flotante neón ("🎯 [Nombre]")
+                    // E. Cartel flotante neón ("🎯 [Nombre] · [IP]")
+                    const ipTxt = (n.dev && ((n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip)) || n.sub || '';
                     const pinTitle = `🎯 ${n.label || 'DISPOSITIVO'}`;
-                    const pinSub = n.sub ? `${n.sub}` : '';
-                    ctx.font = '800 12px system-ui, -apple-system, sans-serif';
+                    const pinSub = ipTxt ? `${ipTxt}` : '';
+                    ctx.font = '800 12.5px system-ui, -apple-system, sans-serif';
                     const twTitle = ctx.measureText(pinTitle).width;
-                    ctx.font = '600 10px monospace';
+                    ctx.font = '700 10.5px monospace';
                     const twSub = pinSub ? ctx.measureText(pinSub).width : 0;
-                    const cardW = Math.max(twTitle, twSub) + 32;
-                    const cardH = pinSub ? 40 : 26;
-                    const cardY = n.y - (n.r + 22);
+                    const cardW = Math.max(twTitle, twSub) + 36;
+                    const cardH = pinSub ? 42 : 28;
+                    const cardY = n.y - (n.r + 30);
 
-                    // Fondo de cristal oscuro con borde verde-neón luminiscente
-                    ctx.shadowColor = '#00f5d4';
-                    ctx.shadowBlur = 24;
+                    // Fondo de cristal oscuro con borde dorado luminiscente palpitante
+                    ctx.shadowColor = '#f59e0b';
+                    ctx.shadowBlur = 24 + 10 * heartbeat;
                     ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
-                    ctx.strokeStyle = '#00f5d4';
-                    ctx.lineWidth = 2.0;
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 2.2;
 
                     ctx.beginPath();
                     if (ctx.roundRect) {
@@ -6562,23 +6709,22 @@ function drawTopoFrame(now) {
                     ctx.beginPath();
                     ctx.moveTo(n.x - 7, cardY);
                     ctx.lineTo(n.x + 7, cardY);
-                    ctx.lineTo(n.x, cardY + 8);
+                    ctx.lineTo(n.x, cardY + 7);
                     ctx.closePath();
-                    ctx.fillStyle = '#00f5d4';
+                    ctx.fillStyle = '#fbbf24';
                     ctx.fill();
 
                     // Textos del cartel
-                    ctx.shadowBlur = 0;
                     ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
+                    ctx.textBaseline = 'top';
+                    ctx.shadowBlur = 0;
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = '800 12px system-ui, -apple-system, sans-serif';
-                    ctx.fillText(pinTitle, n.x, pinSub ? (cardY - cardH + 13) : (cardY - cardH / 2));
-
+                    ctx.font = '800 12.5px system-ui, -apple-system, sans-serif';
+                    ctx.fillText(pinTitle, n.x, cardY - cardH + 6);
                     if (pinSub) {
                         ctx.fillStyle = '#67e8f9';
-                        ctx.font = '600 10px monospace';
-                        ctx.fillText(pinSub, n.x, cardY - 11);
+                        ctx.font = '700 10.5px monospace';
+                        ctx.fillText(pinSub, n.x, cardY - cardH + 23);
                     }
 
                     ctx.restore();
@@ -6957,9 +7103,21 @@ function locateDeviceInTopology(mac, ip) {
         }
 
         if (targetNode) {
+            // Sincronizar el campo de búsqueda en modo exacto para resaltar como una búsqueda pero palpitante
+            const searchVal = ip || targetNode.label || targetNode.sub || mac;
+            topoState.searchQuery = searchVal.toLowerCase();
+            topoState.searchExact = true;
+
+            const searchInp = document.getElementById('topo-search');
+            if (searchInp) searchInp.value = searchVal;
+            const clearBtn = document.getElementById('topo-search-clear');
+            if (clearBtn) clearBtn.style.display = 'inline';
+            const exactBtn = document.getElementById('topo-search-exact-btn');
+            if (exactBtn) exactBtn.classList.add('active');
+
             focusTopoNode(targetNode, 1.35);
             const name = targetNode.label || targetNode.sub || mac;
-            showMessage(`🎯 Localizado y Enfocado: ${name}`);
+            showMessage(`🎯 Localizado y Enfocado: ${name} (${ip || mac})`);
         } else if (attempts < 4) {
             setTimeout(() => tryLocate(attempts + 1), 100);
         } else {
