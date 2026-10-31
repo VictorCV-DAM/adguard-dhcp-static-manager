@@ -156,8 +156,29 @@ def _ip_propia():
 
 
 def _mapa_ips_y_nombres():
-    """Devuelve {mac_minusculas: (ip, hostname)} cruzando DHCP de AdGuard y tabla ARP."""
+    """Devuelve {mac_minusculas: dict(ip, hostname, is_static, vendor, icon, cat)} cruzando estado completo y DHCP."""
     res = {}
+    build_state = _context.get('build_state')
+    if callable(build_state):
+        try:
+            st = build_state()
+            for d in st.get('devices', []):
+                mac = (d.get('mac') or '').strip().lower()
+                if mac and mac != '00:00:00:00:00:00':
+                    res[mac] = {
+                        'ip': d.get('ip') or '',
+                        'hostname': d.get('custom_name') or d.get('hostname') or '',
+                        'is_static': bool(d.get('is_static', False)),
+                        'vendor': d.get('dev_vendor') or '',
+                        'icon': d.get('dev_icon') or '📱',
+                        'cat': d.get('dev_cat') or 'dispositivo'
+                    }
+            if res:
+                return res
+        except Exception:
+            pass
+
+    # Fallback si build_state no está disponible
     read_leases = _context.get('read_leases')
     if callable(read_leases):
         try:
@@ -166,8 +187,16 @@ def _mapa_ips_y_nombres():
                 mac = (l.get('mac') or '').strip().lower()
                 ip = (l.get('ip') or '').strip()
                 host = (l.get('hostname') or '').strip()
+                is_static = bool(l.get('static', False))
                 if mac and mac != '00:00:00:00:00:00':
-                    res[mac] = (ip, host)
+                    res[mac] = {
+                        'ip': ip,
+                        'hostname': host,
+                        'is_static': is_static,
+                        'vendor': '',
+                        'icon': '📱',
+                        'cat': 'dispositivo'
+                    }
         except Exception:
             pass
 
@@ -177,8 +206,16 @@ def _mapa_ips_y_nombres():
         try:
             arp = get_arp()
             for mac, ips in arp.items():
-                if ips and mac not in res:
-                    res[mac] = (ips[0], '')
+                mac_l = mac.strip().lower()
+                if ips and mac_l not in res:
+                    res[mac_l] = {
+                        'ip': ips[0],
+                        'hostname': '',
+                        'is_static': False,
+                        'vendor': '',
+                        'icon': '📱',
+                        'cat': 'dispositivo'
+                    }
         except Exception:
             pass
 
@@ -445,9 +482,13 @@ def init_app(app, context):
             resueltas = 0
             for est in estaciones:
                 c_mac = est["client"].lower()
-                ip_info = mapa.get(c_mac, ("", ""))
-                est["ip"] = ip_info[0]
-                est["hostname"] = ip_info[1]
+                dev_info = mapa.get(c_mac, {})
+                est["ip"] = dev_info.get("ip", "")
+                est["hostname"] = dev_info.get("hostname", "")
+                est["is_static"] = bool(dev_info.get("is_static", False))
+                est["vendor"] = dev_info.get("vendor", "")
+                est["icon"] = dev_info.get("icon", "📱")
+                est["cat"] = dev_info.get("cat", "dispositivo")
                 if est["ip"]:
                     resueltas += 1
 

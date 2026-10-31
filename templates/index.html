@@ -2896,6 +2896,19 @@ async function setWifiCardMode(mode) {
     }
 }
 
+function prefillStaticFromRadar(mac, name, ip) {
+    switchMainTab('devices');
+    const inMac = document.getElementById('in-mac');
+    const inName = document.getElementById('in-hostname');
+    const inIp = document.getElementById('in-ip');
+    if (inMac) inMac.value = mac;
+    if (inName) inName.value = name;
+    if (inIp && ip) inIp.value = ip;
+    if (inIp) inIp.focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showMessage('Dispositivo ' + (name || mac) + ' cargado para fijar IP estática.');
+}
+
 async function scanWifiSpectrum() {
     const resultsDiv = document.getElementById('wifi-radar-results');
     const countEl = document.getElementById('wifi-scan-count');
@@ -2921,9 +2934,42 @@ async function scanWifiSpectrum() {
                     </thead>
                     <tbody>
             `;
-            data.devices.forEach(d => {
-                const hostLabel = d.hostname ? `<strong>${escapeHtml(d.hostname)}</strong> · ` : '';
-                const ipLabel = d.ip ? `<code style="color:#38bdf8; font-weight:700;">${d.ip}</code>` : '<span style="color:var(--muted);">Sin IP activa</span>';
+                        data.devices.forEach(d => {
+                const icon = d.icon || '📱';
+                const hostNameHtml = d.hostname 
+                    ? `<div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                         <span style="font-size:1.05rem;">${icon}</span>
+                         <strong style="color:#f8fafc; font-size:0.86rem;">${escapeHtml(d.hostname)}</strong>
+                       </div>`
+                    : `<div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                         <span style="font-size:1.05rem;">${icon}</span>
+                         <span style="color:var(--muted); font-style:italic; font-size:0.82rem;">(Sin nombre en DHCP)</span>
+                       </div>`;
+
+                const ipHtml = d.ip 
+                    ? `<code style="color:#38bdf8; font-weight:700; font-size:0.82rem; margin-right:6px;">${d.ip}</code>` 
+                    : '<span style="color:var(--muted); font-size:0.78rem; margin-right:6px;">Sin IP asignada</span>';
+
+                const vendorHtml = d.vendor 
+                    ? `<span style="font-size:0.70rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.08);">${escapeHtml(d.vendor)}</span>`
+                    : '';
+
+                let statusBadge = '';
+                if (d.is_static) {
+                    statusBadge = `<span class="badge" style="background:rgba(34,197,94,0.18); color:#86efac; border:1px solid rgba(34,197,94,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">📌 IP Estática Fija</span>`;
+                } else if (d.ip) {
+                    statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.18); color:#fcd34d; border:1px solid rgba(245,158,11,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">⚡ IP Dinámica (DHCP)</span>`;
+                } else {
+                    statusBadge = `<span class="badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border:1px solid rgba(148,163,184,0.25); font-size:0.72rem; padding:2px 7px; border-radius:6px; display:inline-block; margin-top:4px;">⚪ Sin concesión DHCP</span>`;
+                }
+
+                const fixIpBtn = (!d.is_static) 
+                    ? `<button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; font-weight:600; border-radius:6px; margin-right:6px;"
+                         onclick="prefillStaticFromRadar('${d.client}', '${escapeHtml(d.hostname || '')}', '${d.ip || ''}')" title="Cargar en formulario de IP Fija">
+                         📌 Fijar IP
+                       </button>`
+                    : '';
+
                 html += `
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                         <td style="padding:10px 8px;">
@@ -2935,12 +2981,19 @@ async function scanWifiSpectrum() {
                             <span style="font-size:0.73rem; color:#fcd34d;">Canal ${d.channel || '1'}</span>
                         </td>
                         <td style="padding:10px 8px;">
-                            ${hostLabel}${ipLabel}
+                            ${hostNameHtml}
+                            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-top:2px;">
+                                ${ipHtml} ${vendorHtml}
+                            </div>
+                            <div>
+                                ${statusBadge}
+                            </div>
                         </td>
-                        <td style="padding:10px 8px; text-align:right;">
-                            <button class="btn btn-danger" style="padding:5px 10px; font-size:0.75rem; font-weight:700; border-radius:6px;"
+                        <td style="padding:10px 8px; text-align:right; white-space:nowrap;">
+                            ${fixIpBtn}
+                            <button class="btn btn-danger" style="padding:4px 8px; font-size:0.74rem; font-weight:700; border-radius:6px;"
                                 onclick="execDeauthFromRow('${d.bssid}', '${d.client}', '${d.channel}')">
-                                ⚡ Expulsar (Deauth)
+                                💥 Expulsar
                             </button>
                         </td>
                     </tr>

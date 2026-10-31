@@ -2357,6 +2357,7 @@ try:
         'save_config_raw': save_config_raw,
         'get_arp_table': get_arp_table,
         'read_leases': read_leases,
+        'build_state': build_state,
     })
 except Exception as _e_wifi:
     print(f"Aviso: no se pudo cargar wifi_plugin: {_e_wifi}")
