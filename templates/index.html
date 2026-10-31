@@ -1011,6 +1011,95 @@
         .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.35); color: #7dd3fc; font-size: 0.68rem; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
         .hostname-link { cursor: pointer; color: #f8fafc; text-decoration: none; border-bottom: 1px dashed rgba(148,163,184,0.4); }
         .hostname-link:hover { color: #38bdf8; border-bottom-color: #38bdf8; }
+    
+        /* Estilos de Copia Rápida al Portapapeles */
+        .clickable-copy-pill {
+            cursor: pointer;
+            padding: 2px 7px;
+            border-radius: 5px;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: #38bdf8;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }
+        .clickable-copy-pill:hover {
+            background: rgba(56, 189, 248, 0.25);
+            border-color: #38bdf8;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+
+        /* DISEÑO RESPONSIVO / MOBILE-FRIENDLY */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px 8px !important;
+            }
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 0 !important;
+            }
+            .header {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 12px !important;
+            }
+            .header-left {
+                width: 100% !important;
+            }
+            .grid {
+                grid-template-columns: 1fr !important;
+                gap: 12px !important;
+            }
+            .main-tabs-bar {
+                overflow-x: auto !important;
+                flex-wrap: nowrap !important;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 8px !important;
+            }
+            .tab-nav-btn {
+                white-space: nowrap !important;
+                flex-shrink: 0 !important;
+                padding: 8px 12px !important;
+                font-size: 0.82rem !important;
+            }
+            .search-bar {
+                min-width: 0 !important;
+                width: 100% !important;
+            }
+            .filter-pills {
+                gap: 8px !important;
+            }
+            .popup-modal {
+                width: 98% !important;
+                max-width: 100% !important;
+                max-height: 94vh !important;
+                padding: 14px !important;
+                margin: 4px auto !important;
+            }
+            .modal-overlay {
+                padding: 6px !important;
+            }
+            .table-container {
+                max-width: 100vw !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch;
+            }
+            .topo-controls-row {
+                flex-wrap: wrap !important;
+                gap: 6px !important;
+            }
+            .topo-stage {
+                height: 520px !important;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -1236,10 +1325,21 @@
                 Entradas fantasma (<code>00:00:00:00:00:00</code>): <strong id="lbl-ghost">0</strong> |
                 Caducadas: <strong id="lbl-expired">0</strong>
             </p>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
                 <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
                 <button class="btn btn-outline" onclick="setDuration(3600)">1 hora</button>
                 <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
+            </div>
+            <!-- Tiempo de concesión personalizado -->
+            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px; background:rgba(0,0,0,0.22); padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                <span style="font-size:0.78rem; color:var(--muted); font-weight:600;">Personalizado:</span>
+                <input type="number" id="custom-duration-val" min="1" placeholder="Ej: 24" style="width:75px; padding:4px 8px; font-size:0.8rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
+                <select id="custom-duration-unit" style="padding:4px 8px; font-size:0.8rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
+                    <option value="60">Minutos</option>
+                    <option value="3600" selected>Horas</option>
+                    <option value="86400">Días</option>
+                </select>
+                <button class="btn btn-outline" style="padding:4px 10px; font-size:0.8rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="setCustomDuration()">⏱️ Aplicar</button>
             </div>
             <button id="btn-clean-junk" class="btn btn-warn" onclick="cleanJunk()">🧹 Purgar Concesiones Fantasma y Caducadas</button>
         </div>
@@ -1247,7 +1347,7 @@
 
     <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
-            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="renderTable()">
+            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();">
             <div style="display:inline-flex; align-items:center; gap:8px;">
                 <button id="btn-toggle-table-width" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="toggleTableFullWidth()" title="Ampliar la caja de la tabla horizontalmente a pantalla ancha o restaurar (↔)">
                     <span id="icon-table-width">↔</span>
@@ -1533,7 +1633,9 @@
                         <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="document.getElementById('ds-photo-file').click()" title="Subir o cambiar foto del dispositivo">📷 Cambiar Foto</button>
                             <button class="btn btn-outline" id="ds-photo-btn-delete" style="padding:2px 7px; font-size:0.72rem; color:#f87171; border-color:rgba(248,113,113,0.35); display:none;" onclick="removeDevicePhoto()" title="Eliminar foto">🗑️ Quitar Foto</button>
-                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar ficha técnica con foto en formato JSON">📥 Exportar Ficha</button>
+                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar archivo comprimido (.zip) con ficha técnica y carpeta de imágenes">📥 Exportar Ficha (.zip)</button>
+                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#34d399; border-color:rgba(52,211,153,0.4);" onclick="document.getElementById('ds-import-file').click()" title="Restaurar o importar ficha técnica con imágenes (.zip o .json)">📤 Importar Ficha</button>
+                            <input type="file" id="ds-import-file" accept=".zip,.json" style="display:none;" onchange="importSingleDeviceSheet(event)" />
                             <input type="file" id="ds-photo-file" accept="image/*" style="display:none;" onchange="handleDevicePhotoUpload(event)" />
                         </div>
                     </div>
@@ -1774,7 +1876,7 @@
 
             <div style="background:#0f172a; padding:14px; border-radius:10px; border:1px solid var(--border);">
                 <strong style="display:block; margin-bottom:6px;">📥 Importar Copia (.JSON) con Vista Previa</strong>
-                <input type="file" id="bk-file" accept=".json,application/json" onchange="previewBackupFile(this)" style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">
+                <input type="file" id="bk-file" accept=".zip,.json,application/zip,application/json" onchange="previewBackupFile(this)" style="margin-bottom:10px; font-size:0.82rem; color:var(--muted);">
                 <div id="bk-preview-box" style="display:none; font-size:0.82rem; border-top:1px solid var(--border); padding-top:10px; margin-top:6px;"></div>
             </div>
         </div>
@@ -1897,21 +1999,61 @@ let tableFilters = {
     services: 'all'   // 'all', 'has_services'
 };
 
+function saveTableFilterState() {
+    try {
+        localStorage.setItem('ag_dhcp_table_filters', JSON.stringify(tableFilters));
+        const s = document.getElementById('search');
+        if (s) localStorage.setItem('ag_dhcp_table_search', s.value);
+    } catch(e) {}
+}
+
+function loadSavedTableFilterState() {
+    try {
+        const raw = localStorage.getItem('ag_dhcp_table_filters');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            tableFilters = Object.assign({ status: 'all', medium: 'all', type: 'all', services: 'all' }, parsed);
+        }
+        const savedSearch = localStorage.getItem('ag_dhcp_table_search');
+        const s = document.getElementById('search');
+        if (s && savedSearch !== null) {
+            s.value = savedSearch;
+        }
+    } catch(e) {}
+
+    document.querySelectorAll('.pill-btn[data-group]').forEach(btn => {
+        const grp = btn.dataset.group;
+        const val = btn.dataset.val;
+        btn.classList.toggle('active', tableFilters[grp] === val);
+    });
+
+    const hasSearch = Boolean(document.getElementById('search')?.value?.trim());
+    const isFiltered = hasSearch || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all');
+    const resetBtn = document.getElementById('btn-reset-filters');
+    if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-flex' : 'none';
+}
+
 function setFilter(group, value) {
     tableFilters[group] = value;
     document.querySelectorAll(`.pill-btn[data-group="${group}"]`).forEach(btn => {
         btn.classList.toggle('active', btn.dataset.val === value);
     });
 
-    const isFiltered = (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all');
+    const hasSearch = Boolean(document.getElementById('search')?.value?.trim());
+    const isFiltered = hasSearch || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all');
     const resetBtn = document.getElementById('btn-reset-filters');
     if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-flex' : 'none';
 
+    saveTableFilterState();
     renderTable();
 }
 
 function resetAllFilters() {
     tableFilters = { status: 'all', medium: 'all', type: 'all', services: 'all' };
+    try {
+        localStorage.removeItem('ag_dhcp_table_filters');
+        localStorage.removeItem('ag_dhcp_table_search');
+    } catch(e) {}
     document.querySelectorAll('.pill-btn[data-group]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.val === 'all');
     });
@@ -2256,6 +2398,7 @@ async function manualRefresh() {
 }
 
 async function loadState(isManual = false) {
+    loadSavedTableFilterState();
     if (isRefreshing) return;
     isRefreshing = true;
 
@@ -3266,6 +3409,66 @@ function cleanJunk() {
         showMessage(data.message);
         loadState();
     });
+}
+
+
+// =========================================================================
+// COPIAR AL PORTAPAPELES CON UN CLIC
+// =========================================================================
+function copyToClipboard(text, label = 'Copiado', el = null) {
+    if (!text || text === '—') return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCopyFeedback(el, label);
+        }).catch(() => fallbackCopy(text, el, label));
+    } else {
+        fallbackCopy(text, el, label);
+    }
+}
+
+function fallbackCopy(text, el, label) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        showCopyFeedback(el, label);
+    } catch(e) {
+        showMessage('No se pudo copiar: ' + e);
+    }
+    document.body.removeChild(ta);
+}
+
+function showCopyFeedback(el, label) {
+    if (el) {
+        const orig = el.innerHTML;
+        el.innerHTML = `✓ ¡${label} Copiada!`;
+        el.style.borderColor = '#10b981';
+        el.style.color = '#86efac';
+        el.style.background = 'rgba(16,185,129,0.2)';
+        setTimeout(() => {
+            el.innerHTML = orig;
+            el.style.borderColor = '';
+            el.style.color = '';
+            el.style.background = '';
+        }, 1500);
+    }
+}
+
+function setCustomDuration() {
+    const inp = document.getElementById('custom-duration-val');
+    const sel = document.getElementById('custom-duration-unit');
+    const val = parseInt(inp ? inp.value : '', 10);
+    const unit = parseInt(sel ? sel.value : '3600', 10);
+    if (!val || val <= 0) {
+        showMessage('Por favor introduce un número válido mayor que 0.');
+        return;
+    }
+    const seconds = val * unit;
+    setDuration(seconds);
 }
 
 async function setDuration(seconds) {
@@ -6474,36 +6677,39 @@ function renderDeviceSheetPhoto(photoUrl, devIcon = '📱') {
 function exportSingleDeviceSheet() {
     if (!currentSheetMac) return;
     const dev = allDevices.find(d => d.mac === currentSheetMac) || {};
-    const exportData = {
-        app: 'adguard-dhcp-panel',
-        type: 'device_sheet',
-        exported_at: new Date().toISOString(),
-        device: {
-            mac: currentSheetMac,
-            ip: currentSheetIp || dev.ip || '',
-            hostname: dev.hostname || '',
-            vendor: dev.dev_vendor || '',
-            class: dev.dev_class || '',
-            medium: dev.conn_medium_label || dev.conn_medium || '',
-            router_node: dev.router_node || '',
-            room: document.getElementById('ds-room')?.value || dev.room || '',
-            tags: (document.getElementById('ds-tags')?.value || '').split(',').map(s => s.trim()).filter(Boolean),
-            notes: document.getElementById('ds-notes')?.value || dev.notes || '',
-            photo: dev.photo || '',
-            static: !!dev.static,
-            latency_ms: dev.latency_ms,
-            os_guess: dev.os_guess || ''
-        }
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    showMessage('Generando archivo comprimido (.zip) con ficha y fotos...', 'loading');
+    const url = `/api/device/${encodeURIComponent(currentSheetMac)}/export-sheet`;
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    const safeName = (dev.hostname || currentSheetMac).replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-    a.download = `ficha-${safeName}.json`;
+    a.href = url;
+    a.download = '';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    showMessage('📥 Ficha técnica exportada correctamente (incluye foto).');
+    setTimeout(() => {
+        showMessage('📥 Ficha técnica y fotos exportadas en archivo comprimido (.zip).');
+    }, 800);
+}
+
+async function importSingleDeviceSheet(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    showMessage('Importando archivo comprimido con ficha y fotos...', 'loading');
+    try {
+        const res = await fetch('/api/device/import-sheet', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'success') {
+            showMessage(data.message, 'success');
+            if (currentSheetMac) openDeviceSheet(currentSheetMac, currentSheetIp);
+            loadState();
+        } else {
+            showMessage(data.message || 'Error al importar ficha técnica');
+        }
+    } catch(err) {
+        showMessage('Error al subir el archivo: ' + err);
+    }
+    e.target.value = '';
 }
 
 function locateDeviceInTopology(mac, ip) {
@@ -6603,7 +6809,11 @@ async function openDeviceSheet(mac, ipHint = '') {
     renderDeviceSheetPhoto(dev.photo || '', dev.dev_icon || '📱');
 
     document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Dispositivo sin nombre)'}`;
-    document.getElementById('ds-subtitle').innerHTML = `MAC: <code>${mac}</code> · IP: <code>${currentSheetIp || '—'}</code> · Fabricante: <strong>${escapeHtml(dev.dev_vendor || 'Desconocido')}</strong>`;
+    document.getElementById('ds-subtitle').innerHTML = `
+        MAC: <code class="clickable-copy-pill" onclick="copyToClipboard('${mac}', 'MAC', this)" title="Haz clic para copiar la MAC al portapapeles">${mac} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code> · 
+        IP: <code class="clickable-copy-pill" onclick="copyToClipboard('${currentSheetIp || ''}', 'IP', this)" title="Haz clic para copiar la IP al portapapeles">${currentSheetIp || '—'} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code> · 
+        Fabricante: <strong>${escapeHtml(dev.dev_vendor || 'Desconocido')}</strong>
+    `;
     const hostInp = document.getElementById('ds-edit-hostname');
     const ipInp = document.getElementById('ds-edit-ip');
     const dhcpBadge = document.getElementById('ds-dhcp-badge');
@@ -7243,39 +7453,44 @@ async function previewBackupFile(input) {
     const file = input.files?.[0];
     if (!file) return;
     try {
-        const text = await file.text();
-        pendingBackupData = JSON.parse(text);
+        const fd = new FormData();
+        fd.append('file', file);
+        showMessage('Analizando archivo comprimido de copia de seguridad...', 'loading');
         const res = await fetch('/api/backup/preview', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(pendingBackupData)
+            method: 'POST',
+            body: fd
         });
         const resp = await res.json();
         if (resp.status !== 'success') {
             showMessage(resp.message || 'Copia no válida');
             return;
         }
+        pendingBackupData = resp.backup;
         const d = resp.diff;
+        const imgCount = resp.images_count || 0;
         const box = document.getElementById('bk-preview-box');
         box.style.display = 'block';
         box.innerHTML = `
-            <div style="margin-bottom:8px; color:#86efac; font-weight:700;">✅ Archivo válido (exportado: ${d.exported_at || '—'}) — Resumen de diferencias:</div>
+            <div style="margin-bottom:8px; color:#86efac; font-weight:700;">✅ Archivo comprimido válido (exportado: ${d.exported_at || '—'}${imgCount ? ` · ${imgCount} imágenes incluidas` : ''}) — Resumen:</div>
             <ul style="margin:0 0 10px 18px; color:#cbd5e1;">
                 <li>Concesiones estáticas: <strong>${d.leases.add.length} nuevas</strong>, <strong>${d.leases.change.length} modificadas</strong>, ${d.leases.same.length} iguales${d.leases.conflict.length ? `, <span style="color:#f87171;">${d.leases.conflict.length} en conflicto</span>` : ''}</li>
                 <li>Routers en copia: <strong>${(d.routers.backup || []).length}</strong> (${d.routers.new} nuevos)</li>
                 <li>Nombres personalizados de servicios: <strong>${d.names.total}</strong> (${d.names.changed} cambios)</li>
                 <li>Fichas / Notas de dispositivos: <strong>${d.meta.total}</strong></li>
+                ${imgCount ? `<li>🖼️ Carpeta de imágenes: <strong>${imgCount} fotos de dispositivos listas</strong></li>` : ''}
                 ${d.topology_nodes ? `<li>📐 Distribución de topología: <strong>${d.topology_nodes} nodos personalizados</strong></li>` : ''}
             </ul>
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
                 <label><input type="checkbox" id="bk-ap-cfg" checked> Restaurar Routers y nombres de servicios</label>
-                <label><input type="checkbox" id="bk-ap-meta" checked> Restaurar fichas/notas/habitaciones</label>
+                <label><input type="checkbox" id="bk-ap-meta" checked> Restaurar fichas/notas/fotos/habitaciones</label>
                 <label><input type="checkbox" id="bk-ap-leases" checked> Aplicar reservas DHCP estáticas en AdGuard</label>
                 ${d.topology_nodes ? '<label><input type="checkbox" id="bk-ap-topo" checked> Restaurar orden y posiciones de la topología</label>' : ''}
             </div>
             <button class="btn btn-success" onclick="applyBackupNow()">🚀 Aplicar Restauración Ahora</button>
         `;
+        hideMessage();
     } catch (e) {
-        showMessage('Error al leer el archivo JSON de copia de seguridad.');
+        showMessage('Error leyendo el archivo comprimido: ' + e);
     }
 }
 

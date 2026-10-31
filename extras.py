@@ -25,6 +25,9 @@ import subprocess
 import urllib.request
 import urllib.parse
 import http.cookiejar
+import io
+import zipfile
+import base64
 from collections import Counter
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +38,7 @@ bp = Blueprint('extras', __name__)
 
 D = {}                    # dependencias inyectadas desde app.py
 DB_PATH = None
+PHOTOS_DIR = None
 _DB_LOCK = threading.Lock()
 _PING = {}                # ip -> {'ts', 'ms', 'ttl', 'alive'}
 _MONITOR_STATE = {'last_run': 0, 'running': False, 'last_error': '', 'cycles': 0}
@@ -176,6 +180,45 @@ def kv_get(k, default=None):
 
 def kv_set(k, v):
     db_exec('INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)', (k, json.dumps(v)))
+
+def save_device_photo_file(mac, photo_data_url):
+    """Guarda la foto como archivo en disco en PHOTOS_DIR y devuelve la ruta."""
+    if not photo_data_url or not PHOTOS_DIR:
+        return None
+    try:
+        clean_mac = norm_mac(mac).replace(':', '-').lower()
+        if ',' in photo_data_url:
+            header, b64 = photo_data_url.split(',', 1)
+            ext = 'webp' if 'webp' in header else ('jpeg' if 'jpeg' in header or 'jpg' in header else 'png')
+            raw = base64.b64decode(b64)
+            filepath = os.path.join(PHOTOS_DIR, f"{clean_mac}.{ext}")
+            with open(filepath, 'wb') as f:
+                f.write(raw)
+            return filepath
+    except Exception as e:
+        print(f"Error guardando foto en disco para {mac}: {e}")
+    return None
+
+
+def get_device_photo_data_url(mac):
+    """Devuelve el data URL de la foto desde SQLite o desde disco si existe."""
+    clean_mac = norm_mac(mac).replace(':', '-').lower()
+    row = db_query('SELECT photo FROM devices WHERE mac=?', (norm_mac(mac),))
+    if row and row[0]['photo']:
+        return row[0]['photo']
+    if PHOTOS_DIR and os.path.exists(PHOTOS_DIR):
+        for ext in ('webp', 'jpeg', 'jpg', 'png'):
+            fpath = os.path.join(PHOTOS_DIR, f"{clean_mac}.{ext}")
+            if os.path.exists(fpath):
+                try:
+                    with open(fpath, 'rb') as f:
+                        b64 = base64.b64encode(f.read()).decode('ascii')
+                    mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
+                    return f"data:{mime};base64,{b64}"
+                except Exception:
+                    pass
+    return ''
+
 
 
 # =====================================================================
@@ -1014,6 +1057,144 @@ def api_events():
 
 
 # ---------- Ficha de dispositivo ----------
+
+@bp.route('/api/device/<mac>/export-sheet')
+def api_device_export_sheet(mac):
+    mac = norm_mac(mac)
+    if not valid_mac(mac):
+        return jsonify({'status': 'error', 'message': 'MAC no válida'}), 400
+
+    dev_state = None
+    try:
+        state = D['build_state']()
+        dev_state = next((d for d in state.get('devices', []) if norm_mac(d.get('mac')) == mac), None)
+    except Exception:
+        pass
+
+    row = db_query('SELECT notes, room, tags, known, photo FROM devices WHERE mac=?', (mac,))
+    meta = row[0] if row else {}
+    photo_b64 = meta.get('photo') or get_device_photo_data_url(mac)
+
+    hostname = (dev_state.get('hostname') if dev_state else '') or mac
+    ip = (dev_state.get('ip') if dev_state else '') or ''
+    clean_mac = mac.replace(':', '-').lower()
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', hostname)
+
+    sheet_data = {
+        'app': 'adguard-dhcp-panel',
+        'type': 'device_sheet',
+        'format_version': 1,
+        'exported_at': datetime.now().isoformat(),
+        'device': {
+            'mac': mac,
+            'ip': ip,
+            'hostname': hostname,
+            'vendor': dev_state.get('dev_vendor') if dev_state else '',
+            'class': dev_state.get('dev_class') if dev_state else '',
+            'medium': dev_state.get('conn_medium_label') if dev_state else '',
+            'router_node': dev_state.get('router_node') if dev_state else '',
+            'room': meta.get('room') or '',
+            'tags': json.loads(meta.get('tags') or '[]'),
+            'notes': meta.get('notes') or '',
+            'photo': photo_b64 or '',
+            'static': bool(dev_state.get('static')) if dev_state else False
+        }
+    }
+
+    fmt = request.args.get('format', 'zip').lower()
+    if fmt == 'json':
+        fname = f"ficha-{safe_name}-{clean_mac}.json"
+        return Response(json.dumps(sheet_data, indent=2, ensure_ascii=False), mimetype='application/json',
+                        headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('ficha.json', json.dumps(sheet_data, indent=2, ensure_ascii=False).encode('utf-8'))
+        if photo_b64 and ',' in photo_b64:
+            try:
+                header, b64 = photo_b64.split(',', 1)
+                ext = 'webp' if 'webp' in header else ('jpeg' if 'jpeg' in header or 'jpg' in header else 'png')
+                raw_img = base64.b64decode(b64)
+                zf.writestr(f"images/{clean_mac}.{ext}", raw_img)
+            except Exception as e:
+                print(f"Error empaquetando imagen en ficha zip para {mac}: {e}")
+
+    buf.seek(0)
+    fname = f"ficha-{safe_name}-{clean_mac}.zip"
+    return Response(buf.getvalue(), mimetype='application/zip',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+
+@bp.route('/api/device/import-sheet', methods=['POST'])
+def api_device_import_sheet():
+    try:
+        f = request.files.get('file')
+        content_type = request.content_type or ''
+        sheet_data = None
+        extracted_photo = None
+
+        if f:
+            filename = (f.filename or '').lower()
+            if filename.endswith('.zip'):
+                content = f.read()
+                with zipfile.ZipFile(io.BytesIO(content), 'r') as zf:
+                    json_name = next((n for n in zf.namelist() if n == 'ficha.json' or n.endswith('.json')), None)
+                    if not json_name:
+                        return jsonify({'status': 'error', 'message': 'El archivo comprimido .zip no contiene ficha.json.'}), 400
+                    sheet_data = json.loads(zf.read(json_name).decode('utf-8'))
+                    for name in zf.namelist():
+                        if name.startswith('images/') or name.startswith('photos/'):
+                            base_name = os.path.basename(name)
+                            if not base_name: continue
+                            raw_img = zf.read(name)
+                            ext = os.path.splitext(base_name)[1].lstrip('.').lower()
+                            mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
+                            extracted_photo = f"data:{mime};base64,{base64.b64encode(raw_img).decode('ascii')}"
+                            if PHOTOS_DIR:
+                                with open(os.path.join(PHOTOS_DIR, base_name), 'wb') as img_out:
+                                    img_out.write(raw_img)
+                            break
+            else:
+                sheet_data = json.loads(f.read().decode('utf-8'))
+        else:
+            sheet_data = request.get_json(force=True)
+
+        if not isinstance(sheet_data, dict) or sheet_data.get('app') != 'adguard-dhcp-panel':
+            return jsonify({'status': 'error', 'message': 'Archivo de ficha técnica no válido.'}), 400
+
+        dev = sheet_data.get('device') or {}
+        mac = norm_mac(dev.get('mac') or '')
+        if not valid_mac(mac):
+            return jsonify({'status': 'error', 'message': f'MAC inválida en la ficha: {mac}'}), 400
+
+        photo_to_save = extracted_photo or dev.get('photo')
+
+        if not db_query('SELECT mac FROM devices WHERE mac=?', (mac,)):
+            db_exec('INSERT INTO devices (mac, first_seen, known) VALUES (?,?,1)', (mac, now_ts()))
+
+        db_exec('''
+            UPDATE devices 
+            SET notes=?, room=?, tags=?, known=1, photo=COALESCE(?, photo) 
+            WHERE mac=?
+        ''', (
+            dev.get('notes') or '',
+            dev.get('room') or '',
+            json.dumps(dev.get('tags') or []),
+            photo_to_save,
+            mac
+        ))
+
+        if photo_to_save:
+            save_device_photo_file(mac, photo_to_save)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Ficha técnica y foto de {dev.get("hostname") or mac} importadas correctamente.',
+            'mac': mac
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @bp.route('/api/device/<mac>')
 def api_device_detail(mac):
     mac = norm_mac(mac)
@@ -1084,6 +1265,7 @@ def api_device_meta(mac):
         fields.append('room=?'); vals.append(str(body['room'])[:60])
     if 'photo' in body:
         fields.append('photo=?'); vals.append(str(body['photo'])[:2500000])
+        save_device_photo_file(mac, body['photo'])
     if 'tags' in body and isinstance(body['tags'], list):
         fields.append('tags=?'); vals.append(json.dumps([str(t)[:30] for t in body['tags']][:15]))
     if 'known' in body:
@@ -1565,9 +1747,35 @@ def build_backup(include_secrets=False):
 @bp.route('/api/backup/export')
 def api_backup_export():
     inc = request.args.get('secrets') == '1'
+    fmt = request.args.get('format', 'zip').lower()
     data = build_backup(inc)
-    fname = f"dhcp-panel-backup-{datetime.now().strftime('%Y%m%d-%H%M')}{'-con-claves' if inc else ''}.json"
-    return Response(json.dumps(data, indent=2, ensure_ascii=False), mimetype='application/json',
+
+    if fmt == 'json':
+        fname = f"dhcp-panel-backup-{datetime.now().strftime('%Y%m%d-%H%M')}{'-con-claves' if inc else ''}.json"
+        return Response(json.dumps(data, indent=2, ensure_ascii=False), mimetype='application/json',
+                        headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+    # Por defecto: Archivo Comprimido .ZIP completo con backup.json y carpeta images/
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('backup.json', json.dumps(data, indent=2, ensure_ascii=False).encode('utf-8'))
+        meta = data.get('device_meta') or {}
+        for mac, info in meta.items():
+            photo_b64 = info.get('photo')
+            if photo_b64 and ',' in photo_b64:
+                try:
+                    header, b64 = photo_b64.split(',', 1)
+                    ext = 'webp' if 'webp' in header else ('jpeg' if 'jpeg' in header or 'jpg' in header else 'png')
+                    raw_img = base64.b64decode(b64)
+                    clean_mac = norm_mac(mac).replace(':', '-').lower()
+                    zf.writestr(f"images/{clean_mac}.{ext}", raw_img)
+                    save_device_photo_file(mac, photo_b64)
+                except Exception as e:
+                    print(f"Error empaquetando imagen en zip para {mac}: {e}")
+
+    buf.seek(0)
+    fname = f"dhcp-panel-backup-{datetime.now().strftime('%Y%m%d-%H%M')}{'-con-claves' if inc else ''}.zip"
+    return Response(buf.getvalue(), mimetype='application/zip',
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
 
 
@@ -1625,9 +1833,44 @@ def _diff_backup(b):
 @bp.route('/api/backup/preview', methods=['POST'])
 def api_backup_preview():
     try:
-        b = request.get_json(force=True)
+        b = None
+        images_found = 0
+        if 'file' in request.files:
+            f = request.files['file']
+            filename = (f.filename or '').lower()
+            if filename.endswith('.zip'):
+                content = f.read()
+                with zipfile.ZipFile(io.BytesIO(content), 'r') as zf:
+                    json_name = next((n for n in zf.namelist() if n == 'backup.json' or n.endswith('.json')), None)
+                    if not json_name:
+                        return jsonify({'status': 'error', 'message': 'El archivo .zip no contiene ningún backup.json válido.'})
+                    b = json.loads(zf.read(json_name).decode('utf-8'))
+                    meta = b.get('device_meta') or {}
+                    for name in zf.namelist():
+                        if name.startswith('images/') or name.startswith('photos/'):
+                            base_name = os.path.basename(name)
+                            if not base_name: continue
+                            raw_img = zf.read(name)
+                            if PHOTOS_DIR:
+                                with open(os.path.join(PHOTOS_DIR, base_name), 'wb') as img_out:
+                                    img_out.write(raw_img)
+                            ext = os.path.splitext(base_name)[1].lstrip('.').lower()
+                            mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
+                            b64 = f"data:{mime};base64,{base64.b64encode(raw_img).decode('ascii')}"
+                            target_mac_prefix = os.path.splitext(base_name)[0].lower()
+                            for m in meta:
+                                if norm_mac(m).replace(':', '-').lower() == target_mac_prefix:
+                                    meta[m]['photo'] = b64
+                                    images_found += 1
+                                    break
+            else:
+                b = json.loads(f.read().decode('utf-8'))
+        else:
+            b = request.get_json(force=True)
+
         _validate_backup(b)
-        return jsonify({'status': 'success', 'diff': _diff_backup(b)})
+        diff = _diff_backup(b)
+        return jsonify({'status': 'success', 'diff': diff, 'backup': b, 'images_count': images_found})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 
@@ -1730,7 +1973,10 @@ def init_app(app, deps):
     D.update(deps)
     data_dir = os.environ.get('DHCP_PANEL_DATA_DIR') or os.path.dirname(deps['CONFIG_PATH'])
     os.makedirs(data_dir, exist_ok=True)
+    global PHOTOS_DIR
     DB_PATH = os.path.join(data_dir, 'panel.db')
+    PHOTOS_DIR = os.path.join(data_dir, 'photos')
+    os.makedirs(PHOTOS_DIR, exist_ok=True)
     init_db()
     app.register_blueprint(bp)
     if os.environ.get('DHCP_PANEL_NO_MONITOR') != '1':
