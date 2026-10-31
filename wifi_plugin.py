@@ -508,6 +508,11 @@ def init_app(app, context):
             estaciones = _parsear_csv(ruta)
             mapa = _mapa_ips_y_nombres()
             resueltas = 0
+
+            # Limpiar memoria del escaneo anterior: no acumular infinitamente dispositivos que ya no se detectan
+            _CACHE_CLIENTES_RF.clear()
+
+            estaciones_procesadas = []
             for est in estaciones:
                 c_mac = est["client"].lower()
                 dev_info = mapa.get(c_mac, {})
@@ -519,25 +524,35 @@ def init_app(app, context):
                 est["vendor"] = dev_info.get("vendor", "")
                 est["icon"] = dev_info.get("icon", "📱")
                 est["cat"] = dev_info.get("cat", "dispositivo")
-                _CACHE_CLIENTES_RF[c_mac] = {
-                    'bssid': est.get('bssid'),
-                    'channel': est.get('channel'),
-                    'essid': est.get('essid'),
-                    'hostname': est["hostname"],
-                    'ip': est["ip"],
-                    'ts': time.time()
-                }
-                if est["ip"]:
+                est["is_my_network"] = bool(est["ip"] or c_mac in mapa)
+
+                # Solo registrar en la caché de cobertura RF los dispositivos reconocidos de NUESTRA red local
+                if est["is_my_network"]:
+                    _CACHE_CLIENTES_RF[c_mac] = {
+                        'bssid': est.get('bssid'),
+                        'channel': est.get('channel'),
+                        'essid': est.get('essid'),
+                        'hostname': est["hostname"],
+                        'ip': est["ip"],
+                        'ts': time.time()
+                    }
                     resueltas += 1
+
+                estaciones_procesadas.append(est)
+
+            # Ordenar: primero los dispositivos reconocidos de nuestra red, luego los ajenos
+            estaciones_procesadas.sort(key=lambda x: (not x.get("is_my_network", False), (x.get("hostname") or "").lower(), x.get("client")))
 
             _guardar_cache_rf()
 
-            logs.append(f"[+] Escaneo completado. Clientes detectados en el aire: {len(estaciones)}")
-            logs.append(f"[+] IP y nombre resueltos para {resueltas} de {len(estaciones)} clientes (DHCP/ARP).")
+            logs.append(f"[+] Escaneo completado. Clientes detectados en el aire: {len(estaciones_procesadas)}")
+            logs.append(f"[+] Dispositivos de nuestra red reconocidos en cobertura RF: {resueltas} de {len(estaciones_procesadas)}")
 
             return jsonify({
                 'status': 'success',
-                'devices': estaciones,
+                'devices': estaciones_procesadas,
+                'my_network_count': resueltas,
+                'total_detected': len(estaciones_procesadas),
                 'debug': "\n".join(logs),
                 'pi_ip': _ip_propia(),
                 'mon_iface': MON_IFACE

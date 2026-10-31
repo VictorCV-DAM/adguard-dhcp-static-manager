@@ -1959,9 +1959,16 @@
 
         <!-- Tabla / Radar de Resultados en el Aire -->
         <div style="background:#0f172a; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:18px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <strong style="font-size:0.95rem; color:#f8fafc;">📡 Dispositivos Capturados en el Aire (airodump-ng)</strong>
-                <span id="wifi-scan-count" style="font-size:0.8rem; color:var(--muted);">0 detectados</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <strong style="font-size:0.95rem; color:#f8fafc;">📡 Dispositivos Capturados en el Aire (airodump-ng)</strong>
+                    <span id="wifi-scan-count" style="font-size:0.8rem; color:var(--muted);">0 detectados</span>
+                </div>
+                <div id="wifi-radar-filter-bar" style="display:none; align-items:center; gap:6px;">
+                    <span style="font-size:0.75rem; color:var(--muted);">Filtrar:</span>
+                    <button id="rf-filter-my-net" class="btn btn-primary" style="padding:3px 9px; font-size:0.75rem; font-weight:700;" onclick="setWifiRadarFilter('my_network')">🏠 Solo mi Red (<span id="rf-count-my-net">0</span>)</button>
+                    <button id="rf-filter-all" class="btn btn-outline" style="padding:3px 9px; font-size:0.75rem;" onclick="setWifiRadarFilter('all')">🌐 Todos en el aire (<span id="rf-count-all">0</span>)</button>
+                </div>
             </div>
             <div id="wifi-radar-results" style="overflow-x:auto;">
                 <p style="text-align:center; color:var(--muted); padding:30px 0; font-size:0.88rem;">
@@ -2976,6 +2983,143 @@ function prefillStaticFromRadar(mac, name, ip) {
     showMessage('Dispositivo ' + (name || mac) + ' cargado para fijar IP estática.');
 }
 
+let lastWifiScanDevices = [];
+let wifiRadarFilter = 'my_network';
+
+function setWifiRadarFilter(filterMode) {
+    wifiRadarFilter = filterMode;
+    const btnMy = document.getElementById('rf-filter-my-net');
+    const btnAll = document.getElementById('rf-filter-all');
+    if (btnMy && btnAll) {
+        if (filterMode === 'my_network') {
+            btnMy.className = 'btn btn-primary';
+            btnAll.className = 'btn btn-outline';
+        } else {
+            btnMy.className = 'btn btn-outline';
+            btnAll.className = 'btn btn-primary';
+        }
+    }
+    renderWifiRadarTable();
+}
+
+function renderWifiRadarTable() {
+    const resultsDiv = document.getElementById('wifi-radar-results');
+    const countEl = document.getElementById('wifi-scan-count');
+    const filterBar = document.getElementById('wifi-radar-filter-bar');
+    const cMy = document.getElementById('rf-count-my-net');
+    const cAll = document.getElementById('rf-count-all');
+
+    if (!lastWifiScanDevices || lastWifiScanDevices.length === 0) {
+        if (countEl) countEl.textContent = '0 detectados';
+        if (filterBar) filterBar.style.display = 'none';
+        if (resultsDiv) resultsDiv.innerHTML = '<p style="text-align:center; color:var(--muted); padding:30px 0;">No se detectaron clientes activos en este ciclo de escucha.</p>';
+        return;
+    }
+
+    const myNetDevices = lastWifiScanDevices.filter(d => d.is_my_network);
+    if (cMy) cMy.textContent = myNetDevices.length;
+    if (cAll) cAll.textContent = lastWifiScanDevices.length;
+    if (filterBar) filterBar.style.display = 'inline-flex';
+
+    const displayDevices = (wifiRadarFilter === 'my_network') ? myNetDevices : lastWifiScanDevices;
+
+    if (countEl) {
+        countEl.textContent = (wifiRadarFilter === 'my_network')
+            ? `${myNetDevices.length} de mi red (${lastWifiScanDevices.length} en el aire)`
+            : `${lastWifiScanDevices.length} en el aire (${myNetDevices.length} de mi red)`;
+    }
+
+    if (displayDevices.length === 0) {
+        if (resultsDiv) resultsDiv.innerHTML = '<p style="text-align:center; color:var(--muted); padding:30px 0;">Ningún dispositivo de tu red local detectado en este escaneo de 12 segundos. Cambia a "Todos en el aire" para ver el resto del espectro.</p>';
+        return;
+    }
+
+    let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.83rem;">
+            <thead>
+                <tr style="border-bottom:1px solid var(--border); color:#38bdf8; text-align:left;">
+                    <th style="padding:10px 8px;">Red (ESSID / BSSID)</th>
+                    <th style="padding:10px 8px;">Cliente MAC / Canal</th>
+                    <th style="padding:10px 8px;">Dispositivo Reconocido (DHCP / ARP)</th>
+                    <th style="padding:10px 8px; text-align:right;">Acción RF</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    displayDevices.forEach(d => {
+        const icon = d.icon || '📱';
+        const hostNameHtml = d.hostname 
+            ? `<div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                 <span style="font-size:1.05rem;">${icon}</span>
+                 <strong style="color:#f8fafc; font-size:0.86rem;">${escapeHtml(d.hostname)}</strong>
+               </div>`
+            : `<div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                 <span style="font-size:1.05rem;">${icon}</span>
+                 <span style="color:var(--muted); font-style:italic; font-size:0.82rem;">(Sin nombre en DHCP)</span>
+               </div>`;
+
+        const ipHtml = d.ip 
+            ? `<code style="color:#38bdf8; font-weight:700; font-size:0.82rem; margin-right:6px;">${d.ip}</code>` 
+            : '<span style="color:var(--muted); font-size:0.78rem; margin-right:6px;">Sin IP asignada</span>';
+
+        const vendorHtml = d.vendor 
+            ? `<span style="font-size:0.70rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.08);">${escapeHtml(d.vendor)}</span>`
+            : '';
+
+        let statusBadge = '';
+        if (d.is_static) {
+            const ordTxt = d.static_order ? ` (#${d.static_order})` : '';
+            statusBadge = `<span class="badge" style="background:rgba(34,197,94,0.18); color:#86efac; border:1px solid rgba(34,197,94,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">📌 IP Estática Fija${ordTxt}</span>`;
+        } else if (d.ip) {
+            statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.18); color:#fcd34d; border:1px solid rgba(245,158,11,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">⚡ IP Dinámica (DHCP)</span>`;
+        } else {
+            statusBadge = `<span class="badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border:1px solid rgba(148,163,184,0.25); font-size:0.72rem; padding:2px 7px; border-radius:6px; display:inline-block; margin-top:4px;">⚪ Sin concesión DHCP</span>`;
+        }
+
+        const fixIpBtn = (!d.is_static) 
+            ? `<button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; font-weight:600; border-radius:6px; margin-right:6px;"
+                 onclick="prefillStaticFromRadar('${d.client}', '${escapeHtml(d.hostname || '')}', '${d.ip || ''}')" title="Cargar en formulario de IP Fija">
+                 📌 Fijar IP
+               </button>`
+            : `<button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; font-weight:600; border-radius:6px; margin-right:6px; border-color:rgba(56,189,248,0.4); color:#38bdf8;"
+                 onclick="openDeviceSheet('${d.client}', '${d.ip || ''}')" title="Abrir ficha del dispositivo">
+                 👁️ Ver Ficha
+               </button>`;
+
+        html += `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 8px;">
+                    <span style="font-weight:700; color:#f8fafc;">${escapeHtml(d.essid || '(Oculta / Directa)')}</span><br>
+                    <code style="font-size:0.73rem; color:var(--muted);">${d.bssid}</code>
+                </td>
+                <td style="padding:10px 8px;">
+                    <code class="clickable-copy-pill" onclick="copyToClipboard('${d.client}', 'MAC', this)" title="Copiar MAC">${d.client}</code><br>
+                    <span style="font-size:0.73rem; color:#fcd34d;">Canal ${d.channel || '1'}</span>
+                </td>
+                <td style="padding:10px 8px;">
+                    ${hostNameHtml}
+                    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-top:2px;">
+                        ${ipHtml} ${vendorHtml}
+                    </div>
+                    <div>
+                        ${statusBadge}
+                    </div>
+                </td>
+                <td style="padding:10px 8px; text-align:right; white-space:nowrap;">
+                    ${fixIpBtn}
+                    <button class="btn btn-danger" style="padding:4px 8px; font-size:0.74rem; font-weight:700; border-radius:6px;"
+                        onclick="execDeauthFromRow('${d.bssid}', '${d.client}', '${d.channel}')">
+                        💥 Expulsar
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    html += `</tbody></table>`;
+    if (resultsDiv) resultsDiv.innerHTML = html;
+}
+
 async function scanWifiSpectrum() {
     const resultsDiv = document.getElementById('wifi-radar-results');
     const countEl = document.getElementById('wifi-scan-count');
@@ -2988,106 +3132,28 @@ async function scanWifiSpectrum() {
         if (data.debug) logWifiTerminal(data.debug);
 
         if (data.status === 'success' && data.devices && data.devices.length > 0) {
-            if (countEl) countEl.textContent = `${data.devices.length} detectados`;
-            let html = `
-                <table style="width:100%; border-collapse:collapse; font-size:0.83rem;">
-                    <thead>
-                        <tr style="border-bottom:1px solid var(--border); color:#38bdf8; text-align:left;">
-                            <th style="padding:10px 8px;">Red (ESSID / BSSID)</th>
-                            <th style="padding:10px 8px;">Cliente MAC / Canal</th>
-                            <th style="padding:10px 8px;">Dispositivo Reconocido (DHCP / ARP)</th>
-                            <th style="padding:10px 8px; text-align:right;">Acción RF</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-                        data.devices.forEach(d => {
-                const icon = d.icon || '📱';
-                const hostNameHtml = d.hostname 
-                    ? `<div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-                         <span style="font-size:1.05rem;">${icon}</span>
-                         <strong style="color:#f8fafc; font-size:0.86rem;">${escapeHtml(d.hostname)}</strong>
-                       </div>`
-                    : `<div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-                         <span style="font-size:1.05rem;">${icon}</span>
-                         <span style="color:var(--muted); font-style:italic; font-size:0.82rem;">(Sin nombre en DHCP)</span>
-                       </div>`;
-
-                const ipHtml = d.ip 
-                    ? `<code style="color:#38bdf8; font-weight:700; font-size:0.82rem; margin-right:6px;">${d.ip}</code>` 
-                    : '<span style="color:var(--muted); font-size:0.78rem; margin-right:6px;">Sin IP asignada</span>';
-
-                const vendorHtml = d.vendor 
-                    ? `<span style="font-size:0.70rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.08);">${escapeHtml(d.vendor)}</span>`
-                    : '';
-
-                let statusBadge = '';
-                if (d.is_static) {
-                    const ordTxt = d.static_order ? ` (#${d.static_order})` : '';
-                    statusBadge = `<span class="badge" style="background:rgba(34,197,94,0.18); color:#86efac; border:1px solid rgba(34,197,94,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">📌 IP Estática Fija${ordTxt}</span>`;
-                } else if (d.ip) {
-                    statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.18); color:#fcd34d; border:1px solid rgba(245,158,11,0.45); font-size:0.72rem; padding:2px 7px; border-radius:6px; font-weight:700; display:inline-block; margin-top:4px;">⚡ IP Dinámica (DHCP)</span>`;
-                } else {
-                    statusBadge = `<span class="badge" style="background:rgba(148,163,184,0.15); color:#94a3b8; border:1px solid rgba(148,163,184,0.25); font-size:0.72rem; padding:2px 7px; border-radius:6px; display:inline-block; margin-top:4px;">⚪ Sin concesión DHCP</span>`;
+            lastWifiScanDevices = data.devices;
+            
+            // Reemplazar la memoria RF exclusivamente con los dispositivos del escaneo actual (sin acumulación)
+            if (!wifiPluginState) wifiPluginState = {};
+            wifiPluginState.scanned_clients = {};
+            data.devices.forEach(d => {
+                if (d.client && d.is_my_network) {
+                    wifiPluginState.scanned_clients[d.client.toLowerCase()] = d;
                 }
-
-                const fixIpBtn = (!d.is_static) 
-                    ? `<button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; font-weight:600; border-radius:6px; margin-right:6px;"
-                         onclick="prefillStaticFromRadar('${d.client}', '${escapeHtml(d.hostname || '')}', '${d.ip || ''}')" title="Cargar en formulario de IP Fija">
-                         📌 Fijar IP
-                       </button>`
-                    : `<button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; font-weight:600; border-radius:6px; margin-right:6px; border-color:rgba(56,189,248,0.4); color:#38bdf8;"
-                         onclick="openDeviceSheet('${d.client}', '${d.ip || ''}')" title="Abrir ficha del dispositivo">
-                         👁️ Ver Ficha
-                       </button>`;
-
-                html += `
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:10px 8px;">
-                            <span style="font-weight:700; color:#f8fafc;">${escapeHtml(d.essid || '(Oculta / Directa)')}</span><br>
-                            <code style="font-size:0.73rem; color:var(--muted);">${d.bssid}</code>
-                        </td>
-                        <td style="padding:10px 8px;">
-                            <code class="clickable-copy-pill" onclick="copyToClipboard('${d.client}', 'MAC', this)" title="Copiar MAC">${d.client}</code><br>
-                            <span style="font-size:0.73rem; color:#fcd34d;">Canal ${d.channel || '1'}</span>
-                        </td>
-                        <td style="padding:10px 8px;">
-                            ${hostNameHtml}
-                            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-top:2px;">
-                                ${ipHtml} ${vendorHtml}
-                            </div>
-                            <div>
-                                ${statusBadge}
-                            </div>
-                        </td>
-                        <td style="padding:10px 8px; text-align:right; white-space:nowrap;">
-                            ${fixIpBtn}
-                            <button class="btn btn-danger" style="padding:4px 8px; font-size:0.74rem; font-weight:700; border-radius:6px;"
-                                onclick="execDeauthFromRow('${d.bssid}', '${d.client}', '${d.channel}')">
-                                💥 Expulsar
-                            </button>
-                        </td>
-                    </tr>
-                `;
             });
-            html += `</tbody></table>`;
-            if (resultsDiv) resultsDiv.innerHTML = html;
-            if (data.devices) {
-                if (!wifiPluginState) wifiPluginState = {};
-                if (!wifiPluginState.scanned_clients) wifiPluginState.scanned_clients = {};
-                data.devices.forEach(d => {
-                    if (d.client) wifiPluginState.scanned_clients[d.client.toLowerCase()] = d;
-                });
-            }
-            logWifiTerminal(`[+] Escaneo finalizado. ${data.devices.length} clientes capturados.`);
+
+            renderWifiRadarTable();
+            logWifiTerminal(`[+] Escaneo finalizado. ${data.my_network_count || 0} de tu red detectados (${data.total_detected || data.devices.length} en el aire).`);
         } else {
-            if (countEl) countEl.textContent = '0 detectados';
-            if (resultsDiv) {
-                resultsDiv.innerHTML = `<p style="text-align:center; color:#f87171; padding:30px 0;">No se detectaron clientes en este ciclo o la captura no obtuvo datos.</p>`;
-            }
+            lastWifiScanDevices = [];
+            if (!wifiPluginState) wifiPluginState = {};
+            wifiPluginState.scanned_clients = {};
+            renderWifiRadarTable();
             logWifiTerminal('[!] Escaneo sin resultados.');
         }
         await refreshWifiPluginUi();
+        await loadState(false);
     } catch (e) {
         if (resultsDiv) resultsDiv.innerHTML = '<p style="text-align:center; color:#f87171; padding:30px 0;">Error en la comunicación con el escáner.</p>';
         logWifiTerminal('Error en api/wifi/scan: ' + e);
