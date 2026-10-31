@@ -981,8 +981,8 @@
         }
         .topo-controls-row {
             display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
+            gap: 5px;
+            flex-wrap: nowrap;
             justify-content: flex-end;
             align-items: center;
         }
@@ -1690,49 +1690,58 @@
                 </div>
 
                 <div class="topo-controls">
-                    <!-- Fila 1: Motor visual, malla, telemetría e impulsos -->
+                    <!-- Fila 1: Motor visual, malla (entramado, tono y opacidad), telemetría e impulsos -->
                     <div class="topo-controls-row">
                         <!-- Banner de dispositivo enfocado / localizado -->
                         <div id="topo-pinned-banner" style="display:none; align-items:center; gap:8px; background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(6,78,59,0.7)); border:1.5px solid #00f5d4; padding:3px 12px; border-radius:20px; font-size:0.75rem; color:#f0fdf4; font-weight:600; box-shadow:0 0 16px rgba(0,245,212,0.45); backdrop-filter:blur(8px);">
                             <span>🎯 <strong id="topo-pinned-name" style="color:#67e8f9; font-weight:800;">Dispositivo</strong></span>
                             <button onclick="clearTopoPin()" style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.5); color:#fca5a5; cursor:pointer; font-size:0.72rem; padding:1px 6px; border-radius:10px; font-weight:bold;" title="Quitar enfoque fijado">✕</button>
                         </div>
+
                         <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Alternar entre Zigzag Flotante Constelación (Plexus), Impulsos Eléctricos, o Fusión">
                             🕸️ Estilo: <span id="topo-style-txt">Zigzag Flotante</span>
                         </button>
-                        <!-- Selector de malla con stepper compacto y selector de tono -->
-                        <div class="topo-mesh-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Nivel de entramado y tono de color de la tela de araña">
-                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(-1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Reducir entramado (−)">−</button>
-                            <span id="topo-mesh-density-txt" onclick="cycleTopoMeshDensity()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Clic para alternar densidad">🕸️ Malla: 3x</span>
-                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Aumentar entramado (+)">+</button>
-                            <div style="display:inline-flex; align-items:center; padding:0 6px; border-left:1px solid rgba(56,189,248,0.2); height:100%;" title="Personalizar tono de color de la tela de araña">
-                                <input type="color" id="topo-mesh-color" value="#bae6fd" oninput="setTopoMeshColor(this.value)" style="width:18px; height:18px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.45); padding:0; background:none; cursor:pointer; vertical-align:middle;">
+
+                        <!-- Grupo unificado de Malla: Densidad/Entramado + Tono de Color + Deslizador de Opacidad -->
+                        <div class="topo-mesh-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Configuración de la tela de araña: Entramado (−/+), Tono y Opacidad">
+                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(-1)" style="border:none; border-radius:0; padding:0 7px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Reducir entramado (−)">−</button>
+                            <span id="topo-mesh-density-txt" onclick="cycleTopoMeshDensity()" style="font-size:0.73rem; font-weight:700; color:#e0f2fe; padding:0 6px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Clic para alternar densidad">Densa (3x)</span>
+                            <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(1)" style="border:none; border-radius:0; padding:0 7px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Aumentar entramado (+)">+</button>
+                            
+                            <!-- Selector de tono de color -->
+                            <div style="display:inline-flex; align-items:center; padding:0 5px; border-left:1px solid rgba(56,189,248,0.2); height:100%;" title="Personalizar tono de color de la tela de araña">
+                                <input type="color" id="topo-mesh-color" value="#bae6fd" oninput="setTopoMeshColor(this.value)" style="width:17px; height:17px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.45); padding:0; background:none; cursor:pointer; vertical-align:middle;">
+                            </div>
+
+                            <!-- Deslizador de opacidad en vivo -->
+                            <div style="display:inline-flex; align-items:center; gap:4px; padding:0 6px; border-left:1px solid rgba(56,189,248,0.2); height:100%;" title="Control de opacidad de la tela de araña (5% a 100%)">
+                                <span style="font-size:0.68rem; color:#94a3b8; user-select:none;">💧</span>
+                                <input type="range" id="topo-mesh-opacity" min="0.05" max="1.0" step="0.05" value="0.35" oninput="setTopoMeshOpacity(this.value)" style="width:44px; height:4px; accent-color:#38bdf8; cursor:pointer; margin:0;">
+                                <span id="topo-mesh-opacity-txt" style="font-size:0.68rem; font-weight:700; color:#7dd3fc; min-width:26px; text-align:right;">35%</span>
                             </div>
                         </div>
+
                         <button id="topo-btn-telemetry" class="topo-ctrl-btn" onclick="toggleTopoTelemetryMode()" title="Alternar entre impulsos ambientales simulados o flujo continuo de Tráfico Real DNS + Ping">
                             📡 Lógica: <span id="topo-telemetry-txt">Simulada</span>
                         </button>
+
                         <div class="topo-freq-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Frecuencia y velocidad de impulsos (- / +)">
                             <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(-1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Reducir velocidad (−)">−</button>
-                            <span id="topo-freq-txt" onclick="resetTopoImpulseFreq()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Clic para restablecer 1.0x">⚡ 1.0x</span>
+                            <span id="topo-freq-txt" onclick="resetTopoImpulseFreq()" style="font-size:0.73rem; font-weight:700; color:#e0f2fe; padding:0 6px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Clic para restablecer 1.0x">⚡ 1.0x</span>
                             <button type="button" class="topo-ctrl-btn" onclick="adjustTopoImpulseFreq(1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Aumentar velocidad (+)">+</button>
                         </div>
+
                         <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);" title="Disparar onda de sinapsis neuronal">
                             ⚡ Impulso
                         </button>
-                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.15);" title="Auto-organizar topología">
-                            🪄 Auto-Organizar
-                        </button>
-                        <span style="font-size:0.7rem; color:#94a3b8; display:inline-flex; align-items:center; gap:4px; user-select:none; background:rgba(15,23,42,0.65); padding:2px 7px; border-radius:6px; border:1px solid rgba(148,163,184,0.18); height:30px; line-height:1;" title="Atajos: Ctrl+Z revertir / Ctrl+Y rehacer / Ctrl+Arrastrar mueve solo el nodo">
-                            <kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 3px; font-family:monospace; font-size:0.65rem; color:#e2e8f0;">Ctrl+Z</kbd>/<kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 3px; font-family:monospace; font-size:0.65rem; color:#e2e8f0;">Y</kbd>
-                            <span style="opacity:0.35;">·</span>
-                            <kbd style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); border-radius:3px; padding:1px 3px; font-family:monospace; font-size:0.65rem; color:#38bdf8;">Ctrl+Arrastrar</kbd>
-                        </span>
                     </div>
 
-                    <!-- Fila 2: Visualización, persistencia, encuadre y pantalla completa -->
+                    <!-- Fila 2: Organización, visibilidad, encuadre, exportación y pantalla completa -->
                     <div class="topo-controls-row">
-                        <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Mostrar u ocultar inactivos">
+                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.15);" title="Auto-organizar topología equilibradamente">
+                            🪄 Auto-Organizar
+                        </button>
+                        <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Mostrar u ocultar dispositivos inactivos">
                             👁️ Inactivos
                         </button>
                         <button id="topo-btn-label" class="topo-ctrl-btn" onclick="cycleTopoLabelMode()" title="Texto mostrado en los nodos">
@@ -1748,21 +1757,26 @@
                             🗂️ Tarjetas
                         </button>
                         <button class="topo-ctrl-btn" onclick="exportTopoPositionsJson()" title="Descargar posiciones JSON">
-                            💾 Exportar Mapa
+                            💾 Exportar
                         </button>
                         <button class="topo-ctrl-btn" onclick="document.getElementById('topo-import-file').click()" title="Restaurar posiciones JSON">
-                            📂 Importar Mapa
+                            📂 Importar
                         </button>
                         <input type="file" id="topo-import-file" accept=".json" style="display:none;" onchange="importTopoPositionsJson(event)">
                         <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refrescar estado de red">
                             🔄
                         </button>
                         <button id="topo-btn-reset-box" class="topo-ctrl-btn" onclick="resetTopoStageBox()" title="Restablecer la caja al ancho y centrado original">
-                            ⇤⇥ Restablecer Ancho
+                            ⇤⇥ Ancho
                         </button>
                         <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Pantalla completa (⛶)">
                             ⛶
                         </button>
+                        <span style="font-size:0.67rem; color:#94a3b8; display:inline-flex; align-items:center; gap:3px; user-select:none; background:rgba(15,23,42,0.65); padding:2px 6px; border-radius:6px; border:1px solid rgba(148,163,184,0.18); height:30px; line-height:1;" title="Atajos: Ctrl+Z revertir / Ctrl+Y rehacer / Ctrl+Arrastrar mueve solo el nodo">
+                            <kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 3px; font-family:monospace; font-size:0.64rem; color:#e2e8f0;">Ctrl+Z</kbd>/<kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 3px; font-family:monospace; font-size:0.64rem; color:#e2e8f0;">Y</kbd>
+                            <span style="opacity:0.35;">·</span>
+                            <kbd style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); border-radius:3px; padding:1px 3px; font-family:monospace; font-size:0.64rem; color:#38bdf8;">Ctrl+Arrastrar</kbd>
+                        </span>
                     </div>
                 </div>
             </div>
@@ -3826,7 +3840,11 @@ let topoState = {
     initialized: false,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
-        meshColor: (function() {
+        meshOpacity: (function() {
+        const o = parseFloat(localStorage.getItem('ag_topo_mesh_opacity'));
+        return (!isNaN(o) && o >= 0.05 && o <= 1.0) ? o : 0.35;
+    })(), // Nivel de opacidad personalizado de la tela de araña (0.05 a 1.0)
+    meshColor: (function() {
         const c = localStorage.getItem('ag_topo_mesh_color');
         return (c && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : '#bae6fd';
     })(), // Tono de color personalizado de la tela de araña
@@ -4183,6 +4201,16 @@ function hexToRgb(hex) {
     };
 }
 
+function setTopoMeshOpacity(val) {
+    const o = Math.max(0.05, Math.min(1.0, parseFloat(val) || 0.35));
+    topoState.meshOpacity = o;
+    try { localStorage.setItem('ag_topo_mesh_opacity', String(o)); } catch (e) {}
+    const inp = document.getElementById('topo-mesh-opacity');
+    if (inp) inp.value = o;
+    const txt = document.getElementById('topo-mesh-opacity-txt');
+    if (txt) txt.textContent = Math.round(o * 100) + '%';
+}
+
 function setTopoMeshColor(color) {
     if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
     topoState.meshColor = color;
@@ -4200,6 +4228,12 @@ function updateTopoMeshDensityUI() {
     const colorInp = document.getElementById('topo-mesh-color');
     if (colorInp && topoState.meshColor) {
         colorInp.value = topoState.meshColor;
+    }
+    const opInp = document.getElementById('topo-mesh-opacity');
+    const opTxt = document.getElementById('topo-mesh-opacity-txt');
+    if (opInp && topoState.meshOpacity != null) {
+        opInp.value = topoState.meshOpacity;
+        if (opTxt) opTxt.textContent = Math.round(topoState.meshOpacity * 100) + '%';
     }
 }
 
@@ -6364,7 +6398,9 @@ function drawTopoFrame(now) {
                                 linksCount++;
                                 const ratio = 1 - Math.sqrt(dSq) / maxDist;
                                 const dim = (hov || hasSearch || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
-                                const alpha = ratio * (a.online || b.online ? meshCfg.alphaOn : meshCfg.alphaOff) * dim;
+                                const userOp = (topoState.meshOpacity != null) ? topoState.meshOpacity : 0.35;
+                                const baseAlpha = a.online || b.online ? (userOp * 0.85) : (userOp * 0.42);
+                                const alpha = ratio * baseAlpha * dim;
                                 const mc = hexToRgb(topoState.meshColor || '#bae6fd');
                                 ctx.strokeStyle = `rgba(${mc.r}, ${mc.g}, ${mc.b}, ${alpha.toFixed(3)})`;
                                 ctx.beginPath();
