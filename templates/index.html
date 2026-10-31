@@ -725,9 +725,11 @@
         .ip-cell.conflict { background: rgba(239, 68, 68, 0.28); border-color: #ef4444; color: #fecaca; animation: pulseRed 1.5s infinite; }
         .ip-cell.in-pool { box-shadow: inset 0 -2px 0 rgba(245, 158, 11, 0.55); }
         /* Línea temporal de presencia */
-        .tl-row { display: grid; grid-template-columns: 210px 1fr 75px; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; }
-        .tl-track { position: relative; height: 14px; background: #0f172a; border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
-        .tl-seg { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #22c55e, #10b981); border-radius: 2px; }
+        /* Línea temporal de presencia (timeline) */
+        .tl-row { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.82rem; transition: background 0.15s ease; }
+        .tl-row:hover { background: rgba(255,255,255,0.03); }
+        .tl-bar, .tl-track { position: relative !important; height: 20px !important; background: #070c18 !important; border-radius: 6px !important; overflow: hidden !important; border: 1px solid rgba(255,255,255,0.09) !important; width: 100% !important; box-sizing: border-box !important; }
+        .tl-seg { position: absolute !important; top: 2px !important; bottom: 2px !important; background: linear-gradient(90deg, #22c55e, #10b981) !important; border-radius: 3px !important; box-shadow: 0 0 8px rgba(34, 197, 94, 0.45) !important; }
         /* Topología interactiva estilo malla Bluetooth / radial + sinapsis neuronal */
         .topo-stage {
             position: relative;
@@ -6301,9 +6303,11 @@ function drawTopoFrame(now) {
 
             // 4. BALIZA LUMINOSA TÁCTICA, RADAR SÓNAR CONTINUO Y DIANA RETICULAR PARA EL DISPOSITIVO ENFOCADO
             if (pinned) {
-                const target = topoState.nodes.find(n => n.id === pinned.id);
+                const target = topoState.nodes.find(n => n.id === pinned.id) || pinned;
                 if (target) {
                     ctx.save();
+                    // IMPORTANTE: Restaurar opacidad completa (globalAlpha = 1.0) para que la baliza no quede atenuada al 0.06
+                    ctx.globalAlpha = 1.0;
                     const n = target;
 
                     // A. Ondas continuas de radar sónar expansivo (3 anillos concéntricos fluorescentes)
@@ -6510,7 +6514,22 @@ function renderTimelineRows() {
         return;
     }
 
-    container.innerHTML = filtered.map(d => {
+    const sTimeStr = new Date(start * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const eTimeStr = new Date(end * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const hDuration = Math.round(span / 3600);
+
+    const headerHtml = `
+        <div style="display:grid; grid-template-columns: 240px 1fr; gap:14px; padding:6px 10px; margin-bottom:8px; font-size:0.74rem; color:var(--muted); font-weight:700; border-bottom:1px solid rgba(255,255,255,0.1); text-transform:uppercase;">
+            <span>DISPOSITIVO</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Inicio (${sTimeStr})</span>
+                <span style="color:#38bdf8;">Historial (${hDuration} horas)</span>
+                <span>Ahora (${eTimeStr})</span>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = headerHtml + filtered.map(d => {
         const on = Boolean(d.live_ips && d.live_ips.length > 0);
         const segs = segsByMac[d.mac] || (on ? [[Math.max(start, end - 300), end]] : []);
         const bars = segs.map(([s, e]) => {
@@ -6712,13 +6731,47 @@ async function importSingleDeviceSheet(e) {
     e.target.value = '';
 }
 
+function findTopoNodeByMacOrIp(mac, ip) {
+    const cleanMac = (mac || '').toLowerCase().trim();
+    const cleanIp = (ip || '').trim();
+
+    // 1. Coincidencia directa por id 'dev:<mac>'
+    let n = topoState.nodes.find(x => x.id === 'dev:' + mac || (cleanMac && x.id.toLowerCase() === 'dev:' + cleanMac));
+    if (n) return n;
+
+    // 2. Coincidencia por dev.mac o dev.ip
+    n = topoState.nodes.find(x => x.dev && ((cleanMac && (x.dev.mac || '').toLowerCase() === cleanMac) || (cleanIp && x.dev.ip === cleanIp)));
+    if (n) return n;
+
+    // 3. Coincidencia si es Core Node ('__core__')
+    if (cleanIp === '192.168.1.1' || cleanIp === '192.168.1.249') {
+        n = topoState.nodes.find(x => x.type === 'core');
+        if (n) return n;
+    }
+
+    // 4. Coincidencia por IP en Hubs de infraestructura o Core
+    n = topoState.nodes.find(x => x.ip === cleanIp || (x.sub && x.sub.includes(cleanIp)));
+    if (n) return n;
+
+    // 5. Coincidencia por etiqueta de Hub o nombre de nodo
+    n = topoState.nodes.find(x => x.label && cleanIp && x.label.includes(cleanIp));
+    if (n) return n;
+
+    return null;
+}
+
 function locateDeviceInTopology(mac, ip) {
     if (currentMainTab !== 'topology') {
         switchMainTab('topology');
     }
-    setTimeout(() => {
-        const cid = 'dev:' + mac;
-        let targetNode = topoState.nodes.find(n => n.id === cid || (n.dev && (n.dev.mac === mac || (ip && n.dev.ip === ip))));
+
+    // Asegurar que la topología tiene los nodos construidos
+    if (!topoState.nodes || topoState.nodes.length <= 1) {
+        buildTopoGraph(false);
+    }
+
+    const tryLocate = (attempts = 0) => {
+        let targetNode = findTopoNodeByMacOrIp(mac, ip);
 
         // Si el dispositivo está desconectado y el usuario tenía ocultos los inactivos, activarlos temporalmente
         if (!targetNode && !topoState.showOffline) {
@@ -6726,17 +6779,21 @@ function locateDeviceInTopology(mac, ip) {
             const btnOff = document.getElementById('topo-btn-offline');
             if (btnOff) btnOff.classList.add('active');
             buildTopoGraph(false);
-            targetNode = topoState.nodes.find(n => n.id === cid || (n.dev && (n.dev.mac === mac || (ip && n.dev.ip === ip))));
+            targetNode = findTopoNodeByMacOrIp(mac, ip);
         }
 
         if (targetNode) {
-            focusTopoNode(targetNode, 1.25);
+            focusTopoNode(targetNode, 1.35);
             const name = targetNode.label || targetNode.sub || mac;
-            showMessage(`🎯 Localizado en topología: ${name}`);
+            showMessage(`🎯 Localizado y Enfocado: ${name}`);
+        } else if (attempts < 4) {
+            setTimeout(() => tryLocate(attempts + 1), 100);
         } else {
-            showMessage('Dispositivo localizado en topología.');
+            showMessage(`Dispositivo localizado en topología (${mac || ip}).`);
         }
-    }, 180);
+    };
+
+    setTimeout(() => tryLocate(0), 80);
 }
 
 function clearTopoPin() {
