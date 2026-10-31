@@ -732,6 +732,8 @@
         .topo-stage {
             position: relative;
             width: 100%;
+            margin: 0 auto;
+            transition: width 0.16s ease-out, margin 0.16s ease-out;
             height: 82vh;
             min-height: 420px;
             background: radial-gradient(circle at 50% 50%, #0f1b33 0%, #090e1a 55%, #05070e 100%);
@@ -1437,6 +1439,9 @@
                         <input type="file" id="topo-import-file" accept=".json" style="display:none;" onchange="importTopoPositionsJson(event)">
                         <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refrescar estado de red">
                             🔄
+                        </button>
+                        <button id="topo-btn-reset-box" class="topo-ctrl-btn" onclick="resetTopoStageBox()" title="Restablecer la caja al ancho y centrado original del encabezado de la web">
+                            ⇤⇥ Restablecer Ancho
                         </button>
                         <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Ampliar a pantalla completa y centrar vista (⛶)">
                             ⛶
@@ -3905,6 +3910,28 @@ function smartAutoOrganizeTopology() {
     showMessage('✨ Topología auto-organizada: distribución inteligente, despejada y equilibrada.');
 }
 
+function resetTopoStageBox() {
+    const stage = document.getElementById('topo-stage');
+    if (!stage) return;
+    stage.style.width = '100%';
+    stage.style.maxWidth = '100%';
+    stage.style.marginLeft = '';
+    stage.style.marginRight = '';
+    try {
+        localStorage.removeItem('ag_topo_stage_width');
+        localStorage.removeItem('ag_topo_stage_margin_left');
+    } catch (e) {}
+
+    const canvas = document.getElementById('topo-canvas');
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas) {
+        canvas.width = stage.clientWidth * dpr;
+        canvas.height = stage.clientHeight * dpr;
+    }
+    fitTopoToScreen(true);
+    showMessage('📐 Caja de topología restablecida y perfectamente centrada al ancho de la página.');
+}
+
 function centerTopoStageBox() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
@@ -3917,6 +3944,7 @@ function centerTopoStageBox() {
     } else {
         stage.style.width = '100%';
         stage.style.marginLeft = '';
+        stage.style.marginRight = '';
         try {
             localStorage.removeItem('ag_topo_stage_width');
             localStorage.removeItem('ag_topo_stage_margin_left');
@@ -3928,33 +3956,17 @@ function initTopoStageResizer() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
 
-    // Restaurar dimensiones y forzar centrado estricto respecto al contenedor de la web
+    // Por defecto, la caja de topología está totalmente centrada en la web igual que el encabezado (width: 100%, margin: 0 auto)
+    stage.style.width = '100%';
+    stage.style.maxWidth = '100%';
+    stage.style.marginLeft = '';
+    stage.style.marginRight = '';
     try {
+        // Purgar cualquier ancho previo anómalo o guardado para asegurar centrado perfecto por defecto
+        localStorage.removeItem('ag_topo_stage_width');
+        localStorage.removeItem('ag_topo_stage_margin_left');
         const savedH = localStorage.getItem('ag_topo_stage_height');
-        const savedW = localStorage.getItem('ag_topo_stage_width');
-        const savedML = localStorage.getItem('ag_topo_stage_margin_left');
         if (savedH) stage.style.height = savedH;
-        if (savedW && savedW !== '100%') {
-            const container = stage.closest('.container') || stage.parentElement;
-            const containerW = container ? container.clientWidth : 1380;
-            const wVal = parseFloat(savedW);
-            // Si estaba guardado sin desplazamiento negativo, o desplazado a la derecha, re-centrar o volver a 100%
-            if (!savedML || parseFloat(savedML) >= 0) {
-                stage.style.width = '100%';
-                stage.style.marginLeft = '';
-                localStorage.removeItem('ag_topo_stage_width');
-                localStorage.removeItem('ag_topo_stage_margin_left');
-            } else if (wVal > containerW) {
-                stage.style.width = wVal + 'px';
-                stage.style.marginLeft = ((containerW - wVal) / 2) + 'px';
-            } else {
-                stage.style.width = '100%';
-                stage.style.marginLeft = '';
-            }
-        } else {
-            stage.style.width = '100%';
-            stage.style.marginLeft = '';
-        }
     } catch (e) {}
 
     const resizerL = document.getElementById('topo-resizer-l');
