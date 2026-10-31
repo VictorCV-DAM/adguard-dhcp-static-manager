@@ -190,9 +190,18 @@ def _aes_decrypt_cbc(b64_ct, key_str, iv_str):
     cipher = Cipher(algorithms.AES(key_str.encode('utf-8')), modes.CBC(iv_str.encode('utf-8')))
     decryptor = cipher.decryptor()
     padded_data = decryptor.update(ct) + decryptor.finalize()
-    unpadder = padding.PKCS7(128).unpadder()
-    pt = unpadder.update(padded_data) + unpadder.finalize()
-    return pt.decode('utf-8')
+    try:
+        unpadder = padding.PKCS7(128).unpadder()
+        pt = unpadder.update(padded_data) + unpadder.finalize()
+        return pt.decode('utf-8')
+    except Exception:
+        last_brace = padded_data.rfind(b'}')
+        if last_brace != -1:
+            try:
+                return padded_data[:last_brace + 1].decode('utf-8', errors='ignore')
+            except Exception:
+                pass
+        return padded_data.rstrip(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f\x10').decode('utf-8', errors='ignore')
 
 
 class MercusysHaloSession:
@@ -301,13 +310,24 @@ class MercusysHaloSession:
         except Exception:
             pass
 
-        # 2. Fallback to configured IPs if device_list failed
-        if not nodes:
+        # 2. Fallback to configured IPs if device_list failed or incomplete
+        known_halo_fallback = [
+            {"device_ip": "192.168.1.11", "mac": "30-16-9D-2B-61-54", "role": "master", "nickname": "Halo 1"},
+            {"device_ip": "192.168.1.12", "mac": "30-16-9D-2B-62-60", "role": "slave", "nickname": "Halo 2"},
+            {"device_ip": "192.168.1.13", "mac": "30-16-9D-2B-5F-F0", "role": "slave", "nickname": "Halo 3"}
+        ]
+        if not nodes or len(nodes) < len(known_halo_fallback):
             for idx, cip in enumerate(configured_ips):
                 cip = cip.strip()
                 if not cip:
                     continue
+                if any(n.get("device_ip") == cip for n in nodes):
+                    continue
                 mac_colon = ip_to_mac_hint.get(cip, "")
+                if not mac_colon:
+                    matched_k = next((k for k in known_halo_fallback if k["device_ip"] == cip), None)
+                    if matched_k:
+                        mac_colon = matched_k["mac"].lower().replace("-", ":")
                 if mac_colon:
                     nodes.append({
                         "device_ip": cip,
@@ -469,9 +489,9 @@ def _refresh_halo_cache_sync(router, ip_to_mac_hint=None):
             if cmap or ninfo:
                 now_ts = time.time()
                 if cmap:
-                    _HALO_CACHE["client_map"] = cmap
+                    _HALO_CACHE["client_map"].update(cmap)
                 if ninfo:
-                    _HALO_CACHE["node_info_by_ip"] = ninfo
+                    _HALO_CACHE["node_info_by_ip"].update(ninfo)
                 _HALO_CACHE["timestamp"] = now_ts
                 try:
                     with open(HALO_CACHE_FILE, 'w', encoding='utf-8') as f:
@@ -483,6 +503,7 @@ def _refresh_halo_cache_sync(router, ip_to_mac_hint=None):
                 except Exception:
                     pass
     finally:
+        _HALO_CACHE["timestamp"] = time.time()
         _HALO_CACHE["refreshing"] = False
 
 
@@ -494,7 +515,7 @@ def get_mercusys_halo_data(router, ip_to_mac_hint=None, wait_if_empty=False):
     if not _HALO_CACHE["client_map"]:
         _HALO_CACHE["refreshing"] = True
         _refresh_halo_cache_sync(router, ip_to_mac_hint)
-    elif age > 25.0 and not _HALO_CACHE["refreshing"]:
+    elif age > 90.0 and not _HALO_CACHE["refreshing"]:
         _HALO_CACHE["refreshing"] = True
         t = threading.Thread(target=_refresh_halo_cache_sync, args=(router, ip_to_mac_hint), daemon=True)
         t.start()
