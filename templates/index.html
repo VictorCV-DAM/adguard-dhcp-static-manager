@@ -1348,6 +1348,7 @@
             <button class="btn btn-outline" onclick="openAlertsModal()">🔔 Alertas</button>
             <button class="btn btn-outline" onclick="openBackupModal()">💾 Exportar / Importar</button>
             <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columnas</button>
+            <button class="btn btn-outline" onclick="openStaticOrderModal()">📌 Orden de Fijadas <span id="btn-statics-badge" class="badge" style="background:rgba(56,189,248,0.18); color:#38bdf8; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
             <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Configuraciones (AdGuard / Routers)</button>
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
                 <button class="btn btn-outline" style="font-weight:600;" onclick="toggleUserMenu(event)" title="Sesión y seguridad">👤 {{ auth_user }} ▾</button>
@@ -1547,6 +1548,21 @@
                 Entradas fantasma (<code>00:00:00:00:00:00</code>): <strong id="lbl-ghost">0</strong> |
                 Caducadas: <strong id="lbl-expired">0</strong>
             </p>
+            <!-- Entrada de Orden Cronológico de Fijación -->
+            <div style="background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.22); border-radius:8px; padding:8px 12px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                    <span style="font-size:0.83rem; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+                        📌 Orden de Fijación (<strong id="lbl-statics-total" style="color:#86efac;">0</strong> fijadas)
+                    </span>
+                    <button class="btn btn-outline" style="padding:2px 8px; font-size:0.74rem;" onclick="openStaticOrderModal()">
+                        📋 Ver Lista Numerada (1 → N)
+                    </button>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:5px; font-size:0.78rem;">
+                    <div>🥇 <strong>1ª Fijada:</strong> <span id="lbl-static-first" style="color:#86efac; font-weight:600;">—</span></div>
+                    <div>🏁 <strong>Última Fijada:</strong> <span id="lbl-static-last" style="color:#fcd34d; font-weight:600;">—</span></div>
+                </div>
+            </div>
             <!-- Fila unificada de tiempos de concesión: predefinidos y personalizado integrados -->
             <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
                 <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
@@ -1570,7 +1586,8 @@
 
     <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
-            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();">
+            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();
+        updateStaticOrderWidgets(data.static_order_summary);">
             <div style="display:inline-flex; align-items:center; gap:8px;">
                 <button id="btn-toggle-table-width" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="toggleTableFullWidth()" title="Ampliar la caja de la tabla horizontalmente a pantalla ancha o restaurar (↔)">
                     <span id="icon-table-width">↔</span>
@@ -3945,8 +3962,9 @@ function renderTable() {
         }
         const mediumHtml = `<span class="badge ${mediumBadgeClass}" title="${d.conn_medium_label || ''}">${mediumIcon}${d.conn_medium_label || 'Desconectado'}</span>`;
 
+        const staticOrderLabel = d.static_order_idx ? ` #${d.static_order_idx}` : '';
         const typeBadge = d.static
-            ? `<span class="badge badge-static" title="${d.manual_static ? 'IP estática configurada manualmente en el dispositivo (fuera de DHCP)' : 'Reserva estática en AdGuard'}">${d.manual_static ? 'Estática (Manual)' : 'Estática'}</span>`
+            ? `<span class="badge badge-static" style="cursor:pointer;" onclick="openStaticOrderModal()" title="${d.manual_static ? 'IP estática manual' : `Reserva estática fija en AdGuard (Orden #${d.static_order_idx || '—'})`}">${d.manual_static ? 'Estática (Manual)' : 'Estática' + staticOrderLabel}</span>`
             : `<span class="badge badge-dyn">${d.expired ? 'Dinámica (Caducada)' : 'Dinámica'}</span>`;
 
         const predHtml = `
@@ -9192,6 +9210,194 @@ setInterval(() => {
         loadState(false);
     }
 }, 30000);
+
+let currentStaticOrderSummary = null;
+
+function updateStaticOrderWidgets(summary) {
+    if (!summary) return;
+    currentStaticOrderSummary = summary;
+    
+    const countTotal = document.getElementById('lbl-statics-total');
+    if (countTotal) countTotal.textContent = summary.total || 0;
+    
+    const btnBadge = document.getElementById('btn-statics-badge');
+    if (btnBadge) btnBadge.textContent = summary.total || 0;
+    
+    const firstEl = document.getElementById('lbl-static-first');
+    if (firstEl) {
+        if (summary.first) {
+            firstEl.innerHTML = `<strong>#1 ${escapeHtml(summary.first.hostname || summary.first.mac)}</strong> <code style="color:#38bdf8;">(${summary.first.ip})</code>`;
+        } else {
+            firstEl.textContent = '—';
+        }
+    }
+    
+    const lastEl = document.getElementById('lbl-static-last');
+    if (lastEl) {
+        if (summary.last) {
+            lastEl.innerHTML = `<strong>#${summary.last.order} ${escapeHtml(summary.last.hostname || summary.last.mac)}</strong> <code style="color:#38bdf8;">(${summary.last.ip})</code>`;
+        } else {
+            lastEl.textContent = '—';
+        }
+    }
+}
+
+function openStaticOrderModal() {
+    const modal = document.getElementById('modal-static-order');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderStaticOrderList();
+    }
+}
+
+function closeStaticOrderModal() {
+    const modal = document.getElementById('modal-static-order');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderStaticOrderList() {
+    const summary = currentStaticOrderSummary;
+    if (!summary) return;
+    
+    const firstBox = document.getElementById('so-modal-first');
+    const lastBox = document.getElementById('so-modal-last');
+    const cntBadge = document.getElementById('so-count-badge');
+    const container = document.getElementById('so-table-container');
+    const searchVal = (document.getElementById('so-search-inp')?.value || '').trim().toLowerCase();
+    
+    if (cntBadge) cntBadge.textContent = `${summary.total} fijadas en total`;
+    
+    if (firstBox) {
+        firstBox.innerHTML = summary.first 
+            ? `<span style="color:#86efac; font-weight:800;">#1</span> <strong>${escapeHtml(summary.first.hostname)}</strong> · <code style="color:#38bdf8;">${summary.first.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.first.mac})</span>`
+            : '<span style="color:var(--muted);">Sin IPs fijas registradas</span>';
+    }
+    
+    if (lastBox) {
+        lastBox.innerHTML = summary.last 
+            ? `<span style="color:#fde047; font-weight:800;">#${summary.last.order}</span> <strong>${escapeHtml(summary.last.hostname)}</strong> · <code style="color:#38bdf8;">${summary.last.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.last.mac})</span>`
+            : '<span style="color:var(--muted);">Sin IPs fijas registradas</span>';
+    }
+    
+    if (!container) return;
+    
+    let list = summary.list || [];
+    if (searchVal) {
+        list = list.filter(item => 
+            (item.hostname || '').toLowerCase().includes(searchVal) ||
+            (item.ip || '').toLowerCase().includes(searchVal) ||
+            (item.mac || '').toLowerCase().includes(searchVal) ||
+            String(item.order).includes(searchVal)
+        );
+    }
+    
+    if (list.length === 0) {
+        container.innerHTML = '<div style="padding:24px; text-align:center; color:var(--muted); font-size:0.85rem;">No se encontraron dispositivos que coincidan con la búsqueda.</div>';
+        return;
+    }
+    
+    let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem; text-align:left;">
+            <thead>
+                <tr style="border-bottom:1px solid var(--border); color:#38bdf8; background:#111827; position:sticky; top:0; z-index:2;">
+                    <th style="padding:10px 12px; width:75px;">Nº Orden</th>
+                    <th style="padding:10px 12px;">Dispositivo Fijo</th>
+                    <th style="padding:10px 12px;">Dirección IP</th>
+                    <th style="padding:10px 12px;">MAC</th>
+                    <th style="padding:10px 12px; text-align:right;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    list.forEach(item => {
+        const isFirst = item.order === 1;
+        const isLast = item.order === summary.total;
+        let badgeColor = '#38bdf8';
+        let badgeBg = 'rgba(56,189,248,0.18)';
+        let tag = '';
+        if (isFirst) {
+            badgeColor = '#86efac';
+            badgeBg = 'rgba(34,197,94,0.22)';
+            tag = '<span style="font-size:0.7rem; color:#86efac; font-weight:700; margin-left:4px;">(1ª)</span>';
+        } else if (isLast) {
+            badgeColor = '#fde047';
+            badgeBg = 'rgba(234,179,8,0.22)';
+            tag = '<span style="font-size:0.7rem; color:#fde047; font-weight:700; margin-left:4px;">(Última)</span>';
+        }
+        
+        html += `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <td style="padding:9px 12px;">
+                    <span class="badge" style="background:${badgeBg}; color:${badgeColor}; font-weight:800; font-size:0.82rem; padding:3px 8px; border-radius:6px; border:1px solid ${badgeColor}40;">
+                        #${item.order}
+                    </span>
+                    ${tag}
+                </td>
+                <td style="padding:9px 12px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:1.05rem;">${item.dev_icon || '📱'}</span>
+                        <strong style="color:#f8fafc; font-size:0.86rem;">${escapeHtml(item.hostname)}</strong>
+                    </div>
+                    ${item.dev_vendor ? `<span style="font-size:0.70rem; color:var(--muted);">${escapeHtml(item.dev_vendor)}</span>` : ''}
+                </td>
+                <td style="padding:9px 12px;">
+                    <code class="clickable-copy-pill" onclick="copyToClipboard('${item.ip}', 'IP', this)" style="color:#38bdf8; font-weight:700; font-size:0.84rem;">
+                        ${item.ip}
+                    </code>
+                </td>
+                <td style="padding:9px 12px;">
+                    <code class="clickable-copy-pill" onclick="copyToClipboard('${item.mac}', 'MAC', this)" style="font-size:0.76rem; color:var(--muted);">
+                        ${item.mac}
+                    </code>
+                </td>
+                <td style="padding:9px 12px; text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem;" onclick="closeStaticOrderModal(); openDeviceSheet('${item.mac}', '${item.ip}')">
+                        👁️ Ver Ficha
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
 </script>
+
+    <!-- MODAL: ORDEN DE FIJACIÓN DE IPS ESTÁTICAS -->
+    <div id="modal-static-order" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(4px);" onclick="if(event.target===this) closeStaticOrderModal()">
+        <div class="popup-modal" style="max-width:760px; width:92%; max-height:88vh; display:flex; flex-direction:column; background:#1e293b; border-radius:14px; border:1px solid var(--border); box-shadow:0 20px 40px rgba(0,0,0,0.6); padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+                <h3 style="margin:0; font-size:1.15rem; color:#38bdf8; display:flex; align-items:center; gap:8px;">
+                    📌 Orden Cronológico de IPs Estáticas Fijadas
+                </h3>
+                <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem;" onclick="closeStaticOrderModal()">✕ Cerrar</button>
+            </div>
+
+            <!-- Tarjetas destacadas 1ª y Última -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; margin-bottom:14px;">
+                <div style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); border-radius:10px; padding:10px 14px;">
+                    <span style="font-size:0.72rem; text-transform:uppercase; color:#86efac; font-weight:800; letter-spacing:0.5px;">🥇 Primera Fijada en la Lista</span>
+                    <div id="so-modal-first" style="font-size:0.88rem; font-weight:700; color:#f8fafc; margin-top:4px;">—</div>
+                </div>
+                <div style="background:rgba(234,179,8,0.1); border:1px solid rgba(234,179,8,0.3); border-radius:10px; padding:10px 14px;">
+                    <span style="font-size:0.72rem; text-transform:uppercase; color:#fde047; font-weight:800; letter-spacing:0.5px;">🏁 Última que se Fijó</span>
+                    <div id="so-modal-last" style="font-size:0.88rem; font-weight:700; color:#f8fafc; margin-top:4px;">—</div>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                <input type="text" id="so-search-inp" placeholder="Buscar por nombre, IP, MAC o nº..." oninput="renderStaticOrderList()" style="flex:1; padding:7px 12px; background:#0f172a; border:1px solid var(--border); border-radius:8px; color:#f8fafc; font-size:0.82rem;">
+                <span id="so-count-badge" style="font-size:0.78rem; color:var(--muted); white-space:nowrap;">0 fijadas</span>
+            </div>
+
+            <!-- Tabla numerada 1..N con scroll -->
+            <div id="so-table-container" style="flex:1; max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#0f172a;">
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

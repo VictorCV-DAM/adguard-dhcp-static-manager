@@ -2038,6 +2038,56 @@ def build_state(force_refresh=False):
             'icon': '🔀'
         })
 
+    # Orden histórico/persistente de fijación de IPs Estáticas (1..N)
+    static_order_macs = cfg.get('static_order_macs')
+    if not isinstance(static_order_macs, list):
+        static_order_macs = []
+
+    current_static_macs = []
+    for l in leases:
+        if bool(l.get('static')):
+            m_l = (l.get('mac') or '').strip().lower()
+            if m_l and m_l != '00:00:00:00:00:00' and m_l not in current_static_macs:
+                current_static_macs.append(m_l)
+
+    updated_order = [m for m in static_order_macs if m in current_static_macs]
+    for m in current_static_macs:
+        if m not in updated_order:
+            updated_order.append(m)
+
+    if updated_order != static_order_macs:
+        cfg['static_order_macs'] = updated_order
+        save_config_raw(cfg)
+
+    mac_to_order = {m: idx + 1 for idx, m in enumerate(updated_order)}
+
+    for d in devices:
+        if d.get('static'):
+            d['static_order_idx'] = mac_to_order.get(d['mac'])
+        else:
+            d['static_order_idx'] = None
+
+    ordered_statics_list = []
+    for m in updated_order:
+        dev_match = next((d for d in devices if d['mac'] == m), None)
+        if dev_match:
+            ordered_statics_list.append({
+                'order': mac_to_order[m],
+                'mac': m,
+                'ip': dev_match.get('ip', ''),
+                'hostname': dev_match.get('hostname', '(Sin nombre)'),
+                'dev_icon': dev_match.get('dev_icon', '📱'),
+                'dev_vendor': dev_match.get('dev_vendor', ''),
+                'router_node': dev_match.get('router_node', '')
+            })
+
+    static_order_summary = {
+        'total': len(ordered_statics_list),
+        'first': ordered_statics_list[0] if ordered_statics_list else None,
+        'last': ordered_statics_list[-1] if ordered_statics_list else None,
+        'list': ordered_statics_list
+    }
+
     return {
         'status': 'success',
         'adguard_available': adguard_available,
@@ -2047,7 +2097,8 @@ def build_state(force_refresh=False):
         'expired_count': expired_count,
         'devices': devices,
         'network_links': global_network_links,
-        'custom_service_names': custom_names
+        'custom_service_names': custom_names,
+        'static_order_summary': static_order_summary
     }
 
 
