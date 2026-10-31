@@ -24,6 +24,7 @@ SCAN_SECONDS = 12
 CANAL_SCAN_SECONDS = 10
 
 _context = {}
+_CACHE_CLIENTES_RF = {}
 
 
 def sh(cmd, timeout=25):
@@ -337,6 +338,11 @@ def send_rf_deauth_if_available(client_mac, bssid=None, channel=None):
     if not mon_listo():
         return False, "Modo monitor no activo"
     logs = []
+    c_mac = (client_mac or '').strip().lower()
+    if not bssid and c_mac in _CACHE_CLIENTES_RF:
+        bssid = _CACHE_CLIENTES_RF[c_mac].get('bssid')
+        if not channel:
+            channel = _CACHE_CLIENTES_RF[c_mac].get('channel')
     if not channel and bssid:
         channel = _canal_de_bssid(bssid, logs)
     channel = channel or '1'
@@ -489,6 +495,12 @@ def init_app(app, context):
                 est["vendor"] = dev_info.get("vendor", "")
                 est["icon"] = dev_info.get("icon", "📱")
                 est["cat"] = dev_info.get("cat", "dispositivo")
+                _CACHE_CLIENTES_RF[c_mac] = {
+                    'bssid': est.get('bssid'),
+                    'channel': est.get('channel'),
+                    'essid': est.get('essid'),
+                    'ts': time.time()
+                }
                 if est["ip"]:
                     resueltas += 1
 

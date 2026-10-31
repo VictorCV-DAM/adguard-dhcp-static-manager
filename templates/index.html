@@ -2058,9 +2058,14 @@
                     </div>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:10px;">
-                    <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Si está conectado a un AP compatible (ej. TP-Link), fuerza su reconexión Wi-Fi para que tome la nueva IP inmediatamente">
-                        <input type="checkbox" id="ds-force-reconnect"> ⚡ Forzar nueva IP ahora (reconectar en router/mesh y enviar DHCPNAK) <span id="ds-connected-router-hint" style="color:var(--muted); font-size:0.73rem; margin-left:4px;"></span>
-                    </label>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Fuerza la reconexión por red local a través del Router o nodos Mesh (y envía DHCPNAK)">
+                            <input type="checkbox" id="ds-force-reconnect"> ⚡ Forzar por Router / Mesh (DHCPNAK) <span id="ds-connected-router-hint" style="color:var(--muted); font-size:0.73rem; margin-left:4px;"></span>
+                        </label>
+                        <label id="ds-rf-reconnect-wrap" style="font-size:0.79rem; color:#38bdf8; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Emite una trama de expulsión por radiofrecuencia (802.11 RF) mediante la antena monitor de la Raspberry Pi">
+                            <input type="checkbox" id="ds-rf-reconnect"> 📡 Expulsión Forzosa por Radiofrecuencia (RF) <span id="ds-rf-status-hint" style="font-size:0.73rem; margin-left:4px;"></span>
+                        </label>
+                    </div>
                     <button type="button" id="ds-btn-apply-dhcp" class="btn btn-primary" style="padding:7px 14px; font-size:0.81rem; font-weight:700;" onclick="applyDhcpFromSheet()">📌 Guardar Nombre / Aplicar IP</button>
                 </div>
                 <div id="ds-dhcp-status" style="display:none; margin-top:8px; padding:6px 10px; border-radius:6px; font-size:0.78rem;"></div>
@@ -3020,6 +3025,13 @@ async function scanWifiSpectrum() {
             });
             html += `</tbody></table>`;
             if (resultsDiv) resultsDiv.innerHTML = html;
+            if (data.devices) {
+                if (!wifiPluginState) wifiPluginState = {};
+                if (!wifiPluginState.scanned_clients) wifiPluginState.scanned_clients = {};
+                data.devices.forEach(d => {
+                    if (d.client) wifiPluginState.scanned_clients[d.client.toLowerCase()] = d;
+                });
+            }
             logWifiTerminal(`[+] Escaneo finalizado. ${data.devices.length} clientes capturados.`);
         } else {
             if (countEl) countEl.textContent = '0 detectados';
@@ -8098,13 +8110,46 @@ async function openDeviceSheet(mac, ipHint = '') {
     const dhcpBadge = document.getElementById('ds-dhcp-badge');
     const dhcpStatus = document.getElementById('ds-dhcp-status');
     const forceChk = document.getElementById('ds-force-reconnect');
+    const rfWrap = document.getElementById('ds-rf-reconnect-wrap');
+    const rfChk = document.getElementById('ds-rf-reconnect');
+    const rfHint = document.getElementById('ds-rf-status-hint');
+
     if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Sin nombre)') ? dev.hostname : '';
     if (ipInp) ipInp.value = dev.ip || currentSheetIp || '';
     if (forceChk) forceChk.checked = false;
+
     const rHint = document.getElementById('ds-connected-router-hint');
     if (rHint) {
         const rNode = dev.router_node || '';
         rHint.textContent = rNode ? `[AP: ${rNode}]` : '';
+    }
+
+    // Configurar estado del checkbox de Expulsión Forzosa RF
+    if (rfWrap && rfChk && rfHint) {
+        const isCable = dev.conn_medium === 'cable';
+        const isOffline = dev.conn_medium === 'offline';
+        const rfEnabled = !!(wifiPluginState && wifiPluginState.enabled);
+        const scannedMap = (wifiPluginState && wifiPluginState.scanned_clients) || {};
+        const rfClient = scannedMap[mac.toLowerCase()];
+
+        if (!rfEnabled) {
+            rfChk.disabled = true;
+            rfChk.checked = false;
+            rfHint.innerHTML = '<span style="color:var(--muted);">(⚪ Módulo RF desactivado en Configuración)</span>';
+        } else if (isCable) {
+            rfChk.disabled = true;
+            rfChk.checked = false;
+            rfHint.innerHTML = '<span style="color:var(--muted);">(🚫 Conectado por Cable Ethernet)</span>';
+        } else if (rfClient) {
+            rfChk.disabled = false;
+            rfChk.checked = true;
+            const chan = rfClient.channel ? `Canal ${rfClient.channel}` : 'Canal detectado';
+            rfHint.innerHTML = `<span style="color:#86efac; font-weight:700;">(🟢 En cobertura RF · ${chan})</span>`;
+        } else {
+            rfChk.disabled = false;
+            rfChk.checked = false;
+            rfHint.innerHTML = '<span style="color:#fcd34d;">(⚠️ No detectado en escaneo RF previo · verificar alcance)</span>';
+        }
     }
     if (dhcpBadge) {
         dhcpBadge.innerHTML = dev.static
@@ -8625,7 +8670,7 @@ async function applyDhcpFromSheet() {
         const res = await fetch('/api/assign-static', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mac: currentSheetMac, ip, hostname, force_reconnect })
+            body: JSON.stringify({ mac: currentSheetMac, ip, hostname, force_reconnect, force_rf: !!document.getElementById('ds-rf-reconnect')?.checked })
         });
         const data = await res.json();
         const ok = data.status === 'success';

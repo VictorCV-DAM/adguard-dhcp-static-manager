@@ -2093,6 +2093,7 @@ def api_assign_static():
     ip = (req.get('ip') or '').strip()
     hostname = (req.get('hostname') or '').strip()
     force_reconnect = bool(req.get('force_reconnect', False))
+    force_rf = bool(req.get('force_rf', False))
 
     if not mac or not ip or not hostname:
         return jsonify({'status': 'error', 'message': 'MAC, IP y Nombre son obligatorios.'})
@@ -2176,15 +2177,15 @@ def api_assign_static():
             actions_taken.append(rmsg)
 
     # 2.5 Si el plugin Wi-Fi RF está activo y mon0 listo, emitir deauth adicional por radiofrecuencia
-    try:
-        if cfg.get('wifi_plugin_enabled'):
+    if force_rf or (force_reconnect and cfg.get('wifi_plugin_enabled')):
+        try:
             import wifi_plugin
             if hasattr(wifi_plugin, 'mon_listo') and wifi_plugin.mon_listo():
                 ok_rf, rf_log = wifi_plugin.send_rf_deauth_if_available(mac)
                 if ok_rf:
-                    actions_taken.append("Deauth RF (802.11 aire) emitido")
-    except Exception:
-        pass
+                    actions_taken.append("Expulsión RF (802.11 aire) emitida")
+        except Exception:
+            pass
 
     # Enviar SIEMPRE ráfaga DHCPNAK por L2 y purgar entrada ARP local
     try:
