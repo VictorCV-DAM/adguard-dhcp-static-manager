@@ -280,6 +280,26 @@ class MercusysHaloSession:
         self.stok = (r_login.get("result") or r_login.get("data") or {}).get("stok", "")
         return bool(self.stok)
 
+    def trigger_wifi_reconnect(self):
+        """Dispara una recarga/reconexión Wi-Fi en el nodo maestro Halo guardando la configuración WLAN."""
+        try:
+            if not self.stok:
+                if not self.login():
+                    return False, "Error de autenticación en Mercusys Halo"
+            wlan_data = self._post_encrypted("/admin/wireless?form=wlan", {"operation": "read"})
+            res = wlan_data.get('result', {})
+            if not res:
+                return False, "No se pudo leer la configuración WLAN de Halo"
+            write_res = self._post_encrypted("/admin/wireless?form=wlan", {
+                "operation": "write",
+                "params": res
+            })
+            if write_res.get('error_code') == 0:
+                return True, "Reconexión Wi-Fi recargada en Mercusys Halo."
+            return False, f"Respuesta Halo: {write_res.get('msg', 'error')}"
+        except Exception as e:
+            return False, f"Excepción en Halo: {e}"
+
     def fetch_mesh_topology(self, configured_ips, ip_to_mac_hint=None):
         if not self.stok:
             if not self.login():
@@ -996,15 +1016,22 @@ def query_router_associated_macs(router):
 
 
 def trigger_router_reconnect(router, mac):
+    """Ejecuta la orden de reconexión Wi-Fi en el router indicado."""
     rtype = router.get('type', 'tplink_wr841n')
     name = router.get('name', 'AP')
     first_ip = (router.get('ip') or '').split(',')[0].strip()
     user = (router.get('user') or 'admin').strip()
     pwd = (router.get('password') or '').strip()
 
+    if rtype == 'mercusys_halo':
+        if not pwd:
+            return False, f"Contraseña de {name} no configurada."
+        session = MercusysHaloSession(first_ip, pwd)
+        return session.trigger_wifi_reconnect()
+
     if rtype == 'tplink_wr841n':
         if not pwd:
-            return False, f"Password for {name} is not configured."
+            return False, f"Contraseña de {name} no configurada."
         token = base64.b64encode(f"{user}:{pwd}".encode('utf-8')).decode('ascii')
         headers = {
             'Cookie': f'Authorization=Basic {token}',
@@ -1037,17 +1064,48 @@ def trigger_router_reconnect(router, mac):
                     break
                 except Exception:
                     time.sleep(1)
-            return True, f"Wi-Fi reconnect triggered on {name}."
+            return True, f"Reconexión Wi-Fi aplicada en {name}."
         except Exception:
-            return True, f"Wi-Fi restart command sent to {name}."
+            return True, f"Orden de reinicio Wi-Fi enviada a {name}."
 
-    return False, f"Router {name} ({rtype}) is registered for topology only."
+    return False, f"El router {name} ({rtype}) está registrado para topología pero no soporta reconexión directa."
 
 
 def ping_ip(ip):
     res = subprocess.run(['ping', '-c', '1', '-W', '1', ip], capture_output=True, text=True)
     return res.returncode == 0
 
+
+def verify_ip_l2(ip, target_mac=None, iface="eth0", timeout=2):
+    """Verifica si una IP responde en Layer 2 (ARP) y si coincide con la MAC objetivo."""
+    if not ip:
+        return False, None
+    try:
+        res = subprocess.run(
+            ['sudo', 'arping', '-c', '2', '-w', str(timeout), '-I', iface, ip],
+            capture_output=True, text=True, timeout=timeout + 2
+        )
+        output = res.stdout or ''
+        if 'Received 0 response' in output or res.returncode != 0:
+            arp_table = get_arp_table()
+            if target_mac and target_mac.lower() in arp_table:
+                if ip in arp_table[target_mac.lower()]:
+                    return True, target_mac.lower()
+            return False, None
+
+        found_macs = re.findall(r'\[([0-9a-fA-F:]{17})\]', output)
+        reply_mac = found_macs[0].lower() if found_macs else None
+
+        if target_mac and reply_mac:
+            clean_target = target_mac.lower().replace('-', ':')
+            if reply_mac == clean_target:
+                return True, reply_mac
+            else:
+                return False, reply_mac
+        return True, reply_mac
+    except Exception:
+        alive = ping_ip(ip)
+        return alive, None
 
 def test_adguard_credentials(cfg):
     url = (cfg.get('adguard_url') or 'http://127.0.0.1:8080').rstrip('/')
@@ -2037,12 +2095,23 @@ def api_assign_static():
     force_reconnect = bool(req.get('force_reconnect', False))
 
     if not mac or not ip or not hostname:
-        return jsonify({'status': 'error', 'message': 'MAC, IP, and Hostname are required.'})
+        return jsonify({'status': 'error', 'message': 'MAC, IP y Nombre son obligatorios.'})
 
-    cfg = load_config()
-    container = cfg.get('docker_container', 'adguardhome')
+    if not check_adguard_available():
+        return jsonify({'status': 'error', 'message': 'Modo Autónomo: La asignación DHCP estática en servidor requiere AdGuard Home activo.'}), 400
 
-    run_sudo(['docker', 'stop', container])
+    # Obtener IP previa de la MAC antes de purgar
+    old_ip = None
+    try:
+        curr_data = read_leases()
+        for l in curr_data.get('leases', []):
+            if (l.get('mac') or '').lower() == mac:
+                old_ip = (l.get('ip') or '').strip()
+                break
+    except Exception:
+        pass
+
+    run_sudo(['docker', 'stop', 'adguardhome'])
     removed = 0
     try:
         data = read_leases()
@@ -2068,37 +2137,88 @@ def api_assign_static():
         data['leases'] = new_leases
         write_leases(data)
     finally:
-        run_sudo(['docker', 'start', container])
+        run_sudo(['docker', 'start', 'adguardhome'])
 
-    msg = f'Static IP {ip} assigned to {hostname} ({mac}). ({removed} conflicting lease(s) purged).'
+    base_msg = f'IP estática {ip} guardada en AdGuard Home para {hostname} ({mac}).'
+    if removed > 0:
+        base_msg += f' ({removed} concesiones previas purgadas).'
 
-    if force_reconnect:
-        reconnected = False
+    if not force_reconnect:
+        return jsonify({'status': 'success', 'verified': True, 'message': f'📌 {base_msg} Se aplicará automáticamente en su próxima renovación DHCP.'})
+
+    # Forzar reconexión inteligente según router y broadcast DHCPNAK
+    actions_taken = []
+    cfg = load_config()
+
+    # Identificar si está en Halo
+    connected_to_halo = False
+    try:
         for r in cfg.get('routers', []):
-            if r.get('enabled', True) and r.get('type') == 'tplink_wr841n' and r.get('password'):
-                ok, ap_msg = trigger_router_reconnect(r, mac)
-                msg += f' | {ap_msg}'
-                if ok:
-                    reconnected = True
-        if reconnected:
-            time.sleep(4)
-            if ping_ip(ip):
-                msg += f' | Ping to {ip} OK!'
-            else:
-                msg += f' | Waiting for ping reply on {ip}...'
+            if r.get('type') == 'mercusys_halo':
+                hmap, _ = get_mercusys_halo_data(r)
+                if mac in hmap:
+                    connected_to_halo = True
+                    break
+    except Exception:
+        pass
 
-    return jsonify({'status': 'success', 'message': msg})
+    # Si está en router compatible, lanzar reconexión AP
+    for r in cfg.get('routers', []):
+        if not r.get('enabled', True):
+            continue
+        rtype = r.get('type')
+        if connected_to_halo and rtype == 'mercusys_halo':
+            ok, rmsg = trigger_router_reconnect(r, mac)
+            actions_taken.append(rmsg)
+        elif rtype == 'tplink_wr841n' and not connected_to_halo:
+            ok, rmsg = trigger_router_reconnect(r, mac)
+            actions_taken.append(rmsg)
+
+    # Enviar SIEMPRE ráfaga DHCPNAK por L2 y purgar entrada ARP local
+    try:
+        send_nak_script = os.path.join(os.path.dirname(__file__), 'send_nak.py')
+        if os.path.exists(send_nak_script):
+            nak_res = run_sudo(['python3', send_nak_script, mac, '192.168.1.249', old_ip or '-', 'eth0'])
+            if nak_res.returncode == 0:
+                actions_taken.append("DHCPNAK emitido")
+    except Exception as e:
+        actions_taken.append(f"DHCPNAK err: {e}")
+
+    # Esperar propagación L2
+    time.sleep(3)
+
+    # Verificación verídica L2 (sin falsos positivos)
+    verified_new, _ = verify_ip_l2(ip, mac)
+    if verified_new:
+        full_msg = f"✅ {base_msg} | ¡Nueva IP {ip} confirmada y activa en el dispositivo!"
+        return jsonify({'status': 'success', 'verified': True, 'message': full_msg})
+
+    still_on_old = False
+    if old_ip and old_ip != ip:
+        still_on_old, _ = verify_ip_l2(old_ip, mac)
+
+    if still_on_old:
+        full_msg = f"⚠️ {base_msg} | El dispositivo aún mantiene activa la IP anterior ({old_ip}). Tomará {ip} automáticamente al renovar su concesión DHCP."
+    else:
+        full_msg = f"⚠️ {base_msg} | El dispositivo aún no responde en {ip}. Se le asignará en cuanto solicite DHCP."
+
+    return jsonify({'status': 'warning', 'verified': False, 'old_ip': old_ip, 'message': full_msg})
 
 
 @app.route('/api/ping', methods=['POST'])
 def api_ping():
     req = request.json or {}
     ip = (req.get('ip') or '').strip()
-    alive = ping_ip(ip)
+    mac = (req.get('mac') or '').strip().lower()
+    alive = False
+    if ip:
+        alive, _ = verify_ip_l2(ip, mac if mac else None)
+        if not alive:
+            alive = ping_ip(ip)
     return jsonify({
         'status': 'success',
         'alive': alive,
-        'message': f'Ping to {ip} succeeded! Device is active on this IP.' if alive else f'No ping reply from {ip} yet.'
+        'message': f'¡Comprobación exitosa! {ip} responde activamente.' if alive else f'Sin respuesta en {ip} todavía.'
     })
 
 

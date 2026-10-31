@@ -1908,7 +1908,7 @@
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:10px;">
                     <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Si está conectado a un AP compatible (ej. TP-Link), fuerza su reconexión Wi-Fi para que tome la nueva IP inmediatamente">
-                        <input type="checkbox" id="ds-force-reconnect"> ⚡ Forzar nueva IP ahora (reconectar cliente en AP Wi-Fi)
+                        <input type="checkbox" id="ds-force-reconnect"> ⚡ Forzar nueva IP ahora (reconectar en router/mesh y enviar DHCPNAK) <span id="ds-connected-router-hint" style="color:var(--muted); font-size:0.73rem; margin-left:4px;"></span>
                     </label>
                     <button type="button" id="ds-btn-apply-dhcp" class="btn btn-primary" style="padding:7px 14px; font-size:0.81rem; font-weight:700;" onclick="applyDhcpFromSheet()">📌 Guardar Nombre / Aplicar IP</button>
                 </div>
@@ -7632,6 +7632,11 @@ async function openDeviceSheet(mac, ipHint = '') {
     if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Sin nombre)') ? dev.hostname : '';
     if (ipInp) ipInp.value = dev.ip || currentSheetIp || '';
     if (forceChk) forceChk.checked = false;
+    const rHint = document.getElementById('ds-connected-router-hint');
+    if (rHint) {
+        const rNode = dev.router_node || '';
+        rHint.textContent = rNode ? `[AP: ${rNode}]` : '';
+    }
     if (dhcpBadge) {
         dhcpBadge.innerHTML = dev.static
             ? '<span class="badge badge-static">📌 IP Estática Fija</span>'
@@ -8063,7 +8068,7 @@ async function applyDhcpFromSheet() {
         statusBox.style.border = '1px solid rgba(56, 189, 248, 0.4)';
         statusBox.style.color = '#7dd3fc';
         statusBox.textContent = force_reconnect
-            ? `⏳ Guardando ${hostname} (${ip}) en AdGuard Home y forzando reconexión Wi-Fi...`
+            ? `⏳ Guardando ${hostname} (${ip}) y forzando renovación DHCP (router/mesh + DHCPNAK)...`
             : `⏳ Guardando nombre "${hostname}" e IP fija ${ip} en AdGuard Home...`;
     }
 
@@ -8075,13 +8080,28 @@ async function applyDhcpFromSheet() {
         });
         const data = await res.json();
         const ok = data.status === 'success';
+        const isWarn = data.status === 'warning';
+
         if (statusBox) {
-            statusBox.style.background = ok ? 'rgba(34, 197, 94, 0.16)' : 'rgba(239, 68, 68, 0.16)';
-            statusBox.style.border = ok ? '1px solid rgba(34, 197, 94, 0.45)' : '1px solid rgba(239, 68, 68, 0.45)';
-            statusBox.style.color = ok ? '#86efac' : '#fca5a5';
-            statusBox.textContent = (ok ? '✅ ' : '❌ ') + (data.message || '');
+            statusBox.style.display = 'block';
+            if (ok) {
+                statusBox.style.background = 'rgba(34, 197, 94, 0.16)';
+                statusBox.style.border = '1px solid rgba(34, 197, 94, 0.45)';
+                statusBox.style.color = '#86efac';
+                statusBox.textContent = (data.message.startsWith('✅') ? '' : '✅ ') + (data.message || '');
+            } else if (isWarn) {
+                statusBox.style.background = 'rgba(234, 179, 8, 0.16)';
+                statusBox.style.border = '1px solid rgba(234, 179, 8, 0.45)';
+                statusBox.style.color = '#fde047';
+                statusBox.textContent = (data.message.startsWith('⚠️') ? '' : '⚠️ ') + (data.message || '');
+            } else {
+                statusBox.style.background = 'rgba(239, 68, 68, 0.16)';
+                statusBox.style.border = '1px solid rgba(239, 68, 68, 0.45)';
+                statusBox.style.color = '#fca5a5';
+                statusBox.textContent = (data.message.startsWith('❌') ? '' : '❌ ') + (data.message || '');
+            }
         }
-        if (ok) {
+        if (ok || isWarn) {
             currentSheetIp = ip;
             document.getElementById('ds-title').textContent = `🧾 ${hostname}`;
             const badge = document.getElementById('ds-dhcp-badge');
@@ -8090,6 +8110,7 @@ async function applyDhcpFromSheet() {
         }
     } catch (e) {
         if (statusBox) {
+            statusBox.style.display = 'block';
             statusBox.style.background = 'rgba(239, 68, 68, 0.16)';
             statusBox.style.border = '1px solid rgba(239, 68, 68, 0.45)';
             statusBox.style.color = '#fca5a5';
