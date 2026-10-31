@@ -1447,7 +1447,22 @@
     <div id="settings-panel" class="card">
         <h3>⚙️ Configuraciones de AdGuard Home y Routers / Puntos de Acceso</h3>
         <div class="card" style="background:#0f172a; margin-bottom:14px;">
-            <strong style="display:block; margin-bottom:10px;">Servidor AdGuard Home</strong>
+            <div style="background:#0f172a; padding:14px; border-radius:10px; border:1px solid var(--border); margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                    <strong style="display:block; font-size:0.92rem; color:#38bdf8;">📡 Plugin Wi-Fi / Radar RF y Modo Monitor (Nexmon)</strong>
+                    <p style="font-size:0.78rem; color:var(--muted); margin:4px 0 0 0;">
+                        Permite alternar modo monitor (mon0), escanear el espectro con airodump-ng y expulsar/reconectar clientes por radiofrecuencia (802.11 deauth).
+                    </p>
+                </div>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:700; color:#f8fafc; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:8px; border:1px solid var(--border);">
+                    <input type="checkbox" id="cfg-wifi-plugin-enabled" onchange="toggleWifiPluginFromConfig(this.checked)"> Activar Plugin Wi-Fi
+                </label>
+            </div>
+            <div id="cfg-wifi-status-pills" style="margin-top:10px; font-size:0.75rem; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap;"></div>
+        </div>
+
+        <strong style="display:block; margin-bottom:10px;">Servidor AdGuard Home</strong>
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
                 <div class="form-group">
                     <label>URL de AdGuard Home</label>
@@ -1495,6 +1510,9 @@
         </button>
         <button id="tab-btn-timeline" class="tab-nav-btn" onclick="switchMainTab('timeline')">
             📅 Línea Temporal
+        </button>
+        <button id="tab-btn-wifirf" class="tab-nav-btn" onclick="switchMainTab('wifirf')" style="display:none;">
+            📡 Radar Wi-Fi (RF)
         </button>
         <button id="tab-btn-diagnostics" class="tab-nav-btn" onclick="switchMainTab('diagnostics')">
             ⚠️ Diagnóstico <span id="tab-badge-diag" class="tab-badge" style="display:none; background:rgba(245,158,11,0.22); color:#fcd34d;">0</span>
@@ -2218,7 +2236,7 @@ let currentMainTab = localStorage.getItem('ag_active_main_tab') || 'devices';
 let serviceCategoryFilter = 'all';
 
 function switchMainTab(tab) {
-    const tabs = ['devices', 'services', 'ipmap', 'topology', 'timeline', 'diagnostics'];
+    const tabs = ['devices', 'services', 'ipmap', 'topology', 'timeline', 'diagnostics', 'wifirf'];
     if (!tabs.includes(tab)) tab = 'devices';
     currentMainTab = tab;
     localStorage.setItem('ag_active_main_tab', tab);
@@ -2233,6 +2251,7 @@ function switchMainTab(tab) {
     else if (tab === 'topology') renderTopology();
     else if (tab === 'timeline') loadTimeline(24);
     else if (tab === 'diagnostics') loadDiagnostics();
+    else if (tab === 'wifirf') refreshWifiPluginUi();
 }
 
 function setServiceCategoryFilter(cat) {
@@ -2583,7 +2602,8 @@ async function discoverRouters() {
         const res = await fetch('/api/discover-routers', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ current_routers: routersConfig })
+            body: JSON.stringify({ current_routers: routersConfig,
+        wifi_plugin_enabled: !!document.getElementById('cfg-wifi-plugin-enabled')?.checked })
         });
         const data = await res.json();
         if (data.status === 'success') {
@@ -2620,15 +2640,279 @@ async function loadConfig() {
     document.getElementById('cfg-ag-user').value = c.adguard_user || '';
     document.getElementById('cfg-ag-pass').value = c.adguard_pass || '';
     routersConfig = Array.isArray(c.routers) ? c.routers : [];
+    const wEnabled = !!c.wifi_plugin_enabled;
+    updateWifiTabVisibility(wEnabled);
+    if (wEnabled) refreshWifiPluginUi(false);
     renderRoutersList();
 }
 
-async function saveConfig() {
+async 
+// ==================== PLUGIN WI-FI / MODO MONITOR (RF) ====================
+let wifiPluginState = {
+    enabled: false,
+    has_wlan0: false,
+    has_mon: false,
+    has_aircrack: false,
+    has_nexutil: false,
+    mode: 'normal'
+};
+
+function logWifiTerminal(msg) {
+    const term = document.getElementById('wifi-output');
+    if (!term) return;
+    const ts = new Date().toLocaleTimeString();
+    term.textContent += `\n[${ts}] ` + msg;
+    term.scrollTop = term.scrollHeight;
+}
+
+function clearWifiTerminal() {
+    const term = document.getElementById('wifi-output');
+    if (term) term.textContent = 'root@Pi-Server:~# Terminal limpiada.';
+}
+
+function updateWifiTabVisibility(enabled) {
+    const btn = document.getElementById('tab-btn-wifirf');
+    if (btn) btn.style.display = enabled ? 'inline-block' : 'none';
+    const chk = document.getElementById('cfg-wifi-plugin-enabled');
+    if (chk) chk.checked = enabled;
+}
+
+async function toggleWifiPluginFromConfig(enabled) {
+    try {
+        const res = await fetch('/api/wifi/toggle-plugin', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ enable: enabled })
+        });
+        const data = await res.json();
+        updateWifiTabVisibility(enabled);
+        showMessage(data.message || 'Configuración del plugin actualizada.');
+        if (enabled) {
+            refreshWifiPluginUi(true);
+            switchMainTab('wifirf');
+        } else {
+            if (currentMainTab === 'wifirf') switchMainTab('devices');
+        }
+    } catch (e) {
+        showMessage('Error al cambiar estado del plugin Wi-Fi.');
+    }
+}
+
+async function refreshWifiPluginUi(logIt = false) {
+    try {
+        const res = await fetch('/api/wifi/status');
+        const data = await res.json();
+        wifiPluginState = data;
+        updateWifiTabVisibility(data.enabled);
+
+        // Actualizar badges
+        const badge = document.getElementById('wifi-badge-mode');
+        if (badge) {
+            if (data.has_mon) {
+                badge.textContent = `MODO MONITOR (${data.mon_iface} ACTIVO)`;
+                badge.style.background = 'rgba(234, 179, 8, 0.18)';
+                badge.style.color = '#fde047';
+                badge.style.borderColor = 'rgba(234, 179, 8, 0.45)';
+            } else {
+                badge.textContent = 'MODO NORMAL (wlan0 managed)';
+                badge.style.background = 'rgba(34, 197, 94, 0.16)';
+                badge.style.color = '#86efac';
+                badge.style.borderColor = 'rgba(34, 197, 94, 0.45)';
+            }
+        }
+
+        // Info Pi
+        const piInfo = document.getElementById('wifi-pi-info');
+        if (piInfo) {
+            piInfo.textContent = `Pi: ${data.pi_ip || '—'} · wlan0: ${data.has_wlan0 ? 'Detectada' : 'No presente'} · aircrack: ${data.has_aircrack ? 'Instalado' : 'Falta'} · nexmon: ${data.has_nexutil ? 'Sí' : 'No'}`;
+        }
+
+        // Pills en el modal de config
+        const pillsBox = document.getElementById('cfg-wifi-status-pills');
+        if (pillsBox) {
+            pillsBox.innerHTML = `
+                <span style="background:rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; border:1px solid var(--border);">wlan0: <strong style="color:${data.has_wlan0 ? '#86efac' : '#f87171'};">${data.has_wlan0 ? 'OK' : 'Ausente'}</strong></span>
+                <span style="background:rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; border:1px solid var(--border);">aircrack-ng: <strong style="color:${data.has_aircrack ? '#86efac' : '#fcd34d'};">${data.has_aircrack ? 'Instalado' : 'Pendiente'}</strong></span>
+                <span style="background:rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; border:1px solid var(--border);">Estado actual: <strong style="color:#38bdf8;">${data.has_mon ? 'Monitor' : 'Normal'}</strong></span>
+            `;
+        }
+
+        // Asistente si faltan dependencias
+        const asst = document.getElementById('wifi-assistant-box');
+        if (asst) {
+            asst.style.display = (!data.has_aircrack && data.has_wlan0) ? 'block' : 'none';
+        }
+
+        if (logIt) logWifiTerminal(`Diagnóstico: wlan0=${data.has_wlan0}, aircrack=${data.has_aircrack}, mon0=${data.has_mon}`);
+    } catch (e) {
+        logWifiTerminal('Error consultando estado del plugin Wi-Fi.');
+    }
+}
+
+async function installWifiDeps() {
+    const btn = document.getElementById('wifi-btn-install');
+    if (btn) btn.disabled = true;
+    logWifiTerminal('Iniciando instalación automática de dependencias (apt-get install aircrack-ng)... Por favor espera.');
+    try {
+        const res = await fetch('/api/wifi/install-deps', { method: 'POST' });
+        const data = await res.json();
+        if (data.output) logWifiTerminal(data.output);
+        showMessage(data.has_aircrack ? '✅ Dependencias instaladas y listas.' : '⚠️ Comprueba los logs en la terminal.');
+        await refreshWifiPluginUi();
+    } catch (e) {
+        logWifiTerminal('Error en la llamada de instalación de dependencias: ' + e);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function setWifiCardMode(mode) {
+    logWifiTerminal(`Cambiando modo de la tarjeta Wi-Fi a: ${mode.toUpperCase()}...`);
+    try {
+        const res = await fetch('/api/wifi/set-mode', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mode })
+        });
+        const data = await res.json();
+        if (data.output) logWifiTerminal(data.output);
+        showMessage(data.status === 'success' ? `Modo ${mode} aplicado.` : 'Error al cambiar de modo.');
+        await refreshWifiPluginUi();
+    } catch (e) {
+        logWifiTerminal('Error de conexión al cambiar de modo: ' + e);
+    }
+}
+
+async function scanWifiSpectrum() {
+    const resultsDiv = document.getElementById('wifi-radar-results');
+    const countEl = document.getElementById('wifi-scan-count');
+    if (resultsDiv) resultsDiv.innerHTML = '<p style="text-align:center; color:#38bdf8; padding:30px 0;">⏳ Capturando tráfico en el aire con airodump-ng (12s)...</p>';
+    logWifiTerminal('Iniciando captura de espectro RF con airodump-ng...');
+
+    try {
+        const res = await fetch('/api/wifi/scan');
+        const data = await res.json();
+        if (data.debug) logWifiTerminal(data.debug);
+
+        if (data.status === 'success' && data.devices && data.devices.length > 0) {
+            if (countEl) countEl.textContent = `${data.devices.length} detectados`;
+            let html = `
+                <table style="width:100%; border-collapse:collapse; font-size:0.83rem;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--border); color:#38bdf8; text-align:left;">
+                            <th style="padding:10px 8px;">Red (ESSID / BSSID)</th>
+                            <th style="padding:10px 8px;">Cliente MAC / Canal</th>
+                            <th style="padding:10px 8px;">Dispositivo Reconocido (DHCP / ARP)</th>
+                            <th style="padding:10px 8px; text-align:right;">Acción RF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.devices.forEach(d => {
+                const hostLabel = d.hostname ? `<strong>${escapeHtml(d.hostname)}</strong> · ` : '';
+                const ipLabel = d.ip ? `<code style="color:#38bdf8; font-weight:700;">${d.ip}</code>` : '<span style="color:var(--muted);">Sin IP activa</span>';
+                html += `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:10px 8px;">
+                            <span style="font-weight:700; color:#f8fafc;">${escapeHtml(d.essid || '(Oculta / Directa)')}</span><br>
+                            <code style="font-size:0.73rem; color:var(--muted);">${d.bssid}</code>
+                        </td>
+                        <td style="padding:10px 8px;">
+                            <code class="clickable-copy-pill" onclick="copyToClipboard('${d.client}', 'MAC', this)" title="Copiar MAC">${d.client}</code><br>
+                            <span style="font-size:0.73rem; color:#fcd34d;">Canal ${d.channel || '1'}</span>
+                        </td>
+                        <td style="padding:10px 8px;">
+                            ${hostLabel}${ipLabel}
+                        </td>
+                        <td style="padding:10px 8px; text-align:right;">
+                            <button class="btn btn-danger" style="padding:5px 10px; font-size:0.75rem; font-weight:700; border-radius:6px;"
+                                onclick="execDeauthFromRow('${d.bssid}', '${d.client}', '${d.channel}')">
+                                ⚡ Expulsar (Deauth)
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table>`;
+            if (resultsDiv) resultsDiv.innerHTML = html;
+            logWifiTerminal(`[+] Escaneo finalizado. ${data.devices.length} clientes capturados.`);
+        } else {
+            if (countEl) countEl.textContent = '0 detectados';
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `<p style="text-align:center; color:#f87171; padding:30px 0;">No se detectaron clientes en este ciclo o la captura no obtuvo datos.</p>`;
+            }
+            logWifiTerminal('[!] Escaneo sin resultados.');
+        }
+        await refreshWifiPluginUi();
+    } catch (e) {
+        if (resultsDiv) resultsDiv.innerHTML = '<p style="text-align:center; color:#f87171; padding:30px 0;">Error en la comunicación con el escáner.</p>';
+        logWifiTerminal('Error en api/wifi/scan: ' + e);
+    }
+}
+
+async function execDeauthFromRow(bssid, client, channel) {
+    if (!confirm(`¿Enviar orden de desasociación RF (deauth 802.11) al cliente ${client} en el router ${bssid}?`)) return;
+    logWifiTerminal(`Enviando deauth RF a ${client} en ${bssid} (Canal ${channel})...`);
+    try {
+        const res = await fetch('/api/wifi/deauth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ bssid, client, channel })
+        });
+        const data = await res.json();
+        if (data.output) logWifiTerminal(data.output);
+        showMessage(data.status === 'success' ? '⚡ Orden de desasociación RF emitida.' : 'Comprueba el log de terminal.');
+    } catch (e) {
+        logWifiTerminal('Error ejecutando deauth: ' + e);
+    }
+}
+
+async function execWifiAutoDeauth() {
+    const bssid = (document.getElementById('wifi-auto-bssid')?.value || '').trim();
+    const client = (document.getElementById('wifi-auto-client')?.value || '').trim();
+    if (!bssid || !client) return alert('Debes rellenar BSSID y MAC del Cliente.');
+    logWifiTerminal(`Ejecutando autodetección de canal y deauth RF para BSSID ${bssid} -> Cliente ${client}...`);
+    try {
+        const res = await fetch('/api/wifi/deauth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ bssid, client, auto_channel: true })
+        });
+        const data = await res.json();
+        if (data.output) logWifiTerminal(data.output);
+        showMessage(data.status === 'success' ? '⚡ Deauth RF completado.' : 'Comprueba la salida de la terminal.');
+    } catch (e) {
+        logWifiTerminal('Error ejecutando auto deauth: ' + e);
+    }
+}
+
+async function execWifiManualDeauth() {
+    const bssid = (document.getElementById('wifi-manual-bssid')?.value || '').trim();
+    const client = (document.getElementById('wifi-manual-client')?.value || '').trim();
+    const channel = (document.getElementById('wifi-manual-channel')?.value || '1').trim();
+    if (!bssid || !client) return alert('Debes rellenar BSSID y MAC del Cliente.');
+    logWifiTerminal(`Ejecutando deauth RF manual para BSSID ${bssid} -> Cliente ${client} en Canal ${channel}...`);
+    try {
+        const res = await fetch('/api/wifi/deauth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ bssid, client, channel })
+        });
+        const data = await res.json();
+        if (data.output) logWifiTerminal(data.output);
+        showMessage(data.status === 'success' ? '⚡ Deauth RF completado.' : 'Comprueba la salida de la terminal.');
+    } catch (e) {
+        logWifiTerminal('Error ejecutando deauth manual: ' + e);
+    }
+}
+
+function saveConfig() {
     const payload = {
         adguard_url: document.getElementById('cfg-ag-url').value.trim(),
         adguard_user: document.getElementById('cfg-ag-user').value.trim(),
         adguard_pass: document.getElementById('cfg-ag-pass').value.trim(),
-        routers: routersConfig
+        routers: routersConfig,
+        wifi_plugin_enabled: !!document.getElementById('cfg-wifi-plugin-enabled')?.checked
     };
     const res = await fetch('/api/config', {
         method: 'POST',

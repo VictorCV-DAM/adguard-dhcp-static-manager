@@ -2170,9 +2170,21 @@ def api_assign_static():
         if connected_to_halo and rtype == 'mercusys_halo':
             ok, rmsg = trigger_router_reconnect(r, mac)
             actions_taken.append(rmsg)
+
         elif rtype == 'tplink_wr841n' and not connected_to_halo:
             ok, rmsg = trigger_router_reconnect(r, mac)
             actions_taken.append(rmsg)
+
+    # 2.5 Si el plugin Wi-Fi RF está activo y mon0 listo, emitir deauth adicional por radiofrecuencia
+    try:
+        if cfg.get('wifi_plugin_enabled'):
+            import wifi_plugin
+            if hasattr(wifi_plugin, 'mon_listo') and wifi_plugin.mon_listo():
+                ok_rf, rf_log = wifi_plugin.send_rf_deauth_if_available(mac)
+                if ok_rf:
+                    actions_taken.append("Deauth RF (802.11 aire) emitido")
+    except Exception:
+        pass
 
     # Enviar SIEMPRE ráfaga DHCPNAK por L2 y purgar entrada ARP local
     try:
@@ -2335,6 +2347,19 @@ def api_set_duration():
         'message': f'DHCP lease duration updated to {seconds} seconds ({seconds // 60} min).'
     })
 
+
+
+try:
+    import wifi_plugin
+    wifi_plugin.init_app(app, {
+        'run_sudo': run_sudo,
+        'load_config': load_config,
+        'save_config_raw': save_config_raw,
+        'get_arp_table': get_arp_table,
+        'read_leases': read_leases,
+    })
+except Exception as _e_wifi:
+    print(f"Aviso: no se pudo cargar wifi_plugin: {_e_wifi}")
 
 extras.init_app(app, {
     'CONFIG_PATH': CONFIG_PATH,
