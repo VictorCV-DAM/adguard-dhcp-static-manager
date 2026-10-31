@@ -851,6 +851,27 @@ def run_sudo(cmd_list):
     return subprocess.run(['sudo'] + cmd_list, capture_output=True, text=True, timeout=30)
 
 
+def check_adguard_available():
+    """Comprueba si AdGuard Home está configurado y accesible (vía archivo local o API)."""
+    try:
+        if os.path.exists(LEASES_PATH) or os.path.exists(YAML_PATH):
+            return True
+        cfg = load_config()
+        url = (cfg.get('adguard_url') or '').strip()
+        user = (cfg.get('adguard_user') or '').strip()
+        pwd = (cfg.get('adguard_pass') or '').strip()
+        if not url:
+            return False
+        req = urllib.request.Request(f"{url.rstrip('/')}/control/status", headers={'User-Agent': 'DHCP-Panel'})
+        if user and pwd:
+            b64 = base64.b64encode(f"{user}:{pwd}".encode()).decode()
+            req.add_header('Authorization', f'Basic {b64}')
+        with urllib.request.urlopen(req, timeout=1.8) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
 def read_leases():
     cfg = load_config()
     res = run_sudo(['cat', cfg['leases_path']])
@@ -1526,6 +1547,7 @@ def api_discover_routers():
 
 def build_state(force_refresh=False):
     cfg = load_config()
+    adguard_available = check_adguard_available()
     routers = cfg.get('routers', [])
     data = read_leases()
     leases = data.get('leases', [])
@@ -1939,6 +1961,8 @@ def build_state(force_refresh=False):
 
     return {
         'status': 'success',
+        'adguard_available': adguard_available,
+        'adguard_mode': 'connected' if adguard_available else 'standalone',
         'lease_duration': get_lease_duration(),
         'ghost_count': ghost_count,
         'expired_count': expired_count,

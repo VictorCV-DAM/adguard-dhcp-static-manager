@@ -999,8 +999,11 @@
                       fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <div>
-                <h1>Gestor Directo de IPs Estáticas — AdGuard Home</h1>
-                <p class="subtitle">Reasigna IPs estáticas purgando la concesión previa al instante sin reducir tus 12 horas de estabilidad.</p>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <h1 style="margin:0;">Gestor Directo de IPs Estáticas — AdGuard Home</h1>
+                    <span id="adguard-status-badge" style="font-size:0.75rem; font-weight:700; padding:3px 10px; border-radius:12px; background:rgba(16,185,129,0.18); color:#34d399; border:1px solid rgba(16,185,129,0.4);" title="Comprobando conexión con AdGuard Home...">🟢 AdGuard Activo</span>
+                </div>
+                <p class="subtitle" style="margin-top:4px;">Reasigna IPs estáticas purgando la concesión previa al instante sin reducir tus 12 horas de estabilidad.</p>
             </div>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
@@ -1192,8 +1195,11 @@
                 <input type="text" id="in-ip" placeholder="Nueva IP estática (ej. 192.168.1.22)">
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn" onclick="assignStatic(false)">Guardar IP y Purgar Concesión</button>
-                <button class="btn btn-success" onclick="assignStatic(true)" title="Purga la concesión en AdGuard y reinicia el enlace Wi-Fi del AP configurado">⚡ Guardar + Forzar Reconexión AP</button>
+                <button id="sheet-btn-assign" class="btn" onclick="assignStatic(false)">Guardar IP y Purgar Concesión</button>
+                <button id="sheet-btn-force" class="btn btn-success" onclick="assignStatic(true)" title="Purga la concesión en AdGuard y reinicia el enlace Wi-Fi del AP configurado">⚡ Guardar + Forzar Reconexión AP</button>
+                <div id="sheet-standalone-warning" style="display:none; width:100%; margin-top:8px; font-size:0.78rem; color:#cbd5e1; background:rgba(30,41,59,0.85); padding:7px 12px; border-radius:6px; border:1px solid rgba(148,163,184,0.3);">
+                    ⚪ <strong>Modo Autónomo:</strong> Visualización de red, fichas, notas y puertos activos. Para asignar IP fija por DHCP en el servidor se requiere AdGuard Home.
+                </div>
             </div>
         </div>
 
@@ -1211,7 +1217,7 @@
                 <button class="btn btn-outline" onclick="setDuration(3600)">1 hora</button>
                 <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
             </div>
-            <button class="btn btn-warn" onclick="cleanJunk()">🧹 Purgar Concesiones Fantasma y Caducadas</button>
+            <button id="btn-clean-junk" class="btn btn-warn" onclick="cleanJunk()">🧹 Purgar Concesiones Fantasma y Caducadas</button>
         </div>
     </div>
 
@@ -2119,7 +2125,45 @@ async function loadState(isManual = false) {
         const url = isManual ? '/api/state?refresh=1' : '/api/state';
         const res = await fetch(url);
         const data = await res.json();
-        
+
+        window._isAdGuardAvailable = (data.adguard_available !== false);
+
+        // Actualizar distintivo de estado AdGuard vs Modo Autónomo
+        const agBadge = document.getElementById('adguard-status-badge');
+        if (agBadge) {
+            if (window._isAdGuardAvailable) {
+                agBadge.innerHTML = '🟢 AdGuard Activo';
+                agBadge.style.background = 'rgba(16,185,129,0.18)';
+                agBadge.style.color = '#34d399';
+                agBadge.style.borderColor = 'rgba(16,185,129,0.4)';
+                agBadge.title = 'Conectado y sincronizado con el servidor DHCP/DNS de AdGuard Home.';
+            } else {
+                agBadge.innerHTML = '⚪ Modo Autónomo (Sin AdGuard)';
+                agBadge.style.background = 'rgba(148,163,184,0.15)';
+                agBadge.style.color = '#cbd5e1';
+                agBadge.style.borderColor = 'rgba(148,163,184,0.35)';
+                agBadge.title = 'Operando en Modo Autónomo: visualizador de topología, fichas y monitoreo activos (AdGuard Home no detectado).';
+            }
+        }
+
+        // Adaptar botón de purga de concesiones expiradas
+        const btnClean = document.getElementById('btn-clean-junk');
+        if (btnClean) {
+            btnClean.disabled = !window._isAdGuardAvailable;
+            btnClean.style.opacity = window._isAdGuardAvailable ? '1' : '0.45';
+            btnClean.style.cursor = window._isAdGuardAvailable ? 'pointer' : 'not-allowed';
+            btnClean.title = window._isAdGuardAvailable ? 'Purgar concesiones expiradas en AdGuard' : 'Requiere AdGuard Home como servidor DHCP';
+        }
+
+        // Adaptar selector de duración de concesión DHCP
+        const selDur = document.getElementById('lease-duration');
+        if (selDur) {
+            selDur.disabled = !window._isAdGuardAvailable;
+            selDur.style.opacity = window._isAdGuardAvailable ? '1' : '0.45';
+            selDur.style.cursor = window._isAdGuardAvailable ? 'pointer' : 'not-allowed';
+            selDur.title = window._isAdGuardAvailable ? 'Duración de concesiones DHCP' : 'Requiere AdGuard Home como servidor DHCP';
+        }
+
         const lblDur = document.getElementById('lbl-duration');
         if (lblDur) lblDur.textContent = `${data.lease_duration} s (${Math.round(data.lease_duration/60)} min)`;
         const lblGhost = document.getElementById('lbl-ghost');
@@ -3345,6 +3389,10 @@ function updateTopoLegendUI() {
 }
 
 function toggleTopoTelemetryMode() {
+    if (!_isAdGuardAvailable && !topoState.telemetryMode) {
+        showMessage('⚪ Modo Autónomo: El flujo por consultas DNS en vivo requiere AdGuard Home. Operando con Lógica Simulada/Latencia.', 'info');
+        return;
+    }
     topoState.telemetryMode = !topoState.telemetryMode;
     localStorage.setItem('ag_topo_telemetry', topoState.telemetryMode ? '1' : '0');
     topoState.synapses = [];
@@ -5895,6 +5943,27 @@ let portScanTimer = null;
 
 async function openDeviceSheet(mac, ipHint = '') {
     currentSheetMac = mac;
+    setTimeout(() => {
+        const btnAssign = document.getElementById('sheet-btn-assign');
+        const btnForce = document.getElementById('sheet-btn-force');
+        const warn = document.getElementById('sheet-standalone-warning');
+        const avail = (window._isAdGuardAvailable !== false);
+        if (btnAssign) {
+            btnAssign.disabled = !avail;
+            btnAssign.style.opacity = avail ? '1' : '0.45';
+            btnAssign.style.cursor = avail ? 'pointer' : 'not-allowed';
+            btnAssign.title = avail ? '' : 'La asignación de IP estática por DHCP en servidor requiere AdGuard Home activo.';
+        }
+        if (btnForce) {
+            btnForce.disabled = !avail;
+            btnForce.style.opacity = avail ? '1' : '0.45';
+            btnForce.style.cursor = avail ? 'pointer' : 'not-allowed';
+            btnForce.title = avail ? '' : 'La asignación de IP estática por DHCP en servidor requiere AdGuard Home activo.';
+        }
+        if (warn) {
+            warn.style.display = avail ? 'none' : 'block';
+        }
+    }, 30);
     const dev = allDevices.find(d => d.mac === mac) || { mac };
     currentSheetIp = ipHint || (dev.live_ips && dev.live_ips[0]) || dev.ip || '';
 
