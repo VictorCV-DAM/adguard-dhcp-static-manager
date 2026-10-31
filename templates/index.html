@@ -1595,7 +1595,63 @@
             <label style="display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:12px; cursor:pointer;">
                 <input type="checkbox" id="al-enabled"> Activar envío automático de alertas
             </label>
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:12px;">
+            <!-- SECCIÓN SMTP / GMAIL -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155; margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer; font-size:0.92rem; color:#f8fafc; margin:0;">
+                        <input type="checkbox" id="al-email-enabled"> 📧 Alertas por Correo Electrónico (Gmail / SMTP)
+                    </label>
+                    <span style="font-size:0.75rem; color:#38bdf8; background:rgba(56,189,248,0.12); padding:2px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.25);">
+                        Recomendado: Gmail
+                    </span>
+                </div>
+                <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:12px; line-height:1.45; background:rgba(30,41,59,0.7); padding:10px 12px; border-radius:8px; border-left:3px solid #38bdf8;">
+                    <div style="font-weight:600; color:#e2e8f0; margin-bottom:4px;">🔑 ¿Cómo obtener tus credenciales de Gmail?</div>
+                    Para enviar correos mediante Gmail, Google exige usar una <strong>Contraseña de Aplicación de 16 caracteres</strong> (no tu contraseña normal de Google).
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" rel="noopener" style="color:#38bdf8; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; font-size:0.78rem; background:rgba(56,189,248,0.12); padding:4px 9px; border-radius:6px; border:1px solid rgba(56,189,248,0.25);">
+                            1️⃣ 🔒 Activar Verificación en 2 pasos ↗
+                        </a>
+                        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" style="color:#10b981; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; font-size:0.78rem; background:rgba(16,185,129,0.12); padding:4px 9px; border-radius:6px; border:1px solid rgba(16,185,129,0.25);">
+                            2️⃣ 🔑 Generar Contraseña de Aplicación ↗
+                        </a>
+                        <a href="https://support.google.com/mail/answer/7126229" target="_blank" rel="noopener" style="color:#a78bfa; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:500; font-size:0.78rem; background:rgba(167,139,250,0.12); padding:4px 9px; border-radius:6px; border:1px solid rgba(167,139,250,0.25);">
+                            ℹ️ Parámetros SMTP Gmail ↗
+                        </a>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px;">
+                    <div class="form-group">
+                        <label style="font-size:0.8rem;">Tu Correo Gmail (Remitente)</label>
+                        <input type="email" id="al-smtp-user" placeholder="tu-cuenta@gmail.com" style="width:100%;">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:0.8rem; display:flex; justify-content:space-between; align-items:center;">
+                            <span>Contraseña de Aplicación (16 letras)</span>
+                            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" style="color:#38bdf8; text-decoration:underline; font-size:0.74rem;">Obtener ↗</a>
+                        </label>
+                        <input type="password" id="al-smtp-pass" placeholder="xxxx xxxx xxxx xxxx" style="width:100%;" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:0.8rem;">Correo Destinatario (donde recibir avisos)</label>
+                        <input type="email" id="al-smtp-to" placeholder="avisos@gmail.com" style="width:100%;">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:0.8rem; display:flex; justify-content:space-between; align-items:center;">
+                            <span>Servidor SMTP / Puerto</span>
+                            <span style="font-size:0.72rem; color:#64748b;">(Gmail: smtp.gmail.com:587)</span>
+                        </label>
+                        <div style="display:flex; gap:6px;">
+                            <input type="text" id="al-smtp-host" placeholder="smtp.gmail.com" style="flex:2;" value="smtp.gmail.com">
+                            <input type="number" id="al-smtp-port" placeholder="587" style="flex:1;" value="587">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OTROS CANALES -->
+            <div style="font-size:0.82rem; font-weight:700; color:#cbd5e1; margin-bottom:8px;">📡 Otros Canales de Notificación (Opcional)</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:14px;">
                 <div class="form-group">
                     <label style="font-size:0.8rem;">URL ntfy (ej. <code>https://ntfy.sh/mi-red</code>)</label>
                     <input type="text" id="al-ntfy" placeholder="https://ntfy.sh/..." style="width:100%;">
@@ -1613,11 +1669,15 @@
                     <input type="text" id="al-webhook" placeholder="http://192.168.1.219:8123/api/webhook/..." style="width:100%;">
                 </div>
             </div>
-            <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; font-size:0.82rem;">
-                <label><input type="checkbox" id="al-new-dev"> 🚨 Nuevo dispositivo desconocido</label>
-                <label><input type="checkbox" id="al-svc-down"> 🔴 Servicio web caído</label>
-                <label><input type="checkbox" id="al-svc-up"> 🟢 Servicio recuperado</label>
-                <label><input type="checkbox" id="al-watched"> ⚠️ Dispositivo vigilado desconectado</label>
+
+            <!-- EVENTOS -->
+            <div style="font-size:0.82rem; font-weight:700; color:#cbd5e1; margin-bottom:8px;">⚙️ Eventos a Notificar</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px 14px; margin-bottom:12px; font-size:0.82rem;">
+                <label style="cursor:pointer;"><input type="checkbox" id="al-new-dev"> 🚨 Nuevo dispositivo en la red</label>
+                <label style="cursor:pointer;"><input type="checkbox" id="al-dev-connect"> ⚡ Dispositivo inicia sesión / se conecta</label>
+                <label style="cursor:pointer;"><input type="checkbox" id="al-svc-down"> 🔴 Servicio web caído (tras 10 min caído)</label>
+                <label style="cursor:pointer;"><input type="checkbox" id="al-svc-up"> 🟢 Servicio web recuperado</label>
+                <label style="cursor:pointer;"><input type="checkbox" id="al-watched"> ⚠️ Dispositivo vigilado desconectado</label>
             </div>
             <div class="form-group" style="margin-bottom:14px;">
                 <label style="font-size:0.8rem;">MACs vigiladas (separadas por coma — avisa si se desconectan)</label>
@@ -3050,7 +3110,7 @@ function renderTable() {
 }
 
 function fillForm(hostname, mac, ip) {
-    document.getElementById('in-hostname').value = hostname === '(Unnamed)' ? '' : hostname;
+    document.getElementById('in-hostname').value = hostname === '(Sin nombre)' ? '' : hostname;
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3228,7 +3288,7 @@ function onIpCellClick(ip, status, mac) {
     const sel = document.getElementById('ipm-device-select');
     const sorted = [...allDevices].sort((a, b) => (a.static === b.static ? 0 : a.static ? 1 : -1));
     sel.innerHTML = `<option value="__form__">✍️ Solo rellenar IP ${ip} en el formulario superior</option>` +
-        sorted.map(d => `<option value="${d.mac}">${escapeHtml(d.hostname || '(Unnamed)')} — ${d.ip || (d.live_ips && d.live_ips[0]) || ''} [${d.mac}] ${d.static ? '(Ya estática)' : '(Dinámica)'}</option>`).join('');
+        sorted.map(d => `<option value="${d.mac}">${escapeHtml(d.hostname || '(Sin nombre)')} — ${d.ip || (d.live_ips && d.live_ips[0]) || ''} [${d.mac}] ${d.static ? '(Ya estática)' : '(Dinámica)'}</option>`).join('');
     document.getElementById('ip-assign-overlay').style.display = 'flex';
 }
 
@@ -4539,7 +4599,7 @@ function buildTopoGraph(fitView = false) {
     const coreNode = {
         id: '__core__',
         type: 'core',
-        label: 'MAIN ROUTER / ADGUARD CORE',
+        label: 'Router Principal · AdGuard Core',
         sub: `192.168.1.1 · ${totalOnline} online`,
         x: corePos.x,
         y: corePos.y,
@@ -4639,7 +4699,7 @@ function buildTopoGraph(fitView = false) {
             const cNode = {
                 id: cid,
                 type: 'client',
-                label: d.hostname && d.hostname !== '(Unnamed)' ? d.hostname : (d.mac || ipShow),
+                label: d.hostname && d.hostname !== '(Sin nombre)' ? d.hostname : (d.mac || ipShow),
                 sub: ipShow,
                 x: cx,
                 y: cy,
@@ -4969,7 +5029,7 @@ function getClientDisplayText(n) {
     if (n.type !== 'client') return n.label;
     const d = n.dev || {};
     const ip = (d.live_ips && d.live_ips[0]) || d.ip || '';
-    const host = (d.hostname && d.hostname !== '(Unnamed)') ? d.hostname : (d.mac || ip);
+    const host = (d.hostname && d.hostname !== '(Sin nombre)') ? d.hostname : (d.mac || ip);
     if (topoState.labelMode === 'mac') return (d.mac || host).toUpperCase();
     if (topoState.labelMode === 'name_ip') return ip ? `${host} (${ip})` : host;
     return host;
@@ -5168,7 +5228,7 @@ function updateTopoTooltip(node, sx, sy) {
         tip.innerHTML = `
             <div style="display:flex; align-items:center; gap:6px; font-weight:800; color:#f8fafc; font-size:0.86rem;">
                 <span>${d.dev_icon || '💻'}</span>
-                <span>${escapeHtml(d.hostname || '(Unnamed)')}</span>
+                <span>${escapeHtml(d.hostname || '(Sin nombre)')}</span>
             </div>
             <div style="color:#94a3b8; font-size:0.73rem; margin-bottom:5px;">${escapeHtml(d.dev_class || '')} ${d.dev_vendor ? '· ' + escapeHtml(d.dev_vendor) : ''}</div>
             <div style="font-size:0.76rem; color:#cbd5e1;">
@@ -5886,7 +5946,7 @@ initTopoStageResizer();
                         <div class="topo-client" onclick="openDeviceSheet('${d.mac}', '${ipShow}')" style="opacity:${on ? 1 : 0.55};">
                             <span class="status-dot ${on ? 'dot-online' : 'dot-offline'}"></span>
                             <div style="min-width:0; flex:1;">
-                                <div style="font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(d.hostname || '(Unnamed)')}</div>
+                                <div style="font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(d.hostname || '(Sin nombre)')}</div>
                                 <div style="font-size:0.72rem; color:var(--muted);"><code>${ipShow}</code> ${d.latency_ms != null ? `· ${d.latency_ms.toFixed(1)}ms` : ''}</div>
                             </div>
                         </div>
@@ -5951,7 +6011,7 @@ function renderTimelineRows() {
             <div class="tl-row">
                 <div style="min-width:0; cursor:pointer;" onclick="openDeviceSheet('${d.mac}', '${d.ip || ''}')">
                     <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#f8fafc;">
-                        <span class="status-dot ${on ? 'dot-online' : 'dot-offline'}"></span>${escapeHtml(d.hostname || '(Unnamed)')}
+                        <span class="status-dot ${on ? 'dot-online' : 'dot-offline'}"></span>${escapeHtml(d.hostname || '(Sin nombre)')}
                     </div>
                     <div style="font-size:0.72rem; color:var(--muted);"><code>${d.ip || ''}</code> · ${escapeHtml(d.router_node || '')}</div>
                 </div>
@@ -6030,14 +6090,14 @@ async function openDeviceSheet(mac, ipHint = '') {
     const dev = allDevices.find(d => d.mac === mac) || { mac };
     currentSheetIp = ipHint || (dev.live_ips && dev.live_ips[0]) || dev.ip || '';
 
-    document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Unnamed Device)'}`;
+    document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Dispositivo sin nombre)'}`;
     document.getElementById('ds-subtitle').innerHTML = `MAC: <code>${mac}</code> · IP: <code>${currentSheetIp || '—'}</code> · Fabricante: <strong>${escapeHtml(dev.dev_vendor || 'Desconocido')}</strong>`;
     const hostInp = document.getElementById('ds-edit-hostname');
     const ipInp = document.getElementById('ds-edit-ip');
     const dhcpBadge = document.getElementById('ds-dhcp-badge');
     const dhcpStatus = document.getElementById('ds-dhcp-status');
     const forceChk = document.getElementById('ds-force-reconnect');
-    if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Unnamed)') ? dev.hostname : '';
+    if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Sin nombre)') ? dev.hostname : '';
     if (ipInp) ipInp.value = dev.ip || currentSheetIp || '';
     if (forceChk) forceChk.checked = false;
     if (dhcpBadge) {
@@ -6280,11 +6340,18 @@ async function openAlertsModal() {
     const evData = await evRes.json();
 
     document.getElementById('al-enabled').checked = !!cfg.enabled;
+    document.getElementById('al-email-enabled').checked = !!cfg.email_enabled;
+    document.getElementById('al-smtp-user').value = cfg.smtp_user || '';
+    document.getElementById('al-smtp-pass').value = cfg.smtp_pass || '';
+    document.getElementById('al-smtp-to').value = cfg.smtp_to || '';
+    document.getElementById('al-smtp-host').value = cfg.smtp_host || 'smtp.gmail.com';
+    document.getElementById('al-smtp-port').value = cfg.smtp_port || 587;
     document.getElementById('al-ntfy').value = cfg.ntfy_url || '';
     document.getElementById('al-tg-token').value = cfg.telegram_token || '';
     document.getElementById('al-tg-chat').value = cfg.telegram_chat_id || '';
     document.getElementById('al-webhook').value = cfg.webhook_url || '';
     document.getElementById('al-new-dev').checked = cfg.notify_new_device !== false;
+    document.getElementById('al-dev-connect').checked = !!cfg.notify_device_connect;
     document.getElementById('al-svc-down').checked = cfg.notify_service_down !== false;
     document.getElementById('al-svc-up').checked = cfg.notify_service_up !== false;
     document.getElementById('al-watched').checked = cfg.notify_watched_offline !== false;
@@ -6300,11 +6367,18 @@ async function openAlertsModal() {
 async function saveAlertsConfig() {
     const body = {
         enabled: document.getElementById('al-enabled').checked,
+        email_enabled: document.getElementById('al-email-enabled').checked,
+        smtp_user: document.getElementById('al-smtp-user').value.trim(),
+        smtp_pass: document.getElementById('al-smtp-pass').value.trim(),
+        smtp_to: document.getElementById('al-smtp-to').value.trim(),
+        smtp_host: document.getElementById('al-smtp-host').value.trim() || 'smtp.gmail.com',
+        smtp_port: parseInt(document.getElementById('al-smtp-port').value, 10) || 587,
         ntfy_url: document.getElementById('al-ntfy').value.trim(),
         telegram_token: document.getElementById('al-tg-token').value.trim(),
         telegram_chat_id: document.getElementById('al-tg-chat').value.trim(),
         webhook_url: document.getElementById('al-webhook').value.trim(),
         notify_new_device: document.getElementById('al-new-dev').checked,
+        notify_device_connect: document.getElementById('al-dev-connect').checked,
         notify_service_down: document.getElementById('al-svc-down').checked,
         notify_service_up: document.getElementById('al-svc-up').checked,
         notify_watched_offline: document.getElementById('al-watched').checked,

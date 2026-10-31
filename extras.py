@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Advanced features for AdGuard Home DHCP Panel:
-  - SQLite persistence: presence history, known services, uptime checks, event log
-  - Background monitor (ping latency, TTL/OS fingerprinting, real service status, presence)
-  - Alerts (ntfy, Telegram Bot, generic Webhook / Home Assistant / Discord)
-  - Configuration Export / Import with interactive diff preview
-  - Visual IP Subnet Map (1-254), Network Diagnostics, Device Detail Sheet, Presence Timeline
-  - Device Actions: Block/Unblock Internet (AdGuard DNS), Wake-on-LAN, TCP Port Scanner
+Funciones avanzadas del Panel DHCP:
+  - Persistencia (SQLite): historial de presencia, servicios conocidos, comprobaciones, eventos
+  - Monitor en segundo plano (latencia, TTL/SO, estado real de servicios, presencia)
+  - Alertas (ntfy, Telegram, webhook genérico / Home Assistant)
+  - Exportar / importar configuración con vista previa
+  - Mapa de IPs, diagnóstico de red, ficha de dispositivo, línea temporal
+  - Acciones: bloquear Internet (AdGuard), Wake-on-LAN, escaneo completo de puertos
 """
 import os
 import re
@@ -15,7 +15,12 @@ import time
 import socket
 import sqlite3
 import secrets
+import smtplib
+import html
 import threading
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formatdate
 import subprocess
 import urllib.request
 import urllib.parse
@@ -28,15 +33,16 @@ from flask import Blueprint, request, jsonify, Response
 
 bp = Blueprint('extras', __name__)
 
-D = {}                    # dependencies injected from app.py
+D = {}                    # dependencias inyectadas desde app.py
 DB_PATH = None
 _DB_LOCK = threading.Lock()
 _PING = {}                # ip -> {'ts', 'ms', 'ttl', 'alive'}
 _MONITOR_STATE = {'last_run': 0, 'running': False, 'last_error': '', 'cycles': 0}
 _SCAN_JOBS = {}           # job_id -> {...}
 MONITOR_INTERVAL = int(os.environ.get('DHCP_PANEL_MONITOR_INTERVAL', '60'))
-SERVICE_DOWN_THRESHOLD = 2   # consecutive failed checks before marking service down
-OFFLINE_GRACE_SEC = 300      # seconds without seeing a device before marking it offline
+SERVICE_DOWN_THRESHOLD = 2   # comprobaciones fallidas seguidas para marcar como caído en panel
+SERVICE_DOWN_ALERT_SEC = 600  # 10 minutos (600 s) caído antes de emitir notificación al usuario
+OFFLINE_GRACE_SEC = 300      # segundos sin ver un dispositivo antes de marcarlo desconectado
 
 DEFAULT_ALERTS = {
     'enabled': False,
@@ -44,7 +50,15 @@ DEFAULT_ALERTS = {
     'telegram_token': '',
     'telegram_chat_id': '',
     'webhook_url': '',
+    'email_enabled': False,
+    'smtp_host': 'smtp.gmail.com',
+    'smtp_port': 587,
+    'smtp_user': '',
+    'smtp_pass': '',
+    'smtp_to': '',
+    'smtp_tls': True,
     'notify_new_device': True,
+    'notify_device_connect': False,
     'notify_service_down': True,
     'notify_service_up': True,
     'notify_watched_offline': True,
@@ -53,7 +67,7 @@ DEFAULT_ALERTS = {
 
 
 # =====================================================================
-#  Utilities
+#  Utilidades
 # =====================================================================
 def now_ts():
     return int(time.time())
@@ -82,7 +96,7 @@ def valid_ipv4(ip):
 
 
 # =====================================================================
-#  Database
+#  Base de datos
 # =====================================================================
 def db():
     con = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
@@ -161,7 +175,7 @@ def kv_set(k, v):
 
 
 # =====================================================================
-#  Ping / Latency / TTL Fingerprinting
+#  Ping / latencia / TTL
 # =====================================================================
 def ping_detail(ip):
     try:
@@ -184,14 +198,14 @@ def os_guess(ttl, dev_class=''):
     if ttl <= 64:
         if any(k in c for k in ['iphone', 'ipad', 'apple']):
             return 'iOS / macOS'
-        if any(k in c for k in ['smartphone', 'mobile', 'android']):
+        if any(k in c for k in ['smartphone', 'móvil', 'android']):
             return 'Android'
-        if any(k in c for k in ['iot', 'plug', 'bulb', 'sensor', 'esp', 'smart', 'lighting']):
-            return 'IoT Firmware (RTOS/Linux)'
+        if any(k in c for k in ['iot', 'enchufe', 'bombilla', 'sensor', 'esp', 'domótica', 'iluminación']):
+            return 'Firmware IoT (RTOS/Linux)'
         return 'Linux / Android / Unix'
     if ttl <= 128:
         return 'Windows'
-    return 'Network Gear (Cisco/Router)'
+    return 'Equipo de red (Cisco/Router)'
 
 
 def tcp_latency(ip, port, timeout=1.5):
@@ -205,7 +219,7 @@ def tcp_latency(ip, port, timeout=1.5):
 
 
 # =====================================================================
-#  Alerts
+#  Alertas
 # =====================================================================
 def get_alerts_cfg():
     cfg = D['load_config']()
@@ -220,8 +234,224 @@ def _http_post(url, data, headers=None, timeout=8):
         return r.status
 
 
-def send_alert(title, message, kind='info', force=False, cfg_override=None):
-    """Logs the event and dispatches it through configured alert channels."""
+def send_smtp_email(host, port, user, password, to_addr, subject, body_text, body_html=None, use_tls=True):
+    """Envía un correo electrónico mediante SMTP (ej. Gmail)."""
+    if not host or not user or not password or not to_addr:
+        return False, "Faltan credenciales SMTP (servidor, usuario, contraseña o destinatario)."
+    clean_pass = (password or '').replace(' ', '').strip()
+    user = (user or '').strip()
+    to_addr = (to_addr or '').strip()
+    host = (host or 'smtp.gmail.com').strip()
+    try:
+        port = int(port or 587)
+    except (ValueError, TypeError):
+        port = 587
+
+    msg = MIMEMultipart('alternative')
+    msg['From'] = f"Panel DHCP <{user}>"
+    msg['To'] = to_addr
+    msg['Subject'] = subject
+    msg['Date'] = formatdate(localtime=True)
+    msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+    if body_html:
+        msg.attach(MIMEText(body_html, 'html', 'utf-8'))
+
+    try:
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=12)
+        else:
+            server = smtplib.SMTP(host, port, timeout=12)
+            if use_tls:
+                server.starttls()
+        server.login(user, clean_pass)
+        server.sendmail(user, [to_addr], msg.as_string())
+        server.quit()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
+
+
+def build_device_alert_content(d, is_new=True):
+    """Construye el contenido en texto plano y HTML detallado para alertas de dispositivos."""
+    hostname = d.get('hostname') or d.get('custom_name') or '(Sin nombre registrado)'
+    ip = d.get('ip') or '(Sin IP)'
+    mac = norm_mac(d.get('mac') or '')
+    vendor = d.get('dev_vendor') or 'Desconocido'
+    dev_class = d.get('dev_class') or 'Dispositivo de red'
+    node = d.get('router_node') or 'Router Principal / Red Local'
+    medium = d.get('conn_medium_label') or 'Desconocido'
+    rssi = f"{d.get('wifi_rssi')} dBm" if d.get('wifi_rssi') else (d.get('wifi_signal') or 'N/A')
+    ip_type = 'Estática (Fija)' if d.get('static') else 'Dinámica (DHCP)'
+    time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    title = f"🚨 Nuevo dispositivo conectado: {hostname}" if is_new else f"⚡ Dispositivo conectado: {hostname}"
+
+    text_body = (
+        f"{title}\n"
+        f"-----------------------------------------\n"
+        f"Nombre de equipo : {hostname}\n"
+        f"Dirección IP     : {ip} ({ip_type})\n"
+        f"Dirección MAC    : {mac}\n"
+        f"Fabricante (OUI) : {vendor}\n"
+        f"Tipo de equipo   : {dev_class}\n"
+        f"Punto de acceso  : {node}\n"
+        f"Medio de enlace  : {medium}\n"
+        f"Señal Wi-Fi      : {rssi}\n"
+        f"Fecha y hora     : {time_str}\n"
+        f"-----------------------------------------\n"
+        f"Acceso al Panel: http://192.168.1.249:5001\n"
+    )
+
+    hdr_bg = 'linear-gradient(135deg, #dc2626, #991b1b)' if is_new else 'linear-gradient(135deg, #0284c7, #0369a1)'
+    hdr_title = '🚨 Nuevo dispositivo conectado a la red' if is_new else '⚡ Dispositivo conectado / inicio de sesión'
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0; padding:20px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#0f172a; color:#e2e8f0;">
+  <div style="max-width:600px; margin:0 auto; background:#1e293b; border-radius:12px; border:1px solid #334155; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+    <div style="background:{hdr_bg}; padding:20px; color:#ffffff;">
+      <h2 style="margin:0; font-size:1.25rem;">{hdr_title}</h2>
+      <div style="font-size:0.88rem; opacity:0.9; margin-top:4px;">{time_str}</div>
+    </div>
+    <div style="padding:22px;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8; width:38%;">Nombre de equipo:</td>
+          <td style="padding:9px 0; font-weight:bold; color:#f8fafc;">{html.escape(hostname)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">Dirección IP:</td>
+          <td style="padding:9px 0; font-family:monospace; color:#38bdf8; font-weight:bold;">{html.escape(ip)} <span style="font-size:0.8rem; color:#94a3b8; font-weight:normal;">({ip_type})</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">Dirección MAC:</td>
+          <td style="padding:9px 0; font-family:monospace; color:#cbd5e1;">{html.escape(mac)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">Fabricante:</td>
+          <td style="padding:9px 0; color:#cbd5e1;">{html.escape(vendor)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">Tipo de equipo:</td>
+          <td style="padding:9px 0; color:#cbd5e1;">{html.escape(dev_class)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">Punto de acceso / Nodo:</td>
+          <td style="padding:9px 0; color:#cbd5e1; font-weight:600;">{html.escape(node)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">Medio de enlace:</td>
+          <td style="padding:9px 0; color:#cbd5e1;">{html.escape(medium)}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0; color:#94a3b8;">Señal Wi-Fi:</td>
+          <td style="padding:9px 0; color:#cbd5e1;">{html.escape(str(rssi))}</td>
+        </tr>
+      </table>
+      <div style="margin-top:24px; text-align:center;">
+        <a href="http://192.168.1.249:5001" style="display:inline-block; background:#38bdf8; color:#0f172a; text-decoration:none; font-weight:bold; padding:10px 24px; border-radius:8px; font-size:0.9rem;">
+          Abrir Panel DHCP
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+    return title, text_body, html_body
+
+
+def build_service_alert_content(url, label, ip, port, down_seconds, is_down=True):
+    """Construye el contenido en texto plano y HTML para alertas de servicios."""
+    time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    down_min = max(10, down_seconds // 60)
+    label_str = label or url
+    if is_down:
+        title = f"🔴 Servicio web caído (10+ min): {label_str}"
+        text_body = (
+            f"{title}\n"
+            f"-----------------------------------------\n"
+            f"Servicio         : {label_str}\n"
+            f"URL              : {url}\n"
+            f"IP / Puerto      : {ip}:{port}\n"
+            f"Tiempo de caída  : más de {down_min} minutos\n"
+            f"Fecha y hora     : {time_str}\n"
+            f"-----------------------------------------\n"
+            f"Acceso al Panel: http://192.168.1.249:5001\n"
+        )
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0; padding:20px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#0f172a; color:#e2e8f0;">
+  <div style="max-width:600px; margin:0 auto; background:#1e293b; border-radius:12px; border:1px solid #ef4444; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+    <div style="background:linear-gradient(135deg, #dc2626, #991b1b); padding:20px; color:#ffffff;">
+      <h2 style="margin:0; font-size:1.25rem;">🔴 Servicio web caído hace más de {down_min} minutos</h2>
+      <div style="font-size:0.88rem; opacity:0.9; margin-top:4px;">{time_str}</div>
+    </div>
+    <div style="padding:22px;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8; width:35%;">Servicio:</td>
+          <td style="padding:9px 0; font-weight:bold; color:#f8fafc;">{html.escape(label_str)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">URL:</td>
+          <td style="padding:9px 0; font-family:monospace; color:#38bdf8;"><a href="{html.escape(url)}" style="color:#38bdf8;">{html.escape(url)}</a></td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:9px 0; color:#94a3b8;">IP / Puerto:</td>
+          <td style="padding:9px 0; font-family:monospace; color:#cbd5e1;">{html.escape(str(ip))}:{html.escape(str(port))}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0; color:#94a3b8;">Tiempo de caída:</td>
+          <td style="padding:9px 0; color:#ef4444; font-weight:bold;">Más de {down_min} minutos</td>
+        </tr>
+      </table>
+      <div style="margin-top:24px; text-align:center;">
+        <a href="http://192.168.1.249:5001" style="display:inline-block; background:#38bdf8; color:#0f172a; text-decoration:none; font-weight:bold; padding:10px 24px; border-radius:8px; font-size:0.9rem;">
+          Revisar en Panel DHCP
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+    else:
+        title = f"🟢 Servicio recuperado: {label_str}"
+        text_body = (
+            f"{title}\n"
+            f"-----------------------------------------\n"
+            f"Servicio         : {label_str}\n"
+            f"URL              : {url}\n"
+            f"Estado           : Restablecido y respondiendo OK\n"
+            f"Fecha y hora     : {time_str}\n"
+            f"-----------------------------------------\n"
+        )
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0; padding:20px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#0f172a; color:#e2e8f0;">
+  <div style="max-width:600px; margin:0 auto; background:#1e293b; border-radius:12px; border:1px solid #10b981; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+    <div style="background:linear-gradient(135deg, #059669, #047857); padding:20px; color:#ffffff;">
+      <h2 style="margin:0; font-size:1.25rem;">🟢 Servicio web restablecido</h2>
+      <div style="font-size:0.88rem; opacity:0.9; margin-top:4px;">{time_str}</div>
+    </div>
+    <div style="padding:22px;">
+      <p style="margin:0 0 12px; font-size:0.95rem;">El servicio <strong>{html.escape(label_str)}</strong> ({html.escape(url)}) vuelve a responder con normalidad.</p>
+      <div style="margin-top:16px; text-align:center;">
+        <a href="http://192.168.1.249:5001" style="display:inline-block; background:#10b981; color:#0f172a; text-decoration:none; font-weight:bold; padding:8px 20px; border-radius:8px; font-size:0.85rem;">
+          Ir al Panel
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+    return title, text_body, html_body
+
+
+def send_alert(title, message, kind='info', force=False, cfg_override=None, email_html=None):
+    """Registra el evento y lo envía por los canales configurados (ntfy, Telegram, webhook, email SMTP). Devuelve lista de resultados."""
     a = cfg_override or get_alerts_cfg()
     results = []
     sent = 0
@@ -251,6 +481,20 @@ def send_alert(title, message, kind='info', force=False, cfg_override=None):
                 results.append(('webhook', True, 'OK'))
             except Exception as e:
                 results.append(('webhook', False, str(e)))
+        if a.get('email_enabled') or (force and a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to')):
+            if a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to'):
+                ok, err = send_smtp_email(
+                    host=a.get('smtp_host') or 'smtp.gmail.com',
+                    port=a.get('smtp_port') or 587,
+                    user=a.get('smtp_user', '').strip(),
+                    password=a.get('smtp_pass', '').strip(),
+                    to_addr=a.get('smtp_to', '').strip(),
+                    subject=f"[Panel DHCP] {title}",
+                    body_text=message,
+                    body_html=email_html,
+                    use_tls=bool(a.get('smtp_tls', True))
+                )
+                results.append(('email', ok, err))
         sent = 1 if any(r[1] for r in results) else 0
     db_exec('INSERT INTO events_log (ts, kind, title, message, sent) VALUES (?,?,?,?,?)',
             (now_ts(), kind, title, message, sent))
@@ -258,7 +502,7 @@ def send_alert(title, message, kind='info', force=False, cfg_override=None):
 
 
 # =====================================================================
-#  Background Monitor
+#  Monitor en segundo plano
 # =====================================================================
 def monitor_cycle():
     state = D['build_state'](False)
@@ -266,13 +510,13 @@ def monitor_cycle():
     ts = now_ts()
     alerts = get_alerts_cfg()
 
-    # --- Concurrent ping to active devices (latency + TTL) ---
+    # --- Ping concurrente a dispositivos activos (latencia + TTL) ---
     ips = sorted({d['ip'] for d in devices if d.get('live_ips') and valid_ipv4(d.get('ip'))})
     with ThreadPoolExecutor(max_workers=32) as pool:
         for ip, r in zip(ips, pool.map(ping_detail, ips)):
             _PING[ip] = r
 
-    # --- Device presence tracking ---
+    # --- Presencia de dispositivos ---
     existing = {r['mac']: r for r in db_query('SELECT * FROM devices')}
     first_run = len(existing) == 0
     watched = set(norm_mac(m) for m in alerts.get('watched_macs', []))
@@ -294,9 +538,8 @@ def monitor_cycle():
             db_exec('INSERT INTO device_events (ts, mac, ip, event) VALUES (?,?,?,?)',
                     (ts, mac, d.get('ip'), 'new' if not first_run else ('online' if online else 'offline')))
             if not first_run and online and alerts.get('notify_new_device', True):
-                send_alert('🚨 New Device on Network',
-                           f"{d.get('hostname') or '(Unnamed)'} · {d.get('ip')} · {mac}\n"
-                           f"{d.get('dev_vendor') or ''} — {d.get('dev_class') or ''}", 'new_device')
+                t, b_txt, b_html = build_device_alert_content(d, is_new=True)
+                send_alert(t, b_txt, 'new_device', email_html=b_html)
             continue
 
         if online:
@@ -306,17 +549,21 @@ def monitor_cycle():
                 db_exec('UPDATE devices SET online=1 WHERE mac=?', (mac,))
                 db_exec('INSERT INTO device_events (ts, mac, ip, event) VALUES (?,?,?,?)', (ts, mac, d.get('ip'), 'online'))
                 if mac in watched and alerts.get('notify_watched_offline', True):
-                    send_alert('✅ Watched Device Online', f"{d.get('hostname')} ({d.get('ip')}) is back online.", 'online')
+                    t, b_txt, b_html = build_device_alert_content(d, is_new=False)
+                    send_alert('✅ Dispositivo vigilado conectado', b_txt, 'online', email_html=b_html)
+                elif alerts.get('notify_device_connect', False):
+                    t, b_txt, b_html = build_device_alert_content(d, is_new=False)
+                    send_alert(t, b_txt, 'online', email_html=b_html)
         else:
             last = row['last_seen'] or 0
             if row['online'] and ts - last > OFFLINE_GRACE_SEC:
                 db_exec('UPDATE devices SET online=0 WHERE mac=?', (mac,))
                 db_exec('INSERT INTO device_events (ts, mac, ip, event) VALUES (?,?,?,?)', (ts, mac, d.get('ip'), 'offline'))
                 if mac in watched and alerts.get('notify_watched_offline', True):
-                    send_alert('⚠️ Watched Device Offline',
-                               f"{d.get('hostname')} ({d.get('ip')}) has not responded for {OFFLINE_GRACE_SEC // 60} min.", 'offline')
+                    send_alert('⚠️ Dispositivo vigilado desconectado',
+                               f"{d.get('hostname')} ({d.get('ip')}) no responde desde hace {OFFLINE_GRACE_SEC // 60} min.", 'offline')
 
-    # --- Services: currently detected + previously known ---
+    # --- Servicios: detectados ahora + recordados ---
     known = {r['url']: r for r in db_query('SELECT * FROM services')}
     detected = {}
     for d in devices:
@@ -355,20 +602,25 @@ def monitor_cycle():
             db_exec('''UPDATE services SET mac=?, ip=?, port=?, label=?, last_seen_up=?, last_check=?, up=1, fail_count=0,
                        latency_ms=?, alerted_down=0 WHERE url=?''', (mac or r['mac'], ip, port, label or r['label'], ts, ts, ms, url))
             if was_alerted and alerts.get('notify_service_up', True):
-                send_alert('🟢 Service Recovered', f"{label} ({url}) is responding again.", 'service_up')
+                t, b_txt, b_html = build_service_alert_content(url, label or r['label'], ip, port, 0, is_down=False)
+                send_alert(t, b_txt, 'service_up', email_html=b_html)
         else:
             fc = (r['fail_count'] or 0) + 1
             alerted = r['alerted_down']
-            if fc >= SERVICE_DOWN_THRESHOLD and not alerted:
+            last_up = r['last_seen_up'] or r['first_seen'] or ts
+            down_seconds = max(0, ts - last_up)
+            # Solo notificar si el servicio ha estado caído al menos 10 minutos (600s)
+            if down_seconds >= SERVICE_DOWN_ALERT_SEC and not alerted:
                 alerted = 1
                 if alerts.get('notify_service_down', True):
-                    send_alert('🔴 Service Down', f"{label} ({url}) failed {fc} consecutive checks.", 'service_down')
+                    t, b_txt, b_html = build_service_alert_content(url, label or r['label'], ip, port, down_seconds, is_down=True)
+                    send_alert(t, b_txt, 'service_down', email_html=b_html)
             db_exec('UPDATE services SET last_check=?, up=?, fail_count=?, alerted_down=? WHERE url=?',
                     (ts, 0 if fc >= SERVICE_DOWN_THRESHOLD else 1, fc, alerted, url))
     if checks:
         db_exec('INSERT INTO service_checks (url, ts, up, ms) VALUES (?,?,?,?)', checks, many=True)
 
-    # --- Daily pruning ---
+    # --- Limpieza diaria ---
     if ts - (kv_get('last_prune', 0) or 0) > 86400:
         db_exec('DELETE FROM service_checks WHERE ts < ?', (ts - 7 * 86400,))
         db_exec('DELETE FROM device_events WHERE ts < ?', (ts - 60 * 86400,))
@@ -393,7 +645,7 @@ def monitor_loop():
 
 
 # =====================================================================
-#  Enrich /api/state with persistent data
+#  Enriquecer /api/state con datos persistentes
 # =====================================================================
 def enrich_state(state):
     devs = {r['mac']: r for r in db_query('SELECT * FROM devices')}
@@ -437,7 +689,7 @@ def enrich_state(state):
             l['history'] = (hist.get(l['url']) or [])[-40:]
             l['first_seen'] = iso(sr.get('first_seen'))
 
-    # Previously known services that are no longer responding -> down
+    # Servicios recordados que ya no se detectan → caídos
     dev_by_mac = {norm_mac(d.get('mac')): d for d in state.get('devices', [])}
     down = []
     for url, sr in svc_rows.items():
@@ -462,7 +714,7 @@ def enrich_state(state):
 
 
 # =====================================================================
-#  AdGuard Home API (DNS stats & client blocking)
+#  AdGuard Home API (estadísticas DNS y bloqueo de clientes)
 # =====================================================================
 _AG_SESSION = {'ts': 0, 'op': None, 'url': '', 'key': ''}
 _TOPO_TELEMETRY_CACHE = {'ts': 0, 'payload': None}
@@ -474,7 +726,7 @@ def ag_opener(force_new=False):
     user = (cfg.get('adguard_user') or '').strip()
     pwd = (cfg.get('adguard_pass') or '').strip()
     if not url or not user or not pwd:
-        raise RuntimeError('AdGuard Home credentials not configured (⚙️ Settings).')
+        raise RuntimeError('Credenciales de AdGuard Home no configuradas (⚙️ Configuraciones).')
     key = f'{url}|{user}|{pwd}'
     if not force_new and _AG_SESSION['op'] is not None and _AG_SESSION['key'] == key and (time.time() - _AG_SESSION['ts'] < 600):
         return _AG_SESSION['op'], url
@@ -558,12 +810,11 @@ def dns_stats_for(ip, limit=500):
 
 
 # =====================================================================
-#  DHCP Pool Range
+#  DHCP: rango del pool
 # =====================================================================
 def dhcp_range():
     try:
-        yaml_path = D.get('YAML_PATH') or D['load_config']().get('yaml_path', '/opt/adguardhome/conf/AdGuardHome.yaml')
-        res = D['run_sudo'](['cat', yaml_path])
+        res = D['run_sudo'](['cat', D['YAML_PATH']])
         txt = res.stdout if res.returncode == 0 else ''
         m = re.search(r'dhcpv4:(.*?)(?:dhcpv6:|\n\S)', txt, re.DOTALL)
         block = m.group(1) if m else txt
@@ -652,16 +903,16 @@ def api_topology_telemetry():
     return jsonify(payload)
 
 
-# ---------- Services ----------
+# ---------- Servicios ----------
 @bp.route('/api/services/forget', methods=['POST'])
 def api_services_forget():
     url = (request.json or {}).get('url') or ''
     db_exec('DELETE FROM services WHERE url=?', (url,))
     db_exec('DELETE FROM service_checks WHERE url=?', (url,))
-    return jsonify({'status': 'success', 'message': 'Service forgotten. If it comes back online, it will be rediscovered.'})
+    return jsonify({'status': 'success', 'message': 'Servicio olvidado. Si vuelve a aparecer, se detectará de nuevo.'})
 
 
-# ---------- Alerts ----------
+# ---------- Alertas ----------
 @bp.route('/api/alerts/config', methods=['GET', 'POST'])
 def api_alerts_config():
     if request.method == 'GET':
@@ -675,7 +926,7 @@ def api_alerts_config():
     cfg = D['load_config']()
     cfg['alerts'] = a
     D['save_config_raw'](cfg)
-    return jsonify({'status': 'success', 'message': 'Alert configuration saved.', 'alerts': a})
+    return jsonify({'status': 'success', 'message': 'Configuración de alertas guardada.', 'alerts': a})
 
 
 @bp.route('/api/alerts/test', methods=['POST'])
@@ -683,14 +934,37 @@ def api_alerts_test():
     body = request.json or {}
     a = get_alerts_cfg()
     a.update({k: v for k, v in body.items() if k in DEFAULT_ALERTS})
-    if not (a.get('ntfy_url') or (a.get('telegram_token') and a.get('telegram_chat_id')) or a.get('webhook_url')):
-        return jsonify({'status': 'error', 'message': 'No notification channel configured (ntfy, Telegram, or Webhook).'})
-    res = send_alert('🔔 Alert Test', 'If you see this message, DHCP Panel notifications are working.', 'test',
-                     force=True, cfg_override=a)
+    has_channel = bool(
+        a.get('ntfy_url') or
+        (a.get('telegram_token') and a.get('telegram_chat_id')) or
+        a.get('webhook_url') or
+        (a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to'))
+    )
+    if not has_channel:
+        return jsonify({'status': 'error', 'message': 'No hay ningún canal configurado (ntfy, Telegram, webhook o correo SMTP/Gmail).'})
+    test_title = '🔔 Prueba de alertas del Panel DHCP'
+    test_msg = 'Si ves este mensaje, las notificaciones del Panel DHCP (incluyendo el correo electrónico) funcionan correctamente.'
+    test_html = f"""<!DOCTYPE html>
+<html><body style="background:#0f172a; color:#e2e8f0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding:20px;">
+  <div style="max-width:600px; margin:0 auto; background:#1e293b; padding:24px; border-radius:12px; border:1px solid #38bdf8; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+    <h2 style="color:#38bdf8; margin-top:0;">🔔 Prueba de Alertas por Correo</h2>
+    <p style="font-size:1rem; line-height:1.6; color:#f8fafc;">{test_msg}</p>
+    <div style="background:#0f172a; border-radius:8px; padding:12px; margin-top:16px; font-size:0.85rem; color:#94a3b8;">
+      Servidor SMTP: <strong>{a.get('smtp_host', 'smtp.gmail.com')}:{a.get('smtp_port', 587)}</strong><br>
+      Remitente: <strong>{a.get('smtp_user', '')}</strong><br>
+      Destinatario: <strong>{a.get('smtp_to', '')}</strong><br>
+      Fecha/Hora: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong>
+    </div>
+    <p style="font-size:0.8rem; color:#64748b; margin-top:20px; border-top:1px solid #334155; padding-top:10px;">
+      Panel DHCP &copy; Raspberry Pi 4 · {datetime.now().year}
+    </p>
+  </div>
+</body></html>"""
+    res = send_alert(test_title, test_msg, 'test', force=True, cfg_override=a, email_html=test_html)
     ok = [r[0] for r in res if r[1]]
     ko = [f'{r[0]}: {r[2]}' for r in res if not r[1]]
-    msg = (f'Successfully sent via: {", ".join(ok)}. ' if ok else '') + (f'Failed → {" | ".join(ko)}' if ko else '')
-    return jsonify({'status': 'success' if ok else 'error', 'message': msg or 'No results.'})
+    msg = (f'Enviado correctamente por: {", ".join(ok)}. ' if ok else '') + (f'Fallos → {" | ".join(ko)}' if ko else '')
+    return jsonify({'status': 'success' if ok else 'error', 'message': msg or 'Sin resultados.'})
 
 
 @bp.route('/api/events')
@@ -699,10 +973,11 @@ def api_events():
     rows = db_query('SELECT * FROM events_log ORDER BY ts DESC LIMIT ?', (limit,))
     for r in rows:
         r['time'] = iso(r['ts'])
+        r['detail'] = r.get('message') or ''
     return jsonify({'status': 'success', 'events': rows})
 
 
-# ---------- Device Detail Sheet ----------
+# ---------- Ficha de dispositivo ----------
 @bp.route('/api/device/<mac>')
 def api_device_detail(mac):
     mac = norm_mac(mac)
@@ -714,6 +989,7 @@ def api_device_detail(mac):
     for s in services:
         s['first_seen'] = iso(s['first_seen'])
         s['last_seen_up'] = iso(s['last_seen_up'])
+    # % de tiempo en línea en los últimos 7 días a partir de los eventos
     online_pct = presence_pct(mac, 7 * 86400)
     dns = None
     dns_error = ''
@@ -761,7 +1037,7 @@ def presence_pct(mac, window):
 def api_device_meta(mac):
     mac = norm_mac(mac)
     if not valid_mac(mac):
-        return jsonify({'status': 'error', 'message': 'Invalid MAC address.'}), 400
+        return jsonify({'status': 'error', 'message': 'MAC no válida.'}), 400
     body = request.json or {}
     if not db_query('SELECT mac FROM devices WHERE mac=?', (mac,)):
         db_exec('INSERT INTO devices (mac, first_seen, known) VALUES (?,?,1)', (mac, now_ts()))
@@ -776,10 +1052,10 @@ def api_device_meta(mac):
         fields.append('known=?'); vals.append(1 if body['known'] else 0)
     if fields:
         db_exec(f'UPDATE devices SET {", ".join(fields)} WHERE mac=?', (*vals, mac))
-    return jsonify({'status': 'success', 'message': 'Device details saved.'})
+    return jsonify({'status': 'success', 'message': 'Ficha del dispositivo guardada.'})
 
 
-# ---------- Presence Timeline ----------
+# ---------- Línea temporal ----------
 @bp.route('/api/timeline')
 def api_timeline():
     hours = max(1, min(int(request.args.get('hours', 24)), 24 * 30))
@@ -817,7 +1093,7 @@ def api_timeline():
                     'history_since': iso((db_query('SELECT MIN(ts) AS t FROM device_events') or [{}])[0].get('t'))})
 
 
-# ---------- Visual IP Map ----------
+# ---------- Mapa de IPs ----------
 @bp.route('/api/ipmap')
 def api_ipmap():
     state = D['build_state'](False)
@@ -853,7 +1129,7 @@ def api_ipmap():
     return jsonify({'status': 'success', 'range': rng, 'cells': list(cells.values())})
 
 
-# ---------- Network Diagnostics ----------
+# ---------- Diagnóstico ----------
 @bp.route('/api/diagnostics')
 def api_diagnostics():
     state = D['build_state'](False)
@@ -866,6 +1142,7 @@ def api_diagnostics():
     def add(sev, cat, title, detail, mac=None, ip=None, fix=None):
         issues.append({'severity': sev, 'category': cat, 'title': title, 'detail': detail, 'mac': mac, 'ip': ip, 'fix': fix})
 
+    # IP compartida por varias MAC (ARP)
     arp = D['get_arp_table']()
     ip_macs = {}
     for m, ips in arp.items():
@@ -873,8 +1150,9 @@ def api_diagnostics():
             ip_macs.setdefault(ip, set()).add(m)
     for ip, macs in ip_macs.items():
         if len(macs) > 1:
-            add('critical', 'Conflict', f'Duplicate IP {ip}', f'Multiple MACs responding on the same IP: {", ".join(sorted(macs))}', ip=ip)
+            add('critical', 'Conflicto', f'IP duplicada {ip}', f'Varias MAC responden en la misma IP: {", ".join(sorted(macs))}', ip=ip)
 
+    # Varias concesiones para la misma MAC / misma IP en leases
     leases = D['read_leases']().get('leases', [])
     by_mac, by_ip = {}, {}
     for l in leases:
@@ -885,41 +1163,43 @@ def api_diagnostics():
         by_ip.setdefault(l.get('ip'), set()).add(m)
     for m, ips in by_mac.items():
         if len(ips) > 1:
-            add('warning', 'Leases', 'Multiple leases for the same device',
-                f'{m} has leases on {", ".join(sorted(ips))}', mac=m, fix='Delete stale leases from the table.')
+            add('warning', 'Concesiones', 'Varias concesiones para un mismo dispositivo',
+                f'{m} tiene concesiones en {", ".join(sorted(ips))}', mac=m, fix='Borra las sobrantes desde la tabla.')
     for ip, macs in by_ip.items():
         if len(macs) > 1:
-            add('critical', 'Conflict', f'IP {ip} assigned to multiple MACs in AdGuard', ', '.join(sorted(macs)), ip=ip)
+            add('critical', 'Conflicto', f'IP {ip} asignada a varias MAC en AdGuard', ', '.join(sorted(macs)), ip=ip)
 
     for d in devices:
         ip, mac, host = d.get('ip'), d.get('mac'), d.get('hostname') or ''
         n = ip_last(ip or '')
         if d.get('static') and not d.get('manual_static') and rs > 0 and rs <= n <= re_:
-            add('warning', 'DHCP', f'Static IP inside dynamic pool ({ip})',
-                f'{host}: IP {ip} is inside dynamic pool {rng["start"]}–{rng["end"]}. AdGuard may hand it out to another device.',
-                mac=mac, ip=ip, fix='Assign an IP outside the dynamic range (use the 🗺️ IP Map).')
+            add('warning', 'DHCP', f'IP estática dentro del rango dinámico ({ip})',
+                f'{host}: la IP {ip} está dentro del pool {rng["start"]}–{rng["end"]}. AdGuard podría ofrecerla a otro equipo.',
+                mac=mac, ip=ip, fix='Asigna una IP fuera del rango dinámico (usa el 🗺️ Mapa de IPs).')
         if d.get('mismatch_ip'):
-            add('warning', 'Mismatch', f'{host} is using a different IP than assigned',
-                f'Assigned {ip}, but responding at {d.get("mismatch_ip")}. It may not have renewed its lease yet.',
-                mac=mac, ip=ip, fix='Use "⚡ Save + Force AP Reconnect" or reboot the device.')
+            add('warning', 'Desajuste', f'{host} usa una IP distinta a la asignada',
+                f'Asignada {ip}, pero responde en {d.get("mismatch_ip")}. Puede que no haya renovado su concesión.',
+                mac=mac, ip=ip, fix='Usa "⚡ Guardar + Forzar Reconexión AP" o reinicia el dispositivo.')
         if is_lam(mac) and d.get('static'):
-            add('info', 'Privacy', f'{host}: Randomized MAC with static IP',
-                f'{mac} is a locally administered/randomized MAC; if rotated, the static reservation will stop matching.',
-                mac=mac, ip=ip, fix='Disable "Private Wi-Fi Address" for your home SSID on this device.')
-        if re.fullmatch(r'(\(unnamed\)|\(sin nombre\)|192-168-1-\d+|android-[0-9a-f]+|esp_[0-9a-f]+|unknown.*|)', host.lower()):
-            add('info', 'Identification', f'Device without descriptive name ({ip})',
-                f'"{host}" · {d.get("dev_vendor") or ""}', mac=mac, ip=ip, fix='Set a hostname using "Edit / Pin".')
+            add('info', 'Privacidad', f'{host}: MAC aleatoria con IP fija',
+                f'{mac} es una MAC privada/aleatoria; si el dispositivo la rota, la IP fija dejará de aplicarse.',
+                mac=mac, ip=ip, fix='Desactiva "Dirección MAC privada" para esta red en el móvil.')
+        if re.fullmatch(r'(\(sin nombre\)|192-168-1-\d+|android-[0-9a-f]+|esp_[0-9a-f]+|unknown.*|)', host.lower()):
+            add('info', 'Identificación', f'Dispositivo sin nombre descriptivo ({ip})',
+                f'"{host}" · {d.get("dev_vendor") or ""}', mac=mac, ip=ip, fix='Ponle un nombre con "Editar / Fijar".')
         if d.get('expired'):
-            add('info', 'Leases', f'Expired lease: {host} ({ip})', 'Can be cleaned with "🧹 Purge".', mac=mac, ip=ip)
+            add('info', 'Concesiones', f'Concesión caducada: {host} ({ip})', 'Puede purgarse con "🧹 Purgar".', mac=mac, ip=ip)
 
     if state.get('ghost_count'):
-        add('info', 'Leases', f'{state["ghost_count"]} ghost entries (00:00:00:00:00:00)', 'Click "🧹 Purge".')
+        add('info', 'Concesiones', f'{state["ghost_count"]} entradas fantasma (00:00:00:00:00:00)', 'Pulsa "🧹 Purgar".')
 
+    # Servicios caídos
     for s in db_query('SELECT * FROM services WHERE up=0'):
-        add('warning', 'Services', f'Service down: {s["label"]}', f'{s["url"]} · last seen online: {iso(s["last_seen_up"]) or "never"}', mac=s['mac'], ip=s['ip'])
+        add('warning', 'Servicios', f'Servicio caído: {s["label"]}', f'{s["url"]} · última vez activo: {iso(s["last_seen_up"]) or "nunca"}', mac=s['mac'], ip=s['ip'])
 
+    # Monitor
     if _MONITOR_STATE['last_error']:
-        add('warning', 'Panel', 'Background monitor error', _MONITOR_STATE['last_error'])
+        add('warning', 'Panel', 'Error en el monitor en segundo plano', _MONITOR_STATE['last_error'])
 
     order = {'critical': 0, 'warning': 1, 'info': 2}
     issues.sort(key=lambda i: order.get(i['severity'], 3))
@@ -928,31 +1208,31 @@ def api_diagnostics():
     return jsonify({'status': 'success', 'issues': issues, 'counts': dict(counts), 'score': score, 'range': rng})
 
 
-# ---------- Device Actions ----------
+# ---------- Acciones ----------
 @bp.route('/api/device/block', methods=['POST'])
 def api_device_block():
     body = request.json or {}
     ip = (body.get('ip') or '').strip()
     block = bool(body.get('block'))
     if not valid_ipv4(ip):
-        return jsonify({'status': 'error', 'message': 'Invalid IP address.'})
+        return jsonify({'status': 'error', 'message': 'IP no válida.'})
     if ip in ('192.168.1.249', '192.168.1.1', '127.0.0.1') and block:
-        return jsonify({'status': 'error', 'message': 'Cannot block the local server or main gateway.'})
+        return jsonify({'status': 'error', 'message': 'No se puede bloquear el servidor ni el router principal.'})
     try:
         set_client_blocked(ip, block)
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'AdGuard Home: {e}'})
-    send_alert('⛔ Internet Blocked' if block else '✅ Internet Restored', f'Client {ip}', 'info')
+    send_alert('⛔ Internet bloqueado' if block else '✅ Internet restaurado', f'Cliente {ip}', 'info')
     return jsonify({'status': 'success', 'message': (
-        f'⛔ {ip} blocked in AdGuard Home: DNS resolution is now disabled for this client.'
-        if block else f'✅ {ip} unblocked: Internet access restored.')})
+        f'⛔ {ip} bloqueado en AdGuard Home: ya no podrá resolver DNS (sin navegación).'
+        if block else f'✅ {ip} desbloqueado: vuelve a tener acceso a Internet.')})
 
 
 @bp.route('/api/wol', methods=['POST'])
 def api_wol():
     mac = norm_mac((request.json or {}).get('mac'))
     if not valid_mac(mac):
-        return jsonify({'status': 'error', 'message': 'Invalid MAC address.'})
+        return jsonify({'status': 'error', 'message': 'MAC no válida.'})
     payload = b'\xff' * 6 + bytes.fromhex(mac.replace(':', '')) * 16
     sent = 0
     for addr in ('255.255.255.255', '192.168.1.255'):
@@ -966,19 +1246,19 @@ def api_wol():
             except Exception:
                 pass
     if not sent:
-        return jsonify({'status': 'error', 'message': 'Could not send Wake-on-LAN magic packet.'})
-    return jsonify({'status': 'success', 'message': f'⚡ Wake-on-LAN magic packet sent to {mac}. If WoL is enabled in BIOS/NIC, the host will boot shortly.'})
+        return jsonify({'status': 'error', 'message': 'No se pudo enviar el paquete mágico.'})
+    return jsonify({'status': 'success', 'message': f'⚡ Paquete Wake-on-LAN enviado a {mac}. Si el equipo tiene WoL activado en BIOS/red, arrancará en unos segundos.'})
 
 
 COMMON_PORT_NAMES = {
     20: 'FTP-data', 21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS', 67: 'DHCP', 80: 'HTTP', 81: 'HTTP-alt',
     110: 'POP3', 111: 'RPC', 123: 'NTP', 135: 'MS-RPC', 139: 'NetBIOS', 143: 'IMAP', 161: 'SNMP', 443: 'HTTPS',
-    445: 'SMB', 548: 'AFP', 554: 'RTSP', 631: 'IPP (Printer)', 853: 'DNS-over-TLS', 993: 'IMAPS', 995: 'POP3S',
+    445: 'SMB', 548: 'AFP', 554: 'RTSP', 631: 'IPP (impresora)', 853: 'DNS-over-TLS', 993: 'IMAPS', 995: 'POP3S',
     1080: 'SOCKS', 1194: 'OpenVPN', 1433: 'MSSQL', 1883: 'MQTT', 1900: 'UPnP', 1984: 'go2rtc', 2283: 'Immich',
     3000: 'Grafana/Node', 3306: 'MySQL', 3389: 'RDP', 4357: 'HA Observer', 5000: 'HTTP-alt', 5001: 'HTTP-alt',
     5353: 'mDNS', 5432: 'PostgreSQL', 5900: 'VNC', 6052: 'ESPHome', 6379: 'Redis', 6881: 'BitTorrent',
     8006: 'Proxmox', 8080: 'HTTP-proxy', 8086: 'InfluxDB', 8096: 'Jellyfin', 8123: 'Home Assistant', 8443: 'HTTPS-alt',
-    8883: 'MQTT-TLS', 8888: 'HTTP-alt', 9000: 'Portainer', 9100: 'RAW Printer', 9443: 'Portainer-TLS',
+    8883: 'MQTT-TLS', 8888: 'HTTP-alt', 9000: 'Portainer', 9100: 'Impresora RAW', 9443: 'Portainer-TLS',
     32400: 'Plex', 51820: 'WireGuard', 62078: 'iPhone sync',
 }
 
@@ -1025,7 +1305,7 @@ def api_portscan_start():
     ip = (body.get('ip') or '').strip()
     mode = body.get('mode', 'common')
     if not valid_ipv4(ip) or not ip.startswith('192.168.'):
-        return jsonify({'status': 'error', 'message': 'Only local network IPs are allowed.'})
+        return jsonify({'status': 'error', 'message': 'Solo se permiten IPs de la red local.'})
     if mode == 'full':
         ports, timeout = list(range(1, 65536)), 0.35
     elif mode == 'top':
@@ -1046,13 +1326,13 @@ def api_portscan_start():
 def api_portscan_status(job_id):
     job = _SCAN_JOBS.get(job_id)
     if not job:
-        return jsonify({'status': 'error', 'message': 'Scan job not found.'}), 404
+        return jsonify({'status': 'error', 'message': 'Escaneo no encontrado.'}), 404
     if request.method == 'DELETE':
         job['cancel'] = True
     return jsonify({'status': 'success', **{k: v for k, v in job.items() if k != 'cancel'}})
 
 
-# ---------- Export / Import ----------
+# ---------- Exportar / Importar ----------
 SECRET_ROUTER_KEYS = ('password',)
 
 
@@ -1067,6 +1347,7 @@ def build_backup(include_secrets=False):
                     r[k] = ''
         if 'alerts' in c:
             c['alerts']['telegram_token'] = ''
+            c['alerts']['smtp_pass'] = ''
     leases = D['read_leases']().get('leases', [])
     static = [{'mac': norm_mac(l.get('mac')), 'ip': l.get('ip'), 'hostname': l.get('hostname') or ''}
               for l in leases if l.get('static') and norm_mac(l.get('mac')) != '00:00:00:00:00:00']
@@ -1087,19 +1368,19 @@ def build_backup(include_secrets=False):
 def api_backup_export():
     inc = request.args.get('secrets') == '1'
     data = build_backup(inc)
-    fname = f"dhcp-panel-backup-{datetime.now().strftime('%Y%m%d-%H%M')}{'-with-secrets' if inc else ''}.json"
+    fname = f"dhcp-panel-backup-{datetime.now().strftime('%Y%m%d-%H%M')}{'-con-claves' if inc else ''}.json"
     return Response(json.dumps(data, indent=2, ensure_ascii=False), mimetype='application/json',
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
 
 
 def _validate_backup(b):
     if not isinstance(b, dict) or b.get('app') != 'adguard-dhcp-panel':
-        raise ValueError('File is not a valid AdGuard DHCP Panel backup.')
+        raise ValueError('El archivo no es una copia de seguridad válida del Panel DHCP.')
     if int(b.get('format_version', 0)) > 1:
-        raise ValueError('Backup is from a newer version of the panel.')
+        raise ValueError('La copia es de una versión más nueva del panel.')
     for l in b.get('static_leases', []):
         if not valid_mac(l.get('mac')) or not valid_ipv4(l.get('ip')):
-            raise ValueError(f'Invalid lease in backup: {l}')
+            raise ValueError(f'Concesión no válida en la copia: {l}')
 
 
 def _diff_backup(b):
@@ -1169,7 +1450,7 @@ def api_backup_apply():
     if opts.get('config'):
         old_routers = cfg.get('routers', [])
         new_routers = json.loads(json.dumps(bc.get('routers', [])))
-        for r in new_routers:
+        for r in new_routers:  # conservar contraseñas actuales si la copia no las trae
             if not r.get('password'):
                 prev = next((o for o in old_routers if o.get('id') == r.get('id') or (o.get('ip') == r.get('ip') and o.get('type') == r.get('type'))), None)
                 if prev:
@@ -1180,18 +1461,20 @@ def api_backup_apply():
                 cfg[k] = bc[k]
         if bc.get('adguard_pass'):
             cfg['adguard_pass'] = bc['adguard_pass']
-        done.append(f'{len(new_routers)} routers and AdGuard connection')
+        done.append(f'{len(new_routers)} routers y conexión con AdGuard')
     if opts.get('alerts') and bc.get('alerts'):
         a = dict(bc['alerts'])
         if not a.get('telegram_token'):
             a['telegram_token'] = (cfg.get('alerts') or {}).get('telegram_token', '')
+        if not a.get('smtp_pass'):
+            a['smtp_pass'] = (cfg.get('alerts') or {}).get('smtp_pass', '')
         cfg['alerts'] = a
-        done.append('alerts')
+        done.append('alertas')
     if opts.get('names'):
         names = dict(cfg.get('custom_service_names') or {})
         names.update(bc.get('custom_service_names') or {})
         cfg['custom_service_names'] = names
-        done.append(f'{len(bc.get("custom_service_names") or {})} service names')
+        done.append(f'{len(bc.get("custom_service_names") or {})} nombres de servicios')
     if opts.get('config') or opts.get('names') or opts.get('alerts'):
         D['save_config_raw'](cfg)
 
@@ -1206,21 +1489,20 @@ def api_backup_apply():
             db_exec('UPDATE devices SET notes=?, room=?, tags=?, known=? WHERE mac=?',
                     (m.get('notes') or '', m.get('room') or '', json.dumps(m.get('tags') or []), 1 if m.get('known', True) else 0, mac))
             n += 1
-        done.append(f'metadata for {n} devices')
+        done.append(f'fichas de {n} dispositivos')
 
     if opts.get('topology', True):
         topo_b = b.get('topology_custom_positions') or b.get('topology_layout')
         if topo_b and isinstance(topo_b, dict) and len(topo_b) > 0:
             kv_set('topology_custom_positions', topo_b)
-            done.append(f'topology layout ({len(topo_b)} nodes)')
+            done.append(f'distribución de topología ({len(topo_b)} nodos)')
 
     if opts.get('leases'):
         replace = opts.get('leases_mode') == 'replace'
         bk = [{'mac': norm_mac(l['mac']), 'ip': l['ip'], 'hostname': l.get('hostname') or ''} for l in b.get('static_leases', [])]
         bk_macs = {l['mac'] for l in bk}
         bk_ips = {l['ip'] for l in bk}
-        container = cfg.get('docker_container', 'adguardhome')
-        D['run_sudo'](['docker', 'stop', container])
+        D['run_sudo'](['docker', 'stop', 'adguardhome'])
         try:
             data = D['read_leases']()
             kept = []
@@ -1236,14 +1518,14 @@ def api_backup_apply():
             data['leases'] = kept
             D['write_leases'](data)
         finally:
-            D['run_sudo'](['docker', 'start', container])
-        done.append(f'{len(bk)} static leases ({"full replace" if replace else "merged"})')
+            D['run_sudo'](['docker', 'start', 'adguardhome'])
+        done.append(f'{len(bk)} IPs estáticas ({"reemplazo total" if replace else "fusión"})')
 
-    return jsonify({'status': 'success', 'message': 'Import completed: ' + (', '.join(done) if done else 'nothing selected') + '.'})
+    return jsonify({'status': 'success', 'message': 'Importación completada: ' + (', '.join(done) if done else 'nada seleccionado') + '.'})
 
 
 # =====================================================================
-#  Initialization
+#  Inicialización
 # =====================================================================
 def init_app(app, deps):
     global DB_PATH
