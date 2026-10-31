@@ -868,6 +868,12 @@
             height: 100%;
             display: block;
             cursor: grab;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .topo-mobile-toggle-btn {
+            display: none;
         }
         #topo-canvas:active {
             cursor: grabbing;
@@ -1204,8 +1210,37 @@
                 width: 100% !important;
                 box-sizing: border-box !important;
             }
+            .topo-mobile-toggle-btn {
+                display: inline-flex !important;
+                align-items: center;
+                gap: 4px;
+                background: rgba(56, 189, 248, 0.18);
+                border: 1px solid rgba(56, 189, 248, 0.45);
+                color: #7dd3fc;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 0.74rem;
+                font-weight: 700;
+                cursor: pointer;
+                white-space: nowrap;
+                margin-left: auto;
+            }
             .topo-controls {
-                width: 100% !important;
+                display: none;
+            }
+            .topo-controls.mobile-open {
+                display: flex !important;
+                flex-direction: column !important;
+                background: rgba(15, 23, 42, 0.96) !important;
+                border: 1px solid rgba(56, 189, 248, 0.35) !important;
+                border-radius: 12px !important;
+                padding: 10px !important;
+                box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85) !important;
+                backdrop-filter: blur(14px) !important;
+                max-height: 52vh !important;
+                overflow-y: auto !important;
+                pointer-events: auto !important;
+                z-index: 50 !important;
             }
             .topo-controls-row {
                 flex-wrap: wrap !important;
@@ -1620,8 +1655,9 @@
                 <div class="topo-search-box">
                     <span style="color:#94a3b8; font-size:0.85rem;">🔍</span>
                     <input type="text" id="topo-search" placeholder="Buscar nodo, host, IP o MAC..." oninput="onTopoSearchInput()" onkeydown="if(event.key==='Enter') focusFirstTopoMatch()">
-                    <button id="topo-search-exact-btn" onclick="toggleTopoExactSearch()" class="topo-search-exact-btn" title="Alternar coincidencia exacta de IP / Host / MAC (evita seleccionar 192.168.1.144 al buscar .14) y fijar nodo palpitante">🎯 Exacto</button>
+                    <button id="topo-search-exact-btn" onclick="toggleTopoExactSearch()" class="topo-search-exact-btn" title="Alternar coincidencia exacta de IP / Host / MAC">🎯 Exacto</button>
                     <button id="topo-search-clear" onclick="clearTopoSearch()" style="display:none; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem; padding:0;">✕</button>
+                    <button id="topo-mobile-toggle-btn" onclick="toggleMobileTopoControls()" class="topo-mobile-toggle-btn" title="Mostrar/Ocultar controles">🎛️ Opciones</button>
                 </div>
 
                 <div class="topo-controls">
@@ -4669,6 +4705,19 @@ function isFullIpv4(str) {
     });
 }
 
+function toggleMobileTopoControls() {
+    const ctrl = document.querySelector('.topo-controls');
+    const btn = document.getElementById('topo-mobile-toggle-btn');
+    if (!ctrl) return;
+    const isOpen = ctrl.classList.toggle('mobile-open');
+    if (btn) {
+        btn.textContent = isOpen ? '✕ Cerrar' : '🎛️ Opciones';
+        btn.style.background = isOpen ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.18)';
+        btn.style.borderColor = isOpen ? '#ef4444' : 'rgba(56, 189, 248, 0.45)';
+        btn.style.color = isOpen ? '#fca5a5' : '#7dd3fc';
+    }
+}
+
 function onTopoSearchInput() {
     const inp = document.getElementById('topo-search');
     const clr = document.getElementById('topo-search-clear');
@@ -5747,6 +5796,106 @@ function initTopoCanvas() {
             topoState.scale = topoState.targetScale = nextScale;
         }, { passive: false });
 
+        // Soporte táctil móvil nativo: desplazamiento con 1 dedo y pellizcar para zoom con 2 dedos
+        let touchStartDist = 0;
+        let touchStartScale = 1;
+        let touchStartPanX = 0;
+        let touchStartPanY = 0;
+        let touchStartClientX = 0;
+        let touchStartClientY = 0;
+        let isTouching = false;
+        let touchMoved = false;
+
+        canvas.addEventListener('touchstart', e => {
+            if (e.touches.length === 1) {
+                isTouching = true;
+                touchMoved = false;
+                topoState.smoothCamera = false;
+                const t = e.touches[0];
+                touchStartClientX = t.clientX;
+                touchStartClientY = t.clientY;
+                touchStartPanX = topoState.panX;
+                touchStartPanY = topoState.panY;
+
+                const { wx, wy } = toWorld(t.clientX, t.clientY);
+                const hit = findNodeAt(wx, wy);
+                topoState.dragNode = hit || null;
+            } else if (e.touches.length === 2) {
+                isTouching = true;
+                topoState.dragNode = null;
+                topoState.smoothCamera = false;
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                touchStartScale = topoState.scale;
+                touchStartPanX = topoState.panX;
+                touchStartPanY = topoState.panY;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', e => {
+            if (!isTouching) return;
+            e.preventDefault();
+            touchMoved = true;
+
+            if (e.touches.length === 1) {
+                const t = e.touches[0];
+                if (topoState.dragNode) {
+                    const { wx, wy } = toWorld(t.clientX, t.clientY);
+                    topoState.dragNode.baseX = wx;
+                    topoState.dragNode.baseY = wy;
+                    topoState.dragNode.x = wx;
+                    topoState.dragNode.y = wy;
+                } else {
+                    const dx = t.clientX - touchStartClientX;
+                    const dy = t.clientY - touchStartClientY;
+                    topoState.panX = topoState.targetPanX = touchStartPanX + dx;
+                    topoState.panY = topoState.targetPanY = touchStartPanY + dy;
+                }
+            } else if (e.touches.length === 2) {
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                if (touchStartDist > 0) {
+                    const factor = currentDist / touchStartDist;
+                    const nextScale = Math.max(0.12, Math.min(3.6, touchStartScale * factor));
+                    
+                    const midX = (t1.clientX + t2.clientX) / 2;
+                    const midY = (t1.clientY + t2.clientY) / 2;
+                    const { wx, wy } = toWorld(midX, midY);
+
+                    topoState.scale = topoState.targetScale = nextScale;
+                    const rect = canvas.getBoundingClientRect();
+                    const sx = midX - rect.left;
+                    const sy = midY - rect.top;
+                    topoState.panX = topoState.targetPanX = sx - wx * nextScale;
+                    topoState.panY = topoState.targetPanY = sy - wy * nextScale;
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', e => {
+            if (e.touches.length === 0) {
+                if (!touchMoved && topoState.dragNode) {
+                    const n = topoState.dragNode;
+                    if (n.type === 'client' && n.dev) {
+                        const ipShow = (n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip || '';
+                        openDeviceSheet(n.dev.mac, ipShow);
+                    }
+                }
+                isTouching = false;
+                topoState.dragNode = null;
+                touchStartDist = 0;
+            } else if (e.touches.length === 1) {
+                const t = e.touches[0];
+                touchStartClientX = t.clientX;
+                touchStartClientY = t.clientY;
+                touchStartPanX = topoState.panX;
+                touchStartPanY = topoState.panY;
+                touchStartDist = 0;
+            }
+        }, { passive: false });
+
         canvas.addEventListener('mousedown', e => {
             if (e.button !== 0) return;
             topoState.smoothCamera = false;
@@ -6052,75 +6201,42 @@ function drawTopoFrame(now) {
                 ctx.restore();
             }
 
-            // 1. ENTRAMADO DE TELA DE ARAÑA / CONSTELACIÓN (PLEXUS) ENTRE CLIENTES Y VÉRTICES DE CADA NODO
+            // 1. MALLA POLIGONAL DE CONSTELACIÓN (PLEXUS): Silueta perimetral sutil y elegante entre vecinos inmediatos
             if (usePlexus) {
-                const plexusPts = [];
-                topoState.nodes.forEach(n => {
-                    if (n.type === 'core') return;
-                    const isOff = n.hubId && (n.hubId.toLowerCase().includes('desconectado') || n.hubId.toLowerCase().includes('offline'));
-                    if (!isOff && n.travelStartTime === undefined) {
-                        plexusPts.push({
-                            x: n.x,
-                            y: n.y,
-                            hubId: n.hubId || n.id,
-                            online: n.online,
-                            isNode: true
-                        });
-                    }
-                });
-
-                topoState.links.forEach(lk => {
-                    const hId = lk.type === 'trunk' ? lk.to.id : lk.from.id;
-                    const isOff = hId && (hId.toLowerCase().includes('desconectado') || hId.toLowerCase().includes('offline'));
-                    if (!isOff && lk.online && (lk.to ? lk.to.travelStartTime === undefined : true)) {
-                        (lk.joints || []).forEach(j => {
-                            plexusPts.push({
-                                x: j.x,
-                                y: j.y,
-                                hubId: hId,
-                                online: lk.online,
-                                isNode: false
-                            });
-                        });
-                    }
-                });
-
-                const maxDist = 215;
-                const maxDistSq = maxDist * maxDist;
                 ctx.save();
-                ctx.lineWidth = 0.9;
-                for (let i = 0; i < plexusPts.length; i++) {
-                    const a = plexusPts[i];
-                    let linksCount = 0;
-                    for (let j = i + 1; j < plexusPts.length; j++) {
-                        if (linksCount >= 4) break;
-                        const b = plexusPts[j];
-                        // REGLA ANTI-RAYOS TRANSVERSALES:
-                        // Solo enlazar puntos que pertenezcan estrictamente al MISMO nodo / AP (hubId).
-                        if (!a.hubId || !b.hubId || a.hubId !== b.hubId) continue;
+                ctx.lineWidth = 0.8;
+                const dim = (hov || hasSearch || pinned) ? (pinned ? 0.05 : 0.18) : 1.0;
 
-                        const dx = b.x - a.x;
-                        if (Math.abs(dx) > maxDist) continue;
-                        const dy = b.y - a.y;
-                        if (Math.abs(dy) > maxDist) continue;
-                        const dSq = dx * dx + dy * dy;
-                        if (dSq < maxDistSq && dSq > 350) {
-                            linksCount++;
-                            const ratio = 1 - Math.sqrt(dSq) / maxDist;
-                            const dim = (hov || hasSearch) ? 0.18 : 1.0;
-                            const alpha = ratio * (a.online || b.online ? 0.36 : 0.14) * dim;
-                            ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
-                            ctx.beginPath();
-                            ctx.moveTo(a.x, a.y);
-                            ctx.lineTo(b.x, b.y);
-                            ctx.stroke();
+                // Contorno sutil solo entre clientes vecinos adyacentes de cada router/hub
+                const hubs = topoState.nodes.filter(n => n.type === 'hub');
+                hubs.forEach(h => {
+                    const isOff = h.id && (h.id.toLowerCase().includes('desconectado') || h.id.toLowerCase().includes('offline'));
+                    if (isOff) return;
+                    const cNodes = topoState.nodes.filter(n => n.type === 'client' && n.hubId === h.id && n.travelStartTime === undefined);
+                    if (cNodes.length >= 2) {
+                        // Ordenar por ángulo angular para enlazar solo vecinos contiguos del abanico
+                        const sorted = [...cNodes].sort((a, b) => {
+                            const angA = Math.atan2(a.y - h.y, a.x - h.x);
+                            const angB = Math.atan2(b.y - h.y, b.x - h.x);
+                            return angA - angB;
+                        });
+                        for (let k = 0; k < sorted.length - 1; k++) {
+                            const a = sorted[k], b = sorted[k + 1];
+                            const dSq = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+                            if (dSq < 65000) { // < ~255px
+                                const alpha = 0.18 * (a.online || b.online ? 1.0 : 0.4) * dim;
+                                ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                                ctx.beginPath();
+                                ctx.moveTo(a.x, a.y);
+                                ctx.lineTo(b.x, b.y);
+                                ctx.stroke();
+                            }
                         }
                     }
-                }
+                });
+
                 ctx.restore();
             }
-
-            const heartbeat = Math.pow(Math.max(0, Math.sin(tNow * 0.007)), 2.5);
 
             // 2. Dibujar enlaces principales (En modo Plexus: Zigzag articulado flotante con micro-estrellas en cada vértice; En modo Synapse: líneas directas)
             topoState.links.forEach(lk => {
