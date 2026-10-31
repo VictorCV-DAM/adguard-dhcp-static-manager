@@ -246,7 +246,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 9999;
+            z-index: 100005;
             padding: 20px;
         }
         .popup-modal {
@@ -2003,7 +2003,7 @@ function showMessage(msg, mode = 'auto') {
     if (okBtn) okBtn.focus();
 }
 
-function showConfirmPopup(msg, onConfirm) {
+function showConfirmPopup(msg, onConfirm, btnText = 'Sí, continuar', btnClass = 'btn-danger', icon = '🗑️', title = 'Confirmar acción') {
     const overlay = document.getElementById('popup-overlay');
     const modal = document.getElementById('popup-modal');
     const iconEl = document.getElementById('popup-icon');
@@ -2012,18 +2012,22 @@ function showConfirmPopup(msg, onConfirm) {
     const actionsEl = document.getElementById('popup-actions');
 
     modal.className = 'popup-modal popup-warn';
-    iconEl.textContent = '🗑️';
-    titleEl.textContent = 'Confirmar acción';
+    iconEl.textContent = icon;
+    titleEl.textContent = title;
     bodyEl.innerHTML = `<div>${msg}</div>`;
     actionsEl.innerHTML = `
         <button class="btn btn-outline" onclick="closePopup()">Cancelar</button>
-        <button class="btn btn-danger" id="popup-confirm-btn">Sí, eliminar</button>
+        <button class="btn ${btnClass}" id="popup-confirm-btn">${btnText}</button>
     `;
     overlay.style.display = 'flex';
-    document.getElementById('popup-confirm-btn').onclick = () => {
-        closePopup();
-        onConfirm();
-    };
+    const confirmBtn = document.getElementById('popup-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.onclick = () => {
+            closePopup();
+            onConfirm();
+        };
+        confirmBtn.focus();
+    }
 }
 
 function renderRoutersList() {
@@ -6290,41 +6294,57 @@ async function openDeviceSheet(mac, ipHint = '') {
 async function whitelistDomain(domain, ip, mode) {
     if (!domain) return;
     const modeTxt = mode === 'client' ? `solo para este dispositivo (${ip || 'este cliente'})` : 'para toda la red local';
-    if (!confirm(`¿Desbloquear el dominio "${domain}" en AdGuard Home ${modeTxt}?`)) return;
-    try {
-        const res = await fetch('/api/dns/whitelist', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ domain, ip, mode })
-        });
-        const data = await res.json();
-        showMessage(data.message);
-        if (data.status === 'success') {
-            openDeviceSheet(currentSheetMac, currentSheetIp);
-        }
-    } catch (e) {
-        showMessage('Error al desbloquear dominio: ' + e);
-    }
+    showConfirmPopup(
+        `<p style="margin:0 0 8px 0;">¿Desbloquear el dominio <code>${escapeHtml(domain)}</code> en AdGuard Home?</p><div style="font-size:0.84rem; color:var(--muted);">${mode === 'client' ? 'Se creará una excepción específica para este cliente.' : 'Se añadirá una regla de exclusión global @@||' + escapeHtml(domain) + '^'}</div>`,
+        async () => {
+            try {
+                const res = await fetch('/api/dns/whitelist', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ domain, ip, mode })
+                });
+                const data = await res.json();
+                showMessage(data.message);
+                if (data.status === 'success') {
+                    openDeviceSheet(currentSheetMac, currentSheetIp);
+                }
+            } catch (e) {
+                showMessage('Error al desbloquear dominio: ' + e);
+            }
+        },
+        'Desbloquear',
+        'btn-primary',
+        '🔓',
+        'Desbloquear dominio'
+    );
 }
 
 async function unwhitelistDomain(domain, ip, ruleEnc) {
     if (!domain) return;
-    if (!confirm(`¿Volver a bloquear el dominio "${domain}" eliminando la regla de excepción en AdGuard Home?`)) return;
-    try {
-        const rule = decodeURIComponent(ruleEnc || '');
-        const res = await fetch('/api/dns/unwhitelist', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ domain, ip, rule })
-        });
-        const data = await res.json();
-        showMessage(data.message);
-        if (data.status === 'success') {
-            openDeviceSheet(currentSheetMac, currentSheetIp);
-        }
-    } catch (e) {
-        showMessage('Error al eliminar excepción: ' + e);
-    }
+    const rule = decodeURIComponent(ruleEnc || '');
+    showConfirmPopup(
+        `<p style="margin:0 0 8px 0;">¿Volver a bloquear el dominio <code>${escapeHtml(domain)}</code>?</p><div style="font-size:0.84rem; color:var(--muted);">Se eliminará la regla de excepción en AdGuard Home.</div>`,
+        async () => {
+            try {
+                const res = await fetch('/api/dns/unwhitelist', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ domain, ip, rule })
+                });
+                const data = await res.json();
+                showMessage(data.message);
+                if (data.status === 'success') {
+                    openDeviceSheet(currentSheetMac, currentSheetIp);
+                }
+            } catch (e) {
+                showMessage('Error al eliminar excepción: ' + e);
+            }
+        },
+        'Bloquear de nuevo',
+        'btn-danger',
+        '🔒',
+        'Eliminar excepción DNS'
+    );
 }
 
 function closeDeviceSheet() {
