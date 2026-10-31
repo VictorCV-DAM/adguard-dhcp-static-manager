@@ -3114,10 +3114,19 @@ let topoState = {
     customPositions: _savedCustomPositions // guarda posiciones persistentes en localStorage si el usuario arrastra
 };
 
+let _syncPosTimer = null;
 function saveCustomPositionsToStorage() {
     try {
         localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(topoState.customPositions));
     } catch (e) {}
+    if (_syncPosTimer) clearTimeout(_syncPosTimer);
+    _syncPosTimer = setTimeout(() => {
+        fetch('/api/topology/positions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(topoState.customPositions)
+        }).catch(() => {});
+    }, 600);
 }
 
 function syncTopoControlsUI() {
@@ -3719,16 +3728,31 @@ function relaxTopoPositions(nodes) {
 function buildTopoGraph(fitView = false) {
     const isOnline = d => (d.conn_medium !== 'offline') && (Boolean(d.live_ips && d.live_ips.length > 0) || (d.router_type && d.router_type !== 'offline'));
 
-    // Lista de IPs y nombres identificados como Nodos de Infraestructura (Puntos de Red)
+    // Lista de IPs y nombres identificados como Nodos de Infraestructura (Puntos de Red físicos)
     const isInfraDev = d => {
+        if (!d) return false;
         const ip = d.ip || '';
         const h = (d.hostname || '').toLowerCase();
         const c = (d.dev_class || '').toLowerCase();
+        const rt = d.router_type || '';
         return ip === '192.168.1.1' || ip === '192.168.1.249' ||
                ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' ||
                ip === '192.168.1.10' || ip === '192.168.1.9' ||
                h.includes('mercusys-halo') || h.includes('wr841n') || h.includes('em4590') ||
-               d.router_type === 'infra';
+               h.includes('xgb430v') || h.includes('xg-pon') || h.includes('router-principal') ||
+               rt === 'infra';
+    };
+
+    // Mapeo unificado e inequívoco a los Nodos de Red físicos reales
+    const normalizeHubKey = d => {
+        const raw = (d.router_node || '').trim();
+        const l = raw.toLowerCase();
+        if (l.includes('halo 1') || l.includes('halo-1')) return 'Halo 1 (Mi habitación)';
+        if (l.includes('halo 2') || l.includes('halo-2')) return 'Halo 2 (Estudio)';
+        if (l.includes('halo 3') || l.includes('halo-3')) return 'Halo 3 (Pasillo)';
+        if (l.includes('wr841n') || l.includes('tplink')) return 'TP-Link WR841N';
+        if (l.includes('lan') || l.includes('cable') || d.conn_medium === 'cable') return 'Router Principal / LAN';
+        return 'Router Principal / Wi-Fi';
     };
 
     // Agrupar solo dispositivos CLIENTES reales (excluyendo equipos de infraestructura que son nodos)
@@ -3737,17 +3761,11 @@ function buildTopoGraph(fitView = false) {
 
     clientDevices.forEach(d => {
         if (!topoState.showOffline && !isOnline(d)) return;
-        let key = d.router_node || (d.conn_medium === 'cable' ? 'Gateway / LAN' : 'Gateway / Wi-Fi');
-        // Limpiar sufijos redundantes de banda para unificar bajo el mismo nodo físico
-        key = key.replace(/\s*·\s*(?:2\.4G|5G|LAN|Wi-Fi.*)$/i, '').trim();
-        if (key === 'Punto de Acceso / Repetidor Wi-Fi' || key === 'Punto de Acceso / Router') {
-            key = 'Gateway / Wi-Fi';
-        }
+        const key = normalizeHubKey(d);
         if (!groups[key]) groups[key] = [];
         groups[key].push(d);
     });
 
-    // Definición de Nodos de Infraestructura con sectores amplios para la Red Neuronal Mesh
     const definedHubs = [
         {
             id: 'hub:halo1',
@@ -5612,8 +5630,15 @@ function openBackupModal() {
     document.getElementById('backup-overlay').style.display = 'flex';
 }
 
-function exportBackupJson() {
+async function exportBackupJson() {
     const inc = document.getElementById('bk-inc-secrets').checked ? '1' : '0';
+    try {
+        await fetch('/api/topology/positions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(topoState.customPositions)
+        });
+    } catch (e) {}
     window.location.href = `/api/backup/export?secrets=${inc}`;
 }
 
@@ -5659,11 +5684,13 @@ async function previewBackupFile(input) {
                 <li>Routers en copia: <strong>${(d.routers.backup || []).length}</strong> (${d.routers.new} nuevos)</li>
                 <li>Nombres personalizados de servicios: <strong>${d.names.total}</strong> (${d.names.changed} cambios)</li>
                 <li>Fichas / Notas de dispositivos: <strong>${d.meta.total}</strong></li>
+                ${d.topology_nodes ? `<li>📐 Distribución de topología: <strong>${d.topology_nodes} nodos personalizados</strong></li>` : ''}
             </ul>
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
                 <label><input type="checkbox" id="bk-ap-cfg" checked> Restaurar Routers y nombres de servicios</label>
                 <label><input type="checkbox" id="bk-ap-meta" checked> Restaurar fichas/notas/habitaciones</label>
                 <label><input type="checkbox" id="bk-ap-leases" checked> Aplicar reservas DHCP estáticas en AdGuard</label>
+                ${d.topology_nodes ? '<label><input type="checkbox" id="bk-ap-topo" checked> Restaurar orden y posiciones de la topología</label>' : ''}
             </div>
             <button class="btn btn-success" onclick="applyBackupNow()">🚀 Aplicar Restauración Ahora</button>
         `;
@@ -5675,6 +5702,7 @@ async function previewBackupFile(input) {
 async function applyBackupNow() {
     if (!pendingBackupData) return;
     const cfgOn = document.getElementById('bk-ap-cfg').checked;
+    const topoOn = document.getElementById('bk-ap-topo') ? document.getElementById('bk-ap-topo').checked : true;
     const body = {
         backup: pendingBackupData,
         options: {
@@ -5683,7 +5711,8 @@ async function applyBackupNow() {
             alerts: cfgOn,
             meta: document.getElementById('bk-ap-meta').checked,
             leases: document.getElementById('bk-ap-leases').checked,
-            leases_mode: 'merge'
+            leases_mode: 'merge',
+            topology: topoOn
         }
     };
     const res = await fetch('/api/backup/apply', {
@@ -5692,8 +5721,35 @@ async function applyBackupNow() {
     const data = await res.json();
     document.getElementById('backup-overlay').style.display = 'none';
     showMessage(data.message);
+
+    // Recomponer inmediatamente la topología en pantalla si la copia incluía posiciones
+    const bkTopo = pendingBackupData.topology_custom_positions || pendingBackupData.topology_layout;
+    if (topoOn && bkTopo && typeof bkTopo === 'object' && Object.keys(bkTopo).length > 0) {
+        topoState.customPositions = bkTopo;
+        try {
+            localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(bkTopo));
+        } catch (e) {}
+        buildTopoGraph(false);
+        triggerNeuralCascade();
+    }
+
     loadConfig();
     loadState();
+}
+
+// Sincronizar distribución de topología desde el servidor si es la primera vez en este navegador
+if (Object.keys(topoState.customPositions).length === 0) {
+    fetch('/api/topology/positions')
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'success' && res.positions && Object.keys(res.positions).length > 0) {
+                topoState.customPositions = res.positions;
+                try {
+                    localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(res.positions));
+                } catch (e) {}
+                buildTopoGraph(false);
+            }
+        }).catch(() => {});
 }
 
 switchMainTab(currentMainTab);

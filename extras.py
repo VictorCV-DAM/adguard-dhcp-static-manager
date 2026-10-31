@@ -1074,10 +1074,12 @@ def build_backup(include_secrets=False):
     for r in db_query('SELECT mac, notes, room, tags, known FROM devices'):
         if r['notes'] or r['room'] or (r['tags'] and r['tags'] != '[]') or not r['known']:
             meta[r['mac']] = {'notes': r['notes'], 'room': r['room'], 'tags': json.loads(r['tags'] or '[]'), 'known': bool(r['known'])}
+    topo_positions = kv_get('topology_custom_positions', {}) or {}
     return {
         'app': 'adguard-dhcp-panel', 'format_version': 1, 'exported_at': iso(now_ts()),
         'includes_secrets': bool(include_secrets),
         'config': c, 'static_leases': static, 'device_meta': meta, 'favorites': [],
+        'topology_custom_positions': topo_positions,
     }
 
 
@@ -1137,6 +1139,7 @@ def _diff_backup(b):
         'meta': {'total': len(b.get('device_meta') or {})},
         'favorites': len(b.get('favorites') or []),
         'alerts': bool(bc.get('alerts')),
+        'topology_nodes': len(b.get('topology_custom_positions') or b.get('topology_layout') or {}),
     }
 
 
@@ -1205,6 +1208,12 @@ def api_backup_apply():
             n += 1
         done.append(f'metadata for {n} devices')
 
+    if opts.get('topology', True):
+        topo_b = b.get('topology_custom_positions') or b.get('topology_layout')
+        if topo_b and isinstance(topo_b, dict) and len(topo_b) > 0:
+            kv_set('topology_custom_positions', topo_b)
+            done.append(f'topology layout ({len(topo_b)} nodes)')
+
     if opts.get('leases'):
         replace = opts.get('leases_mode') == 'replace'
         bk = [{'mac': norm_mac(l['mac']), 'ip': l['ip'], 'hostname': l.get('hostname') or ''} for l in b.get('static_leases', [])]
@@ -1246,3 +1255,14 @@ def init_app(app, deps):
     app.register_blueprint(bp)
     if os.environ.get('DHCP_PANEL_NO_MONITOR') != '1':
         threading.Thread(target=monitor_loop, daemon=True, name='panel-monitor').start()
+
+@bp.route('/api/topology/positions', methods=['GET', 'POST'])
+def api_topology_positions():
+    if request.method == 'POST':
+        data = request.get_json(force=True) or {}
+        if isinstance(data, dict):
+            kv_set('topology_custom_positions', data)
+            return jsonify({'status': 'success', 'count': len(data)})
+        return jsonify({'status': 'error', 'message': 'Formato no válido'}), 400
+    pos = kv_get('topology_custom_positions', {}) or {}
+    return jsonify({'status': 'success', 'positions': pos})
