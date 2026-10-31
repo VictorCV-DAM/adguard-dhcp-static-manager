@@ -1408,7 +1408,7 @@
                         <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refrescar estado de red">
                             🔄
                         </button>
-                        <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Pantalla completa">
+                        <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Ampliar a pantalla completa y centrar vista (⛶)">
                             ⛶
                         </button>
                     </div>
@@ -4149,12 +4149,56 @@ function toggleTopoCards() {
 function toggleTopoFullscreen() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
+
+    const doCenter = () => {
+        const canvas = document.getElementById('topo-canvas');
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas && stage && stage.clientWidth > 0 && stage.clientHeight > 0) {
+            canvas.width = stage.clientWidth * dpr;
+            canvas.height = stage.clientHeight * dpr;
+        }
+        fitTopoToScreen(true);
+    };
+
     if (!document.fullscreenElement) {
-        stage.requestFullscreen().catch(() => {});
+        if (stage.requestFullscreen) {
+            stage.requestFullscreen().then(() => {
+                setTimeout(doCenter, 100);
+                setTimeout(doCenter, 280);
+            }).catch(() => {
+                doCenter();
+            });
+        } else {
+            doCenter();
+        }
     } else {
-        document.exitFullscreen().catch(() => {});
+        if (document.exitFullscreen) {
+            document.exitFullscreen().then(() => {
+                setTimeout(doCenter, 100);
+                setTimeout(doCenter, 280);
+            }).catch(() => {
+                doCenter();
+            });
+        } else {
+            doCenter();
+        }
     }
+    // Centrado inmediato preventivo mientras arranca la animación de pantalla completa
+    setTimeout(doCenter, 50);
 }
+
+// Asegurar que al cambiar el estado de pantalla completa (por botón o tecla Esc) siempre se centre
+document.addEventListener('fullscreenchange', () => {
+    const stage = document.getElementById('topo-stage');
+    const canvas = document.getElementById('topo-canvas');
+    const dpr = window.devicePixelRatio || 1;
+    if (stage && canvas && stage.clientWidth > 0 && stage.clientHeight > 0) {
+        canvas.width = stage.clientWidth * dpr;
+        canvas.height = stage.clientHeight * dpr;
+    }
+    setTimeout(() => fitTopoToScreen(true), 100);
+    setTimeout(() => fitTopoToScreen(true), 280);
+});
 
 function onTopoSearchInput() {
     const inp = document.getElementById('topo-search');
