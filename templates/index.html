@@ -730,6 +730,29 @@
         .tl-row:hover { background: rgba(255,255,255,0.03); }
         .tl-bar, .tl-track { position: relative !important; height: 20px !important; background: #070c18 !important; border-radius: 6px !important; overflow: hidden !important; border: 1px solid rgba(255,255,255,0.09) !important; width: 100% !important; box-sizing: border-box !important; }
         .tl-seg { position: absolute !important; top: 2px !important; bottom: 2px !important; background: linear-gradient(90deg, #22c55e, #10b981) !important; border-radius: 3px !important; box-shadow: 0 0 8px rgba(34, 197, 94, 0.45) !important; }
+        /* Selector de tono de malla */
+        #topo-mesh-color {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        #topo-mesh-color:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+        }
+        #topo-mesh-color::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        #topo-mesh-color::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+        #topo-mesh-color::-moz-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
         /* Topología interactiva estilo malla Bluetooth / radial + sinapsis neuronal */
         .topo-stage {
             position: relative;
@@ -1677,11 +1700,14 @@
                         <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Alternar entre Zigzag Flotante Constelación (Plexus), Impulsos Eléctricos, o Fusión">
                             🕸️ Estilo: <span id="topo-style-txt">Zigzag Flotante</span>
                         </button>
-                        <!-- Selector de malla con stepper compacto -->
-                        <div class="topo-mesh-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Nivel de entramado de la tela de araña (- / +)">
+                        <!-- Selector de malla con stepper compacto y selector de tono -->
+                        <div class="topo-mesh-group" style="display:inline-flex; align-items:center; background:rgba(15,23,42,0.88); border:1px solid rgba(56,189,248,0.35); border-radius:8px; overflow:hidden; height:30px;" title="Nivel de entramado y tono de color de la tela de araña">
                             <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(-1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Reducir entramado (−)">−</button>
                             <span id="topo-mesh-density-txt" onclick="cycleTopoMeshDensity()" style="font-size:0.74rem; font-weight:700; color:#e0f2fe; padding:0 7px; cursor:pointer; user-select:none; white-space:nowrap; border-left:1px solid rgba(56,189,248,0.2); border-right:1px solid rgba(56,189,248,0.2); line-height:28px;" title="Clic para alternar densidad">🕸️ Malla: 3x</span>
                             <button type="button" class="topo-ctrl-btn" onclick="adjustTopoMeshDensity(1)" style="border:none; border-radius:0; padding:0 8px; height:100%; background:transparent; color:#7dd3fc; font-weight:800; font-size:0.95rem;" title="Aumentar entramado (+)">+</button>
+                            <div style="display:inline-flex; align-items:center; padding:0 6px; border-left:1px solid rgba(56,189,248,0.2); height:100%;" title="Personalizar tono de color de la tela de araña">
+                                <input type="color" id="topo-mesh-color" value="#bae6fd" oninput="setTopoMeshColor(this.value)" style="width:18px; height:18px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.45); padding:0; background:none; cursor:pointer; vertical-align:middle;">
+                            </div>
                         </div>
                         <button id="topo-btn-telemetry" class="topo-ctrl-btn" onclick="toggleTopoTelemetryMode()" title="Alternar entre impulsos ambientales simulados o flujo continuo de Tráfico Real DNS + Ping">
                             📡 Lógica: <span id="topo-telemetry-txt">Simulada</span>
@@ -3800,7 +3826,11 @@ let topoState = {
     initialized: false,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
-        meshDensity: (function() {
+        meshColor: (function() {
+        const c = localStorage.getItem('ag_topo_mesh_color');
+        return (c && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : '#bae6fd';
+    })(), // Tono de color personalizado de la tela de araña
+    meshDensity: (function() {
         const v = parseInt(localStorage.getItem('ag_topo_mesh_density'), 10);
         return (!isNaN(v) && v >= 0 && v <= 4) ? v : 3;
     })(), // 0=Off, 1=1x Sutil, 2=2x Media, 3=3x Densa, 4=4x Extrema
@@ -4142,11 +4172,34 @@ const TOPO_MESH_LEVELS = [
     { level: 4, label: 'Extrema (4x)', maxDist: 430, maxLinks: 12, lineWidth: 0.82, alphaOn: 0.23, alphaOff: 0.11 }
 ];
 
+function hexToRgb(hex) {
+    let c = (hex || '#bae6fd').replace('#', '');
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    const num = parseInt(c, 16);
+    return {
+        r: (num >> 16) & 255,
+        g: (num >> 8) & 255,
+        b: num & 255
+    };
+}
+
+function setTopoMeshColor(color) {
+    if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    topoState.meshColor = color;
+    try { localStorage.setItem('ag_topo_mesh_color', color); } catch (e) {}
+    const inp = document.getElementById('topo-mesh-color');
+    if (inp) inp.value = color;
+}
+
 function updateTopoMeshDensityUI() {
     const txt = document.getElementById('topo-mesh-density-txt');
     const cur = TOPO_MESH_LEVELS.find(l => l.level === topoState.meshDensity) || TOPO_MESH_LEVELS[3];
     if (txt) {
         txt.textContent = cur.label;
+    }
+    const colorInp = document.getElementById('topo-mesh-color');
+    if (colorInp && topoState.meshColor) {
+        colorInp.value = topoState.meshColor;
     }
 }
 
@@ -6312,7 +6365,8 @@ function drawTopoFrame(now) {
                                 const ratio = 1 - Math.sqrt(dSq) / maxDist;
                                 const dim = (hov || hasSearch || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
                                 const alpha = ratio * (a.online || b.online ? meshCfg.alphaOn : meshCfg.alphaOff) * dim;
-                                ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                                const mc = hexToRgb(topoState.meshColor || '#bae6fd');
+                                ctx.strokeStyle = `rgba(${mc.r}, ${mc.g}, ${mc.b}, ${alpha.toFixed(3)})`;
                                 ctx.beginPath();
                                 ctx.moveTo(a.x, a.y);
                                 ctx.lineTo(b.x, b.y);
