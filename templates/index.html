@@ -1389,6 +1389,11 @@
 
                 <div class="topo-controls">
                     <div class="topo-controls-row">
+                        <!-- Banner de dispositivo enfocado / localizado -->
+                        <div id="topo-pinned-banner" style="display:none; align-items:center; gap:8px; background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(6,78,59,0.7)); border:1.5px solid #00f5d4; padding:4px 14px; border-radius:24px; font-size:0.78rem; color:#f0fdf4; font-weight:600; box-shadow:0 0 18px rgba(0,245,212,0.45); backdrop-filter:blur(8px);">
+                            <span>🎯 Enfocado: <strong id="topo-pinned-name" style="color:#67e8f9; font-weight:800;">Dispositivo</strong></span>
+                            <button onclick="clearTopoPin()" style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.5); color:#fca5a5; cursor:pointer; font-size:0.75rem; padding:1px 7px; border-radius:12px; font-weight:bold; line-height:1.2;" title="Quitar enfoque fijado y restaurar vista general">✕ Quitar</button>
+                        </div>
                         <button id="topo-btn-style" class="topo-ctrl-btn active" onclick="cycleTopoVisualStyle()" style="border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.2);" title="Alternar entre el estilo Zigzag Flotante Constelación (Plexus), el estilo Impulsos Eléctricos actual, o la Fusión de ambos">
                             🕸️ Estilo: <span id="topo-style-txt">Zigzag Flotante</span>
                         </button>
@@ -2013,7 +2018,10 @@ function closePopup() {
 }
 
 window.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closePopup();
+    if (e.key === 'Escape') {
+    closePopup();
+    clearTopoPin();
+}
 });
 
 function showMessage(msg, mode = 'auto') {
@@ -3125,8 +3133,11 @@ function renderTable() {
         const hostHtml = `
             <div style="display:flex; align-items:center; gap:8px;">
                 ${d.photo ? `<img src="${d.photo}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(56,189,248,0.5); cursor:pointer; flex-shrink:0;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ver foto y ficha de ${escapeHtml(d.hostname)}" />` : ''}
-                <div>
-                    <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
+                <div style="min-width:0; flex:1;">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
+                        <button class="btn btn-outline" style="padding:1px 6px; font-size:0.68rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); background:rgba(56,189,248,0.08); border-radius:4px; line-height:1.2; flex-shrink:0; display:inline-flex; align-items:center; gap:3px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar ${escapeHtml(d.hostname)} en la topología de red">🌐 Mapa</button>
+                    </div>
                 ${badges.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:3px;">${badges.join('')}</div>` : ''}
                 </div>
             </div>
@@ -3412,6 +3423,7 @@ let topoState = {
     telemetryFetching: false,
     effectsOn: true,
     showCards: localStorage.getItem('ag_topo_show_cards') === '1',
+    pinnedTargetNode: null,
     searchQuery: '',
     panX: 0,
     panY: 0,
@@ -5388,6 +5400,11 @@ function initTopoCanvas() {
                     topoState.dragPreSnapshot = null;
                 } else if (!topoState.movedDuringDrag) {
                     const n = topoState.dragNode;
+                    // Al hacer clic en otro cliente o nodo, cambiar el foco al nuevo nodo clicado
+                    if (topoState.pinnedTargetNode && topoState.pinnedTargetNode.id !== n.id) {
+                        topoState.pinnedTargetNode = n;
+                        updateTopoPinnedBanner();
+                    }
                     if (n.type === 'client' && n.dev) {
                         spawnNodeShockwave(n.x, n.y, n.color, 75);
                         const ipShow = (n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip || '';
@@ -5399,6 +5416,11 @@ function initTopoCanvas() {
                         triggerNeuralCascade(n);
                         fitTopoToScreen(true);
                     }
+                }
+            } else if (!topoState.movedDuringDrag) {
+                // Clic en el fondo vacío del canvas -> quitar el resalte fijado
+                if (topoState.pinnedTargetNode) {
+                    clearTopoPin();
                 }
             }
             topoState.dragNode = null;
@@ -5559,7 +5581,8 @@ function drawTopoFrame(now) {
             ctx.translate(topoState.panX, topoState.panY);
             ctx.scale(topoState.scale, topoState.scale);
 
-            const hov = topoState.hoverNode;
+            const pinned = topoState.pinnedTargetNode;
+            const hov = pinned || topoState.hoverNode;
             const hasSearch = Boolean(topoState.searchQuery);
 
             const isLinkHighlighted = lk => {
@@ -5623,11 +5646,12 @@ function drawTopoFrame(now) {
                     pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
 
                     if (hi) {
-                        ctx.strokeStyle = '#ffffff';
-                        ctx.lineWidth = lk.type === 'trunk' ? 2.6 : 1.8;
-                        ctx.shadowColor = '#00e5ff';
-                        ctx.shadowBlur = 14;
-                        ctx.globalAlpha = 0.96;
+                        const isPinnedSpoke = Boolean(pinned && (lk.to?.id === pinned.id || lk.from?.id === pinned.id));
+                        ctx.strokeStyle = isPinnedSpoke ? '#00f5d4' : '#ffffff';
+                        ctx.lineWidth = isPinnedSpoke ? 3.6 : (lk.type === 'trunk' ? 2.6 : 1.8);
+                        ctx.shadowColor = isPinnedSpoke ? '#00f5d4' : '#00e5ff';
+                        ctx.shadowBlur = isPinnedSpoke ? 26 : 14;
+                        ctx.globalAlpha = 1.0;
                     } else if (topoState.telemetryMode && lk.type === 'spoke') {
                         ctx.strokeStyle = telBlocked
                             ? 'rgba(244, 63, 94, 0.72)'
@@ -5891,7 +5915,7 @@ function drawTopoFrame(now) {
                 const hi = isNodeHighlighted(n);
                 const isDirectHover = hov && hov.id === n.id;
                 const matched = hasSearch && nodeMatchesSearch(n);
-                ctx.globalAlpha = hi ? 1 : 0.15;
+                ctx.globalAlpha = hi ? 1 : (pinned ? 0.06 : 0.15);
 
                 if (n.type === 'core') {
                     // === NODO CENTRAL PROTAGONISTA: ROUTER PRINCIPAL / ADGUARD CORE ===
@@ -6071,6 +6095,114 @@ function drawTopoFrame(now) {
                     }
                 }
             });
+
+            // 4. BALIZA LUMINOSA TÁCTICA, RADAR SÓNAR CONTINUO Y DIANA RETICULAR PARA EL DISPOSITIVO ENFOCADO
+            if (pinned) {
+                const target = topoState.nodes.find(n => n.id === pinned.id);
+                if (target) {
+                    ctx.save();
+                    const n = target;
+
+                    // A. Ondas continuas de radar sónar expansivo (3 anillos concéntricos fluorescentes)
+                    const radarSpeed = 0.045;
+                    for (let rIdx = 0; rIdx < 3; rIdx++) {
+                        const prog = ((tNow * radarSpeed + rIdx * 28) % 84) / 84; // 0..1
+                        const rWave = n.r + 4 + prog * 78;
+                        const alpha = (1 - prog) * 0.95;
+                        ctx.beginPath();
+                        ctx.arc(n.x, n.y, rWave, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(0, 245, 212, ${alpha.toFixed(3)})`;
+                        ctx.lineWidth = 2.6 * (1 - prog * 0.5);
+                        ctx.shadowColor = '#00f5d4';
+                        ctx.shadowBlur = 22 * (1 - prog);
+                        ctx.stroke();
+                    }
+
+                    // B. Retícula táctica giratoria con 4 cuadrantes y marcas de mira
+                    ctx.save();
+                    ctx.translate(n.x, n.y);
+                    ctx.rotate(tNow * 0.0018);
+                    const reticleR = n.r + 16;
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 2.2;
+                    ctx.shadowColor = '#00e5ff';
+                    ctx.shadowBlur = 16;
+                    for (let a = 0; a < 4; a++) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, reticleR, a * Math.PI / 2 + 0.24, (a + 1) * Math.PI / 2 - 0.24);
+                        ctx.stroke();
+                    }
+                    for (let a = 0; a < 4; a++) {
+                        const ang = a * Math.PI / 2;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(ang) * (reticleR - 4), Math.sin(ang) * (reticleR - 4));
+                        ctx.lineTo(Math.cos(ang) * (reticleR + 9), Math.sin(ang) * (reticleR + 9));
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // C. Núcleo resplandeciente del nodo con pulsación continua
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, n.r + 4 + 1.5 * Math.sin(tNow * 0.007), 0, Math.PI * 2);
+                    ctx.strokeStyle = '#00f5d4';
+                    ctx.lineWidth = 2.8;
+                    ctx.shadowColor = '#00f5d4';
+                    ctx.shadowBlur = 26;
+                    ctx.stroke();
+
+                    // D. Cartel flotante neón ("🎯 [Nombre]")
+                    const pinTitle = `🎯 ${n.label || 'DISPOSITIVO'}`;
+                    const pinSub = n.sub ? `${n.sub}` : '';
+                    ctx.font = '800 12px system-ui, -apple-system, sans-serif';
+                    const twTitle = ctx.measureText(pinTitle).width;
+                    ctx.font = '600 10px monospace';
+                    const twSub = pinSub ? ctx.measureText(pinSub).width : 0;
+                    const cardW = Math.max(twTitle, twSub) + 32;
+                    const cardH = pinSub ? 40 : 26;
+                    const cardY = n.y - (n.r + 22);
+
+                    // Fondo de cristal oscuro con borde verde-neón luminiscente
+                    ctx.shadowColor = '#00f5d4';
+                    ctx.shadowBlur = 24;
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+                    ctx.strokeStyle = '#00f5d4';
+                    ctx.lineWidth = 2.0;
+
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(n.x - cardW / 2, cardY - cardH, cardW, cardH, 8);
+                    } else {
+                        ctx.rect(n.x - cardW / 2, cardY - cardH, cardW, cardH);
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Flecha indicadora apuntando hacia abajo hacia el nodo
+                    ctx.beginPath();
+                    ctx.moveTo(n.x - 7, cardY);
+                    ctx.lineTo(n.x + 7, cardY);
+                    ctx.lineTo(n.x, cardY + 8);
+                    ctx.closePath();
+                    ctx.fillStyle = '#00f5d4';
+                    ctx.fill();
+
+                    // Textos del cartel
+                    ctx.shadowBlur = 0;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '800 12px system-ui, -apple-system, sans-serif';
+                    ctx.fillText(pinTitle, n.x, pinSub ? (cardY - cardH + 13) : (cardY - cardH / 2));
+
+                    if (pinSub) {
+                        ctx.fillStyle = '#67e8f9';
+                        ctx.font = '600 10px monospace';
+                        ctx.fillText(pinSub, n.x, cardY - 11);
+                    }
+
+                    ctx.restore();
+                }
+            }
 
             ctx.restore();
         }
@@ -6401,7 +6533,24 @@ function locateDeviceInTopology(mac, ip) {
     }, 180);
 }
 
-function focusTopoNode(nodeOrId, targetScale = 1.2) {
+function clearTopoPin() {
+    topoState.pinnedTargetNode = null;
+    updateTopoPinnedBanner();
+}
+
+function updateTopoPinnedBanner() {
+    const banner = document.getElementById('topo-pinned-banner');
+    const nameEl = document.getElementById('topo-pinned-name');
+    if (!banner) return;
+    if (topoState.pinnedTargetNode) {
+        if (nameEl) nameEl.textContent = topoState.pinnedTargetNode.label || topoState.pinnedTargetNode.sub || 'Dispositivo';
+        banner.style.display = 'inline-flex';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+function focusTopoNode(nodeOrId, targetScale = 1.25) {
     const canvas = document.getElementById('topo-canvas');
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
@@ -6420,8 +6569,10 @@ function focusTopoNode(nodeOrId, targetScale = 1.2) {
     setTopoCamera(targetScale, px, py, true);
     topoState.hoverNode = n;
     topoState.selectedNode = n;
+    topoState.pinnedTargetNode = n;
+    updateTopoPinnedBanner();
     n.flash = 1.0;
-    spawnNodeShockwave(n.x, n.y, n.color || '#38bdf8', 95);
+    spawnNodeShockwave(n.x, n.y, n.color || '#38bdf8', 120);
 }
 
 async function openDeviceSheet(mac, ipHint = '') {
