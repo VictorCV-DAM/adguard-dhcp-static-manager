@@ -2081,11 +2081,25 @@ def build_state(force_refresh=False):
                 'router_node': dev_match.get('router_node', '')
             })
 
+    manual_statics_list = []
+    for d in devices:
+        if d.get('manual_static'):
+            manual_statics_list.append({
+                'mac': d.get('mac', ''),
+                'ip': d.get('ip', ''),
+                'hostname': d.get('hostname', '(Sin nombre)'),
+                'dev_icon': d.get('dev_icon', '⚙️'),
+                'dev_vendor': d.get('dev_vendor', ''),
+                'router_node': d.get('router_node', '')
+            })
+
     static_order_summary = {
         'total': len(ordered_statics_list),
+        'manual_total': len(manual_statics_list),
         'first': ordered_statics_list[0] if ordered_statics_list else None,
         'last': ordered_statics_list[-1] if ordered_statics_list else None,
-        'list': ordered_statics_list
+        'list': ordered_statics_list,
+        'manual_list': manual_statics_list
     }
 
     return {

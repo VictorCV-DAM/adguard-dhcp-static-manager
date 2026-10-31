@@ -8181,9 +8181,14 @@ async function openDeviceSheet(mac, ipHint = '') {
         }
     }
     if (dhcpBadge) {
-        dhcpBadge.innerHTML = dev.static
-            ? '<span class="badge badge-static">📌 IP Estática Fija</span>'
-            : '<span class="badge badge-dynamic">⚡ IP Dinámica</span>';
+        if (dev.manual_static) {
+            dhcpBadge.innerHTML = '<span class="badge" style="background:#475569; color:#f1f5f9; border:1px solid #64748b; font-size:0.75rem; cursor:pointer;" onclick="openStaticOrderModal()" title="IP configurada manualmente o detectada por ARP (sin reserva en AdGuard DHCP). Haz clic para ver el orden.">⚙️ Estática (Manual / Sin reserva DHCP)</span>';
+        } else if (dev.static) {
+            const ordTxt = dev.static_order_idx ? ` (#${dev.static_order_idx})` : '';
+            dhcpBadge.innerHTML = `<span class="badge badge-static" style="cursor:pointer; font-size:0.75rem;" onclick="openStaticOrderModal()" title="Reserva fija en AdGuard Home. Haz clic para ver el orden cronológico.">📌 IP Estática Fija${ordTxt}</span>`;
+        } else {
+            dhcpBadge.innerHTML = '<span class="badge badge-dynamic" style="font-size:0.75rem;">⚡ Concesión Dinámica</span>';
+        }
     }
     if (dhcpStatus) dhcpStatus.style.display = 'none';
     document.getElementById('ds-dns').innerHTML = 'Consultando registro de AdGuard Home...';
@@ -8620,7 +8625,8 @@ function refreshOpenDeviceSheetUi(mac, newIp, newHostname) {
     // 4. Badge DHCP Estática
     const badge = document.getElementById('ds-dhcp-badge');
     if (badge) {
-        badge.innerHTML = '<span class="badge badge-static">📌 IP Estática Fija</span>';
+        const ordTxt = (dev && dev.static_order_idx) ? ` (#${dev.static_order_idx})` : '';
+        badge.innerHTML = `<span class="badge badge-static" style="cursor:pointer; font-size:0.75rem;" onclick="openStaticOrderModal()">📌 IP Estática Fija${ordTxt}</span>`;
     }
 
     // 5. Botones de acción (Hacer Ping con la nueva IP, etc.)
@@ -9276,7 +9282,7 @@ function renderStaticOrderList() {
     const container = document.getElementById('so-table-container');
     const searchVal = (document.getElementById('so-search-inp')?.value || '').trim().toLowerCase();
     
-    if (cntBadge) cntBadge.textContent = `${summary.total} fijadas en total`;
+    if (cntBadge) cntBadge.textContent = `${summary.total} fijadas por DHCP${summary.manual_total ? ` + ${summary.manual_total} manuales` : ''}`;
     
     if (firstBox) {
         firstBox.innerHTML = summary.first 
@@ -9372,6 +9378,53 @@ function renderStaticOrderList() {
     });
     
     html += '</tbody></table>';
+
+    const manuals = summary.manual_list || [];
+    let filteredManuals = manuals;
+    if (searchVal) {
+        filteredManuals = manuals.filter(item => 
+            (item.hostname || '').toLowerCase().includes(searchVal) ||
+            (item.ip || '').toLowerCase().includes(searchVal) ||
+            (item.mac || '').toLowerCase().includes(searchVal)
+        );
+    }
+
+    if (filteredManuals.length > 0) {
+        html += `
+            <div style="margin-top:14px; padding:10px 12px; background:rgba(30,41,59,0.7); border-radius:8px; border:1px dashed rgba(148,163,184,0.3);">
+                <div style="font-size:0.8rem; font-weight:700; color:#cbd5e1; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>⚙️ Estáticas Manuales detectadas por ARP (${filteredManuals.length})</span>
+                    <span style="font-size:0.72rem; color:var(--muted); font-weight:400;">Configuradas en el propio aparato o infraestructura (sin reserva DHCP en AdGuard)</span>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:0.80rem;">
+                    <tbody>
+        `;
+        filteredManuals.forEach(mItem => {
+            html += `
+                <tr style="border-top:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px; width:70px;">
+                        <span class="badge" style="background:#334155; color:#94a3b8; font-size:0.72rem;">Manual</span>
+                    </td>
+                    <td style="padding:6px 8px;">
+                        <strong style="color:#e2e8f0;">${escapeHtml(mItem.hostname)}</strong>
+                    </td>
+                    <td style="padding:6px 8px;">
+                        <code style="color:#38bdf8;">${mItem.ip}</code>
+                    </td>
+                    <td style="padding:6px 8px; font-family:monospace; color:var(--muted); font-size:0.74rem;">
+                        ${mItem.mac}
+                    </td>
+                    <td style="padding:6px 8px; text-align:right;">
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem;" onclick="closeStaticOrderModal(); openDeviceSheet('${mItem.mac}', '${mItem.ip}')" title="Crear reserva fija oficial en AdGuard para que tenga orden #">
+                            📌 Fijar en AdGuard
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table></div>';
+    }
+
     container.innerHTML = html;
 }
 
