@@ -2906,7 +2906,7 @@ async function execWifiManualDeauth() {
     }
 }
 
-function saveConfig() {
+async function saveConfig() {
     const payload = {
         adguard_url: document.getElementById('cfg-ag-url').value.trim(),
         adguard_user: document.getElementById('cfg-ag-user').value.trim(),
