@@ -988,6 +988,7 @@
             color: #38bdf8;
         }
         .topo-legend {
+            pointer-events: none !important;
             position: absolute;
             bottom: 14px;
             left: 50%;
@@ -1228,19 +1229,26 @@
             .topo-controls {
                 display: none;
             }
+            #topo-mobile-close-btn { display: inline-block !important; }
             .topo-controls.mobile-open {
                 display: flex !important;
                 flex-direction: column !important;
-                background: rgba(15, 23, 42, 0.96) !important;
-                border: 1px solid rgba(56, 189, 248, 0.35) !important;
-                border-radius: 12px !important;
+                background: rgba(15, 23, 42, 0.97) !important;
+                border: 1px solid rgba(56, 189, 248, 0.4) !important;
+                border-radius: 14px !important;
                 padding: 10px !important;
-                box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85) !important;
-                backdrop-filter: blur(14px) !important;
-                max-height: 52vh !important;
+                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9) !important;
+                backdrop-filter: blur(16px) !important;
+                max-height: 48vh !important;
                 overflow-y: auto !important;
                 pointer-events: auto !important;
-                z-index: 50 !important;
+                z-index: 99 !important;
+            }
+            .topo-legend {
+                pointer-events: none !important;
+                font-size: 0.64rem !important;
+                padding: 4px 8px !important;
+                bottom: 8px !important;
             }
             .topo-controls-row {
                 flex-wrap: wrap !important;
@@ -1493,23 +1501,21 @@
                 Entradas fantasma (<code>00:00:00:00:00:00</code>): <strong id="lbl-ghost">0</strong> |
                 Caducadas: <strong id="lbl-expired">0</strong>
             </p>
-            <!-- Fila unificada de tiempos de concesión: predefinidos a la izquierda y personalizado compacto a la derecha -->
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                    <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
-                    <button class="btn btn-outline" onclick="setDuration(3600)">1 hora</button>
-                    <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
-                </div>
-                <!-- Tiempo de concesión personalizado compacto alineado a la derecha -->
-                <div style="display:inline-flex; align-items:center; gap:5px; margin-left:auto; background:rgba(0,0,0,0.22); padding:3px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
-                    <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Personalizado:</span>
-                    <input type="number" id="custom-duration-val" min="1" placeholder="Ej: 24" style="width:62px; padding:3px 6px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;" onkeydown="if(event.key==='Enter') setCustomDuration()">
-                    <select id="custom-duration-unit" style="width:auto; padding:3px 6px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc; cursor:pointer;">
+            <!-- Fila unificada de tiempos de concesión: predefinidos y personalizado integrados -->
+            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
+                <button class="btn btn-outline" onclick="setDuration(3600)">1 hora</button>
+                <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
+                <!-- Control personalizado perfectamente integrado en la misma fila -->
+                <div style="display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border:1px solid var(--border); border-radius:6px; background:rgba(15,23,42,0.6); height:33px; box-sizing:border-box;">
+                    <span style="font-size:0.76rem; color:var(--muted); font-weight:600; white-space:nowrap;">Personalizado:</span>
+                    <input type="number" id="custom-duration-val" min="1" placeholder="24" style="width:52px; height:25px; padding:2px 6px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:4px; color:#f8fafc; text-align:center;" onkeydown="if(event.key==='Enter') setCustomDuration()">
+                    <select id="custom-duration-unit" style="width:auto; height:25px; padding:0 4px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:4px; color:#f8fafc; cursor:pointer;">
                         <option value="60">Min</option>
                         <option value="3600" selected>Horas</option>
                         <option value="86400">Días</option>
                     </select>
-                    <button class="btn btn-outline" style="padding:3px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="setCustomDuration()" title="Aplicar tiempo de concesión personalizado">⏱️ Aplicar</button>
+                    <button class="btn btn-primary" style="height:25px; line-height:23px; padding:0 8px; font-size:0.76rem; border-radius:4px; white-space:nowrap;" onclick="setCustomDuration()" title="Aplicar tiempo de concesión personalizado">⏱️ Aplicar</button>
                 </div>
             </div>
             <button id="btn-clean-junk" class="btn btn-warn" onclick="cleanJunk()">🧹 Purgar Concesiones Fantasma y Caducadas</button>
@@ -1661,6 +1667,10 @@
                 </div>
 
                 <div class="topo-controls">
+                    <div class="topo-controls-row" style="width:100%; justify-content:space-between; margin-bottom:2px;">
+                        <span style="font-size:0.75rem; color:#7dd3fc; font-weight:700;">⚙️ Herramientas de Topología</span>
+                        <button id="topo-mobile-close-btn" onclick="toggleMobileTopoControls()" style="display:none; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.5); color:#fca5a5; cursor:pointer; font-size:0.72rem; padding:2px 8px; border-radius:10px; font-weight:bold;">✕ Cerrar</button>
+                    </div>
                     <div class="topo-controls-row">
                         <!-- Banner de dispositivo enfocado / localizado -->
                         <div id="topo-pinned-banner" style="display:none; align-items:center; gap:8px; background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(6,78,59,0.7)); border:1.5px solid #00f5d4; padding:4px 14px; border-radius:24px; font-size:0.78rem; color:#f0fdf4; font-weight:600; box-shadow:0 0 18px rgba(0,245,212,0.45); backdrop-filter:blur(8px);">
@@ -5782,103 +5792,110 @@ function initTopoCanvas() {
             topoState.scale = topoState.targetScale = nextScale;
         }, { passive: false });
 
-        // Soporte táctil móvil nativo: desplazamiento con 1 dedo y pellizcar para zoom con 2 dedos
+        // Soporte táctil móvil nativo robusto y fluido: 1 dedo panea suavemente el mapa, 2 dedos zoom pinzando estable
         let touchStartDist = 0;
         let touchStartScale = 1;
         let touchStartPanX = 0;
         let touchStartPanY = 0;
         let touchStartClientX = 0;
         let touchStartClientY = 0;
+        let touchStartWorldX = 0;
+        let touchStartWorldY = 0;
         let isTouching = false;
-        let touchMoved = false;
+        let touchMovedDist = 0;
+        let touchStartTime = 0;
 
         canvas.addEventListener('touchstart', e => {
+            touchStartTime = Date.now();
+            topoState.smoothCamera = false;
             if (e.touches.length === 1) {
                 isTouching = true;
-                touchMoved = false;
-                topoState.smoothCamera = false;
+                touchMovedDist = 0;
                 const t = e.touches[0];
                 touchStartClientX = t.clientX;
                 touchStartClientY = t.clientY;
                 touchStartPanX = topoState.panX;
                 touchStartPanY = topoState.panY;
-
                 const { wx, wy } = toWorld(t.clientX, t.clientY);
-                const hit = findNodeAt(wx, wy);
-                topoState.dragNode = hit || null;
+                touchStartWorldX = wx;
+                touchStartWorldY = wy;
+                topoState.dragNode = null;
             } else if (e.touches.length === 2) {
                 isTouching = true;
                 topoState.dragNode = null;
-                topoState.smoothCamera = false;
                 const t1 = e.touches[0];
                 const t2 = e.touches[1];
                 touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
                 touchStartScale = topoState.scale;
                 touchStartPanX = topoState.panX;
                 touchStartPanY = topoState.panY;
+
+                const midX = (t1.clientX + t2.clientX) / 2;
+                const midY = (t1.clientY + t2.clientY) / 2;
+                const { wx, wy } = toWorld(midX, midY);
+                touchStartWorldX = wx;
+                touchStartWorldY = wy;
             }
         }, { passive: false });
 
         canvas.addEventListener('touchmove', e => {
             if (!isTouching) return;
             e.preventDefault();
-            touchMoved = true;
 
             if (e.touches.length === 1) {
                 const t = e.touches[0];
-                if (topoState.dragNode) {
-                    const { wx, wy } = toWorld(t.clientX, t.clientY);
-                    topoState.dragNode.baseX = wx;
-                    topoState.dragNode.baseY = wy;
-                    topoState.dragNode.x = wx;
-                    topoState.dragNode.y = wy;
-                } else {
-                    const dx = t.clientX - touchStartClientX;
-                    const dy = t.clientY - touchStartClientY;
-                    topoState.panX = topoState.targetPanX = touchStartPanX + dx;
-                    topoState.panY = topoState.targetPanY = touchStartPanY + dy;
-                }
+                const dx = t.clientX - touchStartClientX;
+                const dy = t.clientY - touchStartClientY;
+                touchMovedDist = Math.hypot(dx, dy);
+
+                // En smartphone, 1 dedo desplaza (panea) el mapa siempre de forma natural y fluida
+                topoState.panX = topoState.targetPanX = touchStartPanX + dx;
+                topoState.panY = topoState.targetPanY = touchStartPanY + dy;
             } else if (e.touches.length === 2) {
                 const t1 = e.touches[0];
                 const t2 = e.touches[1];
                 const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
                 if (touchStartDist > 0) {
                     const factor = currentDist / touchStartDist;
-                    const nextScale = Math.max(0.12, Math.min(3.6, touchStartScale * factor));
+                    const nextScale = Math.max(0.10, Math.min(4.0, touchStartScale * factor));
                     
                     const midX = (t1.clientX + t2.clientX) / 2;
                     const midY = (t1.clientY + t2.clientY) / 2;
-                    const { wx, wy } = toWorld(midX, midY);
-
-                    topoState.scale = topoState.targetScale = nextScale;
                     const rect = canvas.getBoundingClientRect();
                     const sx = midX - rect.left;
                     const sy = midY - rect.top;
-                    topoState.panX = topoState.targetPanX = sx - wx * nextScale;
-                    topoState.panY = topoState.targetPanY = sy - wy * nextScale;
+
+                    topoState.scale = topoState.targetScale = nextScale;
+                    topoState.panX = topoState.targetPanX = sx - touchStartWorldX * nextScale;
+                    topoState.panY = topoState.targetPanY = sy - touchStartWorldY * nextScale;
                 }
             }
         }, { passive: false });
 
         canvas.addEventListener('touchend', e => {
             if (e.touches.length === 0) {
-                if (!touchMoved && topoState.dragNode) {
-                    const n = topoState.dragNode;
-                    if (n.type === 'client' && n.dev) {
-                        const ipShow = (n.dev.live_ips && n.dev.live_ips[0]) || n.dev.ip || '';
-                        openDeviceSheet(n.dev.mac, ipShow);
+                isTouching = false;
+                // Si fue un toque rápido y estático (sin arrastrar el mapa), abrir ficha del nodo pulsado
+                const elapsed = Date.now() - touchStartTime;
+                if (touchMovedDist < 10 && elapsed < 450) {
+                    const { wx, wy } = toWorld(touchStartClientX, touchStartClientY);
+                    const hit = findNodeAt(wx, wy);
+                    if (hit) {
+                        if (hit.type === 'client' && hit.dev) {
+                            const ipShow = (hit.dev.live_ips && hit.dev.live_ips[0]) || hit.dev.ip || '';
+                            openDeviceSheet(hit.dev.mac, ipShow);
+                        } else if (hit.type === 'hub') {
+                            topoState.pinnedTargetNode = (topoState.pinnedTargetNode === hit) ? null : hit;
+                        }
                     }
                 }
-                isTouching = false;
-                topoState.dragNode = null;
-                touchStartDist = 0;
             } else if (e.touches.length === 1) {
+                // Pasó de 2 dedos a 1 dedo: reiniciar ancla para evitar saltos bruscos
                 const t = e.touches[0];
                 touchStartClientX = t.clientX;
                 touchStartClientY = t.clientY;
                 touchStartPanX = topoState.panX;
                 touchStartPanY = topoState.panY;
-                touchStartDist = 0;
             }
         }, { passive: false });
 
@@ -6187,40 +6204,56 @@ function drawTopoFrame(now) {
                 ctx.restore();
             }
 
-            // 1. MALLA POLIGONAL DE CONSTELACIÓN (PLEXUS): Silueta perimetral sutil y elegante entre vecinos inmediatos
+            // 1. MALLA POLIGONAL DE CONSTELACIÓN (PLEXUS) ENTRE VÉRTICES Y NODOS CERCANOS (Estilo original 7cbd2f6)
             if (usePlexus) {
-                ctx.save();
-                ctx.lineWidth = 0.8;
-                const dim = (hov || hasSearch || pinned) ? (pinned ? 0.05 : 0.18) : 1.0;
-
-                // Contorno sutil solo entre clientes vecinos adyacentes de cada router/hub
-                const hubs = topoState.nodes.filter(n => n.type === 'hub');
-                hubs.forEach(h => {
-                    const isOff = h.id && (h.id.toLowerCase().includes('desconectado') || h.id.toLowerCase().includes('offline'));
-                    if (isOff) return;
-                    const cNodes = topoState.nodes.filter(n => n.type === 'client' && n.hubId === h.id && n.travelStartTime === undefined);
-                    if (cNodes.length >= 2) {
-                        // Ordenar por ángulo angular para enlazar solo vecinos contiguos del abanico
-                        const sorted = [...cNodes].sort((a, b) => {
-                            const angA = Math.atan2(a.y - h.y, a.x - h.x);
-                            const angB = Math.atan2(b.y - h.y, b.x - h.x);
-                            return angA - angB;
-                        });
-                        for (let k = 0; k < sorted.length - 1; k++) {
-                            const a = sorted[k], b = sorted[k + 1];
-                            const dSq = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
-                            if (dSq < 65000) { // < ~255px
-                                const alpha = 0.18 * (a.online || b.online ? 1.0 : 0.4) * dim;
-                                ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
-                                ctx.beginPath();
-                                ctx.moveTo(a.x, a.y);
-                                ctx.lineTo(b.x, b.y);
-                                ctx.stroke();
-                            }
+                const plexusPts = [];
+                topoState.nodes.forEach(n => {
+                    if (n.type !== 'core') {
+                        const isOff = n.hubId && (n.hubId.toLowerCase().includes('desconectado') || n.hubId.toLowerCase().includes('offline'));
+                        if (!isOff) {
+                            plexusPts.push({ x: n.x, y: n.y, hubId: n.hubId || n.id, online: n.online, isNode: true });
                         }
                     }
                 });
+                topoState.links.forEach(lk => {
+                    const hId = lk.type === 'trunk' ? lk.to.id : lk.from.id;
+                    const isOff = hId && (hId.toLowerCase().includes('desconectado') || hId.toLowerCase().includes('offline'));
+                    if (!isOff) {
+                        (lk.joints || []).forEach(j => {
+                            plexusPts.push({ x: j.x, y: j.y, hubId: hId, online: lk.online, isNode: false });
+                        });
+                    }
+                });
 
+                const maxDist = 265;
+                const maxDistSq = maxDist * maxDist;
+                ctx.save();
+                ctx.lineWidth = 0.9;
+                for (let i = 0; i < plexusPts.length; i++) {
+                    const a = plexusPts[i];
+                    let linksCount = 0;
+                    for (let j = i + 1; j < plexusPts.length; j++) {
+                        if (linksCount >= 4) break;
+                        const b = plexusPts[j];
+                        if (a.hubId && b.hubId && a.hubId !== b.hubId) continue;
+                        const dx = b.x - a.x;
+                        if (Math.abs(dx) > maxDist) continue;
+                        const dy = b.y - a.y;
+                        if (Math.abs(dy) > maxDist) continue;
+                        const dSq = dx * dx + dy * dy;
+                        if (dSq < maxDistSq && dSq > 900) {
+                            linksCount++;
+                            const ratio = 1 - Math.sqrt(dSq) / maxDist;
+                            const dim = (hov || hasSearch || pinned) ? (pinned ? 0.05 : 0.18) : 1.0;
+                            const alpha = ratio * (a.online || b.online ? 0.36 : 0.14) * dim;
+                            ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+                            ctx.beginPath();
+                            ctx.moveTo(a.x, a.y);
+                            ctx.lineTo(b.x, b.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
                 ctx.restore();
             }
 
