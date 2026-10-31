@@ -5070,7 +5070,7 @@ function buildTopoGraph(fitView = false) {
         const c = (d.dev_class || '').toLowerCase();
         const rt = d.router_type || '';
         return ip === '192.168.1.1' || ip === '192.168.1.249' ||
-               ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' || ip === '192.168.1.14' ||
+               ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' ||
                ip === '192.168.1.10' || ip === '192.168.1.9' ||
                h.includes('mercusys-halo') || h.includes('wr841n') || h.includes('em4590') ||
                h.includes('xgb430v') || h.includes('xg-pon') || h.includes('router-principal') ||
@@ -6225,15 +6225,16 @@ function drawTopoFrame(now) {
                     }
                 });
 
-                const maxDist = 265;
+                // Tela de araña más transparente y entramada (líneas finas, alta conectividad y opacidad sutil)
+                const maxDist = 310;
                 const maxDistSq = maxDist * maxDist;
                 ctx.save();
-                ctx.lineWidth = 0.9;
+                ctx.lineWidth = 0.6;
                 for (let i = 0; i < plexusPts.length; i++) {
                     const a = plexusPts[i];
                     let linksCount = 0;
                     for (let j = i + 1; j < plexusPts.length; j++) {
-                        if (linksCount >= 4) break;
+                        if (linksCount >= 7) break;
                         const b = plexusPts[j];
                         if (a.hubId && b.hubId && a.hubId !== b.hubId) continue;
                         const dx = b.x - a.x;
@@ -6241,11 +6242,12 @@ function drawTopoFrame(now) {
                         const dy = b.y - a.y;
                         if (Math.abs(dy) > maxDist) continue;
                         const dSq = dx * dx + dy * dy;
-                        if (dSq < maxDistSq && dSq > 900) {
+                        if (dSq < maxDistSq && dSq > 750) {
                             linksCount++;
                             const ratio = 1 - Math.sqrt(dSq) / maxDist;
-                            const dim = (hov || hasSearch || pinned) ? (pinned ? 0.05 : 0.18) : 1.0;
-                            const alpha = ratio * (a.online || b.online ? 0.36 : 0.14) * dim;
+                            const dim = (hov || hasSearch || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
+                            // Más transparente, tenue y elegante
+                            const alpha = ratio * (a.online || b.online ? 0.16 : 0.07) * dim;
                             ctx.strokeStyle = `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
                             ctx.beginPath();
                             ctx.moveTo(a.x, a.y);
