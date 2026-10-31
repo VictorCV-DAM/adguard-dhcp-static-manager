@@ -4847,37 +4847,25 @@ function buildTopoGraph(fitView = false) {
             const oldNode = oldNodesMap.get(cid);
             let savedClient = topoState.customPositions[cid];
 
-            // Detección estricta de cambio de nodo (desconexión, reconexión a AP o roaming)
-            let isStale = false;
-            let travelOrigin = null;
+            // Reemplazamiento automático y completo de punto A a punto B:
+            // 1. Si el nodo actual es Desconectado, los clientes siempre se posicionan en su abanico limpio propio.
+            // 2. Si el cliente tiene posición guardada de otro nodo (o sin hubId, o a más de 290px), se purga inmediatamente.
+            // 3. Si en tiempo real el cliente cambió de estado o de nodo, se ubica automáticamente en Punto B.
+            const isOfflineHub = hubNode.id.includes('Desconectado') || hubNode.id.includes('offline');
+            const changedHub = Boolean(oldNode && oldNode.hubId && oldNode.hubId !== hubNode.id);
 
-            if (oldNode && oldNode.hubId && oldNode.hubId !== hubNode.id) {
-                // El cliente cambió de nodo de red en tiempo real
-                isStale = true;
-                travelOrigin = { x: oldNode.x, y: oldNode.y };
-            } else if (savedClient) {
+            if (savedClient) {
                 const distToHub = Math.hypot(savedClient.x - hubNode.baseX, savedClient.y - hubNode.baseY);
-                const hubMismatch = savedClient.hubId && savedClient.hubId !== hubNode.id;
-                // Si la posición guardada está a más de 440px del nodo actual o el hubId no coincide,
-                // procede de otro nodo (ej. quedó guardada cuando estaba desconectado y ahora se reconectó)
-                if (distToHub > 440 || hubMismatch) {
-                    isStale = true;
-                    travelOrigin = { x: savedClient.x, y: savedClient.y };
+                const hubMismatch = !savedClient.hubId || savedClient.hubId !== hubNode.id;
+                if (isOfflineHub || hubMismatch || distToHub > 290 || changedHub) {
+                    delete topoState.customPositions[cid];
+                    savedClient = null;
                 }
             }
 
-            if (isStale) {
-                delete topoState.customPositions[cid];
-                savedClient = null;
-            }
-
-            // El destino ideal se asigna primero para que relaxTopoPositions reserve su sitio en el nuevo nodo
-            let cx = savedClient ? savedClient.x : idealBaseX;
-            let cy = savedClient ? savedClient.y : idealBaseY;
-
-            let travelFromX = (oldNode && oldNode.travelFromX !== undefined) ? oldNode.travelFromX : undefined;
-            let travelFromY = (oldNode && oldNode.travelFromY !== undefined) ? oldNode.travelFromY : undefined;
-            let travelStartTime = (oldNode && oldNode.travelStartTime !== undefined) ? oldNode.travelStartTime : undefined;
+            // Ubicación instantánea en Punto B (órbita limpia y cercana de su nodo actual)
+            const cx = savedClient ? savedClient.x : idealBaseX;
+            const cy = savedClient ? savedClient.y : idealBaseY;
 
             const on = isOnline(d);
             let dotColor = '#52525b';
@@ -4899,12 +4887,6 @@ function buildTopoGraph(fitView = false) {
                 idealRelY,
                 relX: cx - hubNode.baseX,
                 relY: cy - hubNode.baseY,
-                travelOrigin: travelOrigin,
-                travelFromX: travelFromX,
-                travelFromY: travelFromY,
-                travelTargetX: undefined,
-                travelTargetY: undefined,
-                travelStartTime: travelStartTime,
                 angle: ang,
                 r: on ? 6.2 : 4.8,
                 color: dotColor,
@@ -4915,7 +4897,7 @@ function buildTopoGraph(fitView = false) {
                 hubId: hubNode.id,
                 phase: (cIdx * 1.13) + idx * 2.1,
                 driftR: on ? 7.5 : 3.5,
-                flash: 0
+                flash: changedHub ? 1.0 : 0
             };
             nodes.push(cNode);
         });
@@ -4924,29 +4906,10 @@ function buildTopoGraph(fitView = false) {
     // Ejecutar relajación espacial para garantizar separación amplia y cero solapamientos
     relaxTopoPositions(nodes);
 
-    // Ajustar destinos de viaje relajados para los clientes en vuelo y lanzar transiciones suaves
-    nodes.filter(n => n.travelOrigin !== undefined || n.travelFromX !== undefined).forEach(n => {
-        n.travelTargetX = n.baseX;
-        n.travelTargetY = n.baseY;
-        if (n.travelOrigin) {
-            n.travelFromX = n.travelOrigin.x;
-            n.travelFromY = n.travelOrigin.y;
-            n.travelStartTime = performance.now();
-            delete n.travelOrigin;
-            n.baseX = n.travelFromX;
-            n.baseY = n.travelFromY;
-            n.x = n.travelFromX;
-            n.y = n.travelFromY;
-        } else if (n.travelFromX !== undefined) {
-            const elapsed = performance.now() - n.travelStartTime;
-            const t = Math.min(1, elapsed / 1200);
-            const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-            n.baseX = n.travelFromX + (n.travelTargetX - n.travelFromX) * ease;
-            n.baseY = n.travelFromY + (n.travelTargetY - n.travelFromY) * ease;
-            n.x = n.baseX;
-            n.y = n.baseY;
-        }
-    });
+    // Guardar limpieza de posiciones si hubo transiciones automáticas
+    if (nodes.some(n => n.flash > 0)) {
+        saveCustomPositionsToStorage();
+    }
 
     // 4. Construir enlaces troncales (Jerarquía real: Core -> Hubs directos, y Halo 1 -> Halo 2 & Halo 3)
     const hubsList = nodes.filter(n => n.type === 'hub');
@@ -5516,27 +5479,6 @@ function drawTopoFrame(now) {
             // 1. Movimiento flotante lento y constante ("Constelación / Zigzag Flotante")
             topoState.nodes.forEach(n => {
                 if (n === topoState.dragNode) return;
-                // Actualizar viaje fluido de reconexión/desconexión hacia su nuevo nodo
-                if (n.travelFromX !== undefined && n.travelTargetX !== undefined) {
-                    const elapsed = tNow - n.travelStartTime;
-                    const duration = 1200; // 1.2 segundos de vuelo suave
-                    const t = Math.min(1, elapsed / duration);
-                    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-                    n.baseX = n.travelFromX + (n.travelTargetX - n.travelFromX) * ease;
-                    n.baseY = n.travelFromY + (n.travelTargetY - n.travelFromY) * ease;
-                    if (t >= 1) {
-                        n.baseX = n.travelTargetX;
-                        n.baseY = n.travelTargetY;
-                        delete n.travelFromX;
-                        delete n.travelFromY;
-                        delete n.travelTargetX;
-                        delete n.travelTargetY;
-                        delete n.travelStartTime;
-                        topoState.customPositions[n.id] = { x: n.baseX, y: n.baseY, hubId: n.hubId };
-                        saveCustomPositionsToStorage();
-                    }
-                }
-
                 if (!topoState.effectsOn) {
                     n.x = n.baseX;
                     n.y = n.baseY;
