@@ -1260,12 +1260,22 @@
                         <button id="topo-btn-fx" class="topo-ctrl-btn active" onclick="toggleTopoEffects()" title="Activar/desactivar movimiento flotante y efectos de red">
                             ✨ Animación
                         </button>
-                        <button class="topo-ctrl-btn" onclick="resetTopoLayout()" title="Recalcular posiciones ultra-espaciadas y centrar el mapa">
+                        <button class="topo-ctrl-btn" onclick="fitTopoToScreen(true)" title="Centrar y encuadrar la vista del mapa en pantalla (mantiene intacto tu orden)">
                             🎯 Centrar
                         </button>
                         <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" title="Mostrar u ocultar también el listado en tarjetas debajo del mapa">
                             🗂️ Tarjetas
                         </button>
+                        <button class="topo-ctrl-btn" onclick="exportTopoPositionsJson()" title="Descargar archivo JSON con el orden y posiciones de los nodos del mapa">
+                            💾 Exportar Mapa
+                        </button>
+                        <button class="topo-ctrl-btn" onclick="document.getElementById('topo-import-file').click()" title="Cargar archivo JSON para restaurar el orden del mapa">
+                            📂 Importar Mapa
+                        </button>
+                        <button class="topo-ctrl-btn" onclick="resetTopoPositionsToDefault()" title="Restablecer el orden al diseño circular original predeterminado" style="opacity:0.75;">
+                            ↺ Reiniciar
+                        </button>
+                        <input type="file" id="topo-import-file" accept=".json" style="display:none;" onchange="importTopoPositionsJson(event)">
                         <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refrescar estado de red">
                             🔄
                         </button>
@@ -3080,7 +3090,10 @@ let topoState = {
     initialized: false,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
-    visualStyle: 'plexus', // 'plexus' (Zigzag Flotante Constelación) | 'synapse' (Impulsos Rayo) | 'hybrid' (Fusión Ambos)
+    visualStyle: (function() {
+        const s = localStorage.getItem('ag_topo_style');
+        return (s === 'straight' || s === 'synapse' || s === 'plexus') ? s : 'plexus';
+    })(), // 'plexus' (Zigzag Flotante) | 'straight' (Líneas Rectas) | 'synapse' (Impulsos Rayo)
     telemetryMode: _savedTopoTel, // false = Simulada | true = Tráfico Real DNS + Latencia Ping
     impulseFreq: TOPO_FREQ_STEPS.includes(_savedTopoFreq) ? _savedTopoFreq : 1.0,
     telemetryData: {},     // ip -> { queries, blocked, last_domain, last_blocked_domain, latency_ms }
@@ -3088,7 +3101,7 @@ let topoState = {
     telemetryLastFetch: 0,
     telemetryFetching: false,
     effectsOn: true,
-    showCards: false,
+    showCards: localStorage.getItem('ag_topo_show_cards') === '1',
     searchQuery: '',
     panX: 0,
     panY: 0,
@@ -3399,19 +3412,91 @@ function spawnAutoTopoImpulse() {
 }
 
 function cycleTopoVisualStyle() {
-    const order = ['plexus', 'synapse', 'hybrid'];
+    const order = ['plexus', 'straight', 'synapse'];
     const names = {
         plexus: 'Zigzag Flotante',
-        synapse: 'Impulsos Rayo',
-        hybrid: 'Fusión Completa'
+        straight: 'Líneas Rectas',
+        synapse: 'Impulsos Rayo'
     };
     const nextIdx = (order.indexOf(topoState.visualStyle) + 1) % order.length;
     topoState.visualStyle = order[nextIdx];
+    try {
+        localStorage.setItem('ag_topo_style', topoState.visualStyle);
+    } catch (e) {}
     const txtEl = document.getElementById('topo-style-txt');
     if (txtEl) txtEl.textContent = names[topoState.visualStyle];
-    if (topoState.visualStyle !== 'plexus') {
-        triggerNeuralCascade();
-    }
+    triggerNeuralCascade();
+}
+
+function exportTopoPositionsJson() {
+    const exportData = {
+        app: 'adguard-dhcp-panel',
+        type: 'topology_layout',
+        exported_at: new Date().toISOString(),
+        nodes_count: Object.keys(topoState.customPositions).length,
+        topology_custom_positions: topoState.customPositions
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `topologia_orden_${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showMessage(`Orden de la topología exportado (${exportData.nodes_count} nodos).`);
+}
+
+function importTopoPositionsJson(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            const positions = data.topology_custom_positions || data.topology_layout || data.positions || (typeof data === 'object' && !data.app ? data : null);
+            if (!positions || typeof positions !== 'object' || Object.keys(positions).length === 0) {
+                showMessage('El archivo no contiene un orden de topología válido.', 'error');
+                return;
+            }
+            topoState.customPositions = positions;
+            try {
+                localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(positions));
+            } catch (err) {}
+            fetch('/api/topology/positions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(positions)
+            }).catch(() => {});
+            buildTopoGraph(false);
+            fitTopoToScreen(true);
+            triggerNeuralCascade();
+            showMessage(`Orden de topología restaurado con éxito (${Object.keys(positions).length} nodos).`);
+        } catch (err) {
+            showMessage('Error al procesar el archivo JSON: ' + err.message, 'error');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file);
+}
+
+function resetTopoPositionsToDefault() {
+    if (!confirm('¿Deseas restablecer el orden de la topología al diseño circular original?')) return;
+    topoState.customPositions = {};
+    try {
+        localStorage.removeItem('ag_topo_custom_positions_v3');
+    } catch (e) {}
+    fetch('/api/topology/positions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    }).catch(() => {});
+    buildTopoGraph(true);
+    triggerNeuralCascade();
+    showMessage('Orden de topología restablecido al diseño predeterminado.');
 }
 
 function toggleTopoOffline() {
@@ -3438,6 +3523,9 @@ function toggleTopoEffects() {
 
 function toggleTopoCards() {
     topoState.showCards = !topoState.showCards;
+    try {
+        localStorage.setItem('ag_topo_show_cards', topoState.showCards ? '1' : '0');
+    } catch (e) {}
     const btn = document.getElementById('topo-btn-cards');
     if (btn) btn.classList.toggle('active', topoState.showCards);
     const box = document.getElementById('topology-container');
@@ -4121,6 +4209,14 @@ function pointOnPolylineByArc(pts, t) {
 }
 
 function pointOnArticulatedLink(lk, t) {
+    if (!lk) return { x: 0, y: 0 };
+    if (topoState.visualStyle === 'straight') {
+        const clamped = Math.max(0, Math.min(1, t));
+        return {
+            x: lk.from.x + (lk.to.x - lk.from.x) * clamped,
+            y: lk.from.y + (lk.to.y - lk.from.y) * clamped
+        };
+    }
     return pointOnPolylineByArc([lk.from, ...(lk.joints || []), lk.to], t);
 }
 
@@ -4548,8 +4644,9 @@ function drawTopoFrame(now) {
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
 
-            const usePlexus = (topoState.visualStyle === 'plexus' || topoState.visualStyle === 'hybrid');
-            const useSynapse = (topoState.visualStyle === 'synapse' || topoState.visualStyle === 'hybrid');
+            const usePlexus = (topoState.visualStyle === 'plexus');
+            const useStraight = (topoState.visualStyle === 'straight');
+            const useSynapse = (topoState.visualStyle === 'synapse');
 
             // Interpolación suave de cámara (zoom / encuadre)
             if (topoState.smoothCamera) {
@@ -4722,8 +4819,8 @@ function drawTopoFrame(now) {
                     telActive = true;
                 }
 
-                if (usePlexus) {
-                    const pts = [lk.from, ...(lk.joints || []), lk.to];
+                if (usePlexus || useStraight) {
+                    const pts = usePlexus ? [lk.from, ...(lk.joints || []), lk.to] : [lk.from, lk.to];
                     ctx.save();
                     ctx.beginPath();
                     pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
@@ -5763,6 +5860,17 @@ async function applyBackupNow() {
     loadConfig();
     loadState();
 }
+
+// Aplicar estado inicial guardado de tarjetas y estilo de topología
+const initStyleTxt = document.getElementById('topo-style-txt');
+if (initStyleTxt) {
+    const names = { plexus: 'Zigzag Flotante', straight: 'Líneas Rectas', synapse: 'Impulsos Rayo' };
+    initStyleTxt.textContent = names[topoState.visualStyle] || 'Zigzag Flotante';
+}
+const initCardsBtn = document.getElementById('topo-btn-cards');
+if (initCardsBtn) initCardsBtn.classList.toggle('active', topoState.showCards);
+const initCardsBox = document.getElementById('topology-container');
+if (initCardsBox) initCardsBox.style.display = topoState.showCards ? 'block' : 'none';
 
 // Sincronizar distribución de topología desde el servidor si es la primera vez en este navegador
 if (Object.keys(topoState.customPositions).length === 0) {
