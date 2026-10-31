@@ -4867,11 +4867,11 @@ function onTopoSearchInput() {
     topoState.searchQuery = (inp ? inp.value : '').trim().toLowerCase();
     if (clr) clr.style.display = topoState.searchQuery ? 'inline' : 'none';
 
-    // Al escribir o borrar texto, desactivar Exacto para permitir búsqueda progresiva
+    // Al escribir o borrar texto, mantener búsqueda progresiva abierta
     topoState.searchExact = false;
     if (exactBtn) exactBtn.classList.remove('active');
 
-    // Limpiar pin fijado al escribir para que la cámara y el mapa respondan con libertad
+    // Despejar cualquier pin previo para que el mapa responda con fluidez
     clearTopoPin();
 }
 
@@ -4974,24 +4974,26 @@ function nodeMatchesSearch(n) {
     // Recopilar todas las IPs asociadas
     const ips = [
         d.ip,
-        ...(d.live_ips || []),
+        ...(Array.isArray(d.live_ips) ? d.live_ips : (d.live_ips ? [d.live_ips] : [])),
         n.ip,
-        ...(n.ips || []),
+        ...(Array.isArray(n.ips) ? n.ips : (n.ips ? [n.ips] : [])),
         ...(n.id === '__core__' ? ['192.168.1.1', '192.168.1.249'] : [])
     ].filter(Boolean).map(x => String(x).trim().toLowerCase());
 
-    const mac = (d.mac || n.mac || '').toLowerCase();
-    const hostname = (d.hostname || '').toLowerCase();
-    const label = (n.label || '').toLowerCase();
+    const mac = String(d.mac || n.mac || '').toLowerCase();
+    const hostname = String(d.hostname || '').toLowerCase();
+    const label = String(n.label || '').toLowerCase();
     const cleanLabel = label.replace(/\s*\([^)]*\)/g, '').trim();
-    const sub = (n.sub || '').toLowerCase();
-    const id = (n.id || '').toLowerCase();
+    const sub = String(n.sub || '').toLowerCase();
+    const id = String(n.id || '').toLowerCase();
+    const vendor = String(d.dev_vendor || '').toLowerCase();
+    const room = String(d.room || '').toLowerCase();
 
-    // 1. Coincidencia por IP inteligente (aplica tanto en exacto como en progresivo):
-    // A) IP completa exacta (ej. '192.168.1.14')
+    // 1. Coincidencia por IP inteligente:
+    // A) IP completa exacta
     if (ips.some(ip => ip === q)) return true;
 
-    // B) Host number o último octeto (ej. '1' -> 192.168.1.1, '14' -> 192.168.1.14, '249' -> 192.168.1.249)
+    // B) Host number o último octeto (ej. '1' -> .1, '14' -> .14, '249' -> .249)
     if (/^\d{1,3}$/.test(q)) {
         const num = parseInt(q, 10);
         if (num >= 1 && num <= 254) {
@@ -5010,28 +5012,27 @@ function nodeMatchesSearch(n) {
         if (ips.some(ip => ip === q || ip.startsWith(prefix))) return true;
     }
 
-    // 2. Si es modo Exacto (Enter pulsado o botón Exacto activo):
+    // 2. Si es modo EXACTO (Enter pulsado o botón Exacto activo):
     if (topoState.searchExact) {
         if (mac && mac === q) return true;
-        if (hostname && hostname === q) return true;
+        if (hostname && (hostname === q || hostname === cleanLabel)) return true;
         if (label === q || cleanLabel === q) return true;
         if (id === q || id === 'hub:' + q || id === 'dev:' + q) return true;
-        
-        // Tokens de palabras exactas (ej: buscar 'halo', 'switch', 'wr841n', 'deco')
-        // Ignorar tokens numéricos puros si ya no coincidió en IP (para que '1' no coincida con 'Halo 1')
+
         if (!/^\d+$/.test(q)) {
-            const labelTokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
-            if (labelTokens.includes(q)) return true;
+            const tokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
+            if (tokens.includes(q)) return true;
+            const hostTokens = hostname.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
+            if (hostTokens.includes(q)) return true;
         }
 
-        // Términos clave de infraestructura
         if ((q === 'router' || q === 'core' || q === 'adguard' || q === 'gateway') && (n.type === 'core' || n.id === '__core__' || n.id === 'hub:lan')) return true;
 
         return false;
     }
 
-    // 3. Modo progresivo mientras se escribe (sin Enter):
-    const hay = `${label} ${cleanLabel} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${id} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
+    // 3. Modo PROGRESIVO mientras se escribe en vivo (sin Enter):
+    const hay = `${label} ${cleanLabel} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${id} ${vendor} ${room}`;
     return hay.includes(q);
 }
 
@@ -6472,7 +6473,7 @@ function drawTopoFrame(now) {
                             if (dSq < maxDistSq && dSq > 700) {
                                 linksCount++;
                                 const ratio = 1 - Math.sqrt(dSq) / maxDist;
-                                const dim = (hov || (hasSearch && hasMatches) || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
+                                const dim = (hov || pinned) ? (pinned ? 0.25 : 0.45) : 1.0;
                                 const userOp = (topoState.meshOpacity != null) ? topoState.meshOpacity : 0.35;
                                 const baseAlpha = a.online || b.online ? (userOp * 0.85) : (userOp * 0.42);
                                 const alpha = ratio * baseAlpha * dim;
@@ -6492,7 +6493,7 @@ function drawTopoFrame(now) {
             // 2. Dibujar enlaces principales (En modo Plexus: Zigzag articulado flotante con micro-estrellas en cada vértice; En modo Synapse: líneas directas)
             topoState.links.forEach(lk => {
                 const hi = isLinkHighlighted(lk);
-                const searchDim = (hasSearch && hasMatches) && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
+                const searchDim = (hasSearch && hasMatches && topoState.searchExact) && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
                 const hovDim = hov && !hi;
 
                 // En modo Tráfico Real, los enlaces con consultas DNS activas brillan más y los enlaces en reposo se atenúan suavemente
@@ -6534,7 +6535,7 @@ function drawTopoFrame(now) {
                         ctx.lineWidth = lk.type === 'trunk' ? 1.75 : 1.15;
                         ctx.shadowColor = '#38bdf8';
                         ctx.shadowBlur = lk.online ? 6 : 0;
-                        ctx.globalAlpha = (searchDim || hovDim) ? 0.12 : 0.9;
+                        ctx.globalAlpha = (searchDim || hovDim) ? 0.45 : 0.9;
                     }
                     ctx.stroke();
 
@@ -6606,7 +6607,7 @@ function drawTopoFrame(now) {
                     p.t += p.speed * (usePlexus && !useSynapse ? 0.65 : 1.0) * freqSpeedMult * latMult;
                     if (p.t > 1) p.t -= 1;
                     if (hov && !isLinkHighlighted(lk)) return;
-                    if (hasSearch && hasMatches && !nodeMatchesSearch(lk.to)) return;
+                    // Particles keep flowing continuously across all links
 
                     let px, py;
                     if (usePlexus) {
@@ -6784,19 +6785,15 @@ function drawTopoFrame(now) {
                 const matched = (hasSearch && nodeMatchesSearch(n)) || isTarget;
                 const hi = isNodeHighlighted(n) || isTarget;
 
-                // Atenuación suave y equilibrada durante la búsqueda
+                // Opacidad de nodos: ¡EL MAPA NUNCA SE VACÍA NI DESAPARECE!
                 let nodeAlpha = 1.0;
                 if (pinned) {
-                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.45 : 0.20);
-                } else if (hasSearch) {
-                    if (hasMatches) {
-                        nodeAlpha = matched ? 1.0 : 0.38;
-                    } else {
-                        // Si no hay coincidencias, el mapa NUNCA se oculta
-                        nodeAlpha = 1.0;
-                    }
+                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.65 : 0.35);
+                } else if (hasSearch && hasMatches && topoState.searchExact) {
+                    // Solo tras pulsar Enter en modo Exacto se atenúa sutilmente el fondo
+                    nodeAlpha = matched ? 1.0 : 0.60;
                 } else if (hov) {
-                    nodeAlpha = hi ? 1.0 : 0.35;
+                    nodeAlpha = hi ? 1.0 : 0.45;
                 }
                 ctx.globalAlpha = nodeAlpha;
 
@@ -6964,7 +6961,7 @@ function drawTopoFrame(now) {
                     }
                     ctx.restore();
 
-                    if (topoState.scale >= 0.22 || isDirectHover || matched) {
+                    if (topoState.scale >= 0.12 || isDirectHover || matched || isTarget) {
                         const hub = topoState.nodes.find(h => h.id === n.hubId);
                         const isLeftSide = hub ? (n.x < hub.x) : (Math.cos(n.angle || 0) < 0);
                         const txt = getClientDisplayText(n);
