@@ -6225,8 +6225,57 @@ async function openDeviceSheet(mac, ipHint = '') {
                     ${(dns.top_domains || []).map(([dom, cnt]) => `<div style="display:flex; justify-content:space-between; gap:4px;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(dom)}</span><code>${cnt}</code></div>`).join('')}
                 </div>
                 <div>
-                    <div style="font-size:0.72rem; color:#f87171; font-weight:700;">TOP BLOQUEADOS</div>
-                    ${(dns.top_blocked || []).length ? dns.top_blocked.map(([dom, cnt]) => `<div style="display:flex; justify-content:space-between; gap:4px;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(dom)}</span><code>${cnt}</code></div>`).join('') : '<div style="color:var(--muted);">Ninguno</div>'}
+                    <div style="font-size:0.72rem; color:#f87171; font-weight:700; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
+                        <span>TOP BLOQUEADOS</span>
+                        <span style="font-size:0.65rem; color:#94a3b8; font-weight:normal;">Acciones: 🔓 Desbloquear</span>
+                    </div>
+                    ${(() => {
+                        const whitelistedMap = dns.whitelisted || {};
+                        const blockedList = dns.top_blocked || [];
+                        if (!blockedList.length) return '<div style="color:var(--muted); font-size:0.78rem;">Ninguno</div>';
+                        return blockedList.map(([dom, cnt]) => {
+                            const wl = whitelistedMap[dom.toLowerCase()];
+                            if (wl) {
+                                const ruleEnc = encodeURIComponent(wl.rule || '');
+                                const modeLabel = wl.mode === 'client' ? 'Este disp.' : 'Global';
+                                return `
+                                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                                        <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.78rem;" title="${escapeHtml(dom)}">
+                                            <span style="color:#f8fafc; font-weight:600;">${escapeHtml(dom)}</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                                            <span style="font-size:0.68rem; color:#86efac; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); padding:1px 5px; border-radius:4px; font-weight:700;">
+                                                ✅ ${modeLabel}
+                                            </span>
+                                            <button class="btn btn-outline" style="padding:1px 5px; font-size:0.68rem; color:#f87171; border-color:rgba(248,113,113,0.35); height:22px; line-height:1;"
+                                                onclick="unwhitelistDomain('${escapeHtml(dom)}', '${currentSheetIp}', '${ruleEnc}')"
+                                                title="Eliminar excepción y volver a bloquear ${escapeHtml(dom)}">
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </div>`;
+                            }
+                            return `
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.78rem;" title="${escapeHtml(dom)} (${cnt} bloqueos)">
+                                        <span style="color:#f87171;">${escapeHtml(dom)}</span>
+                                        <code style="font-size:0.68rem; color:#94a3b8; margin-left:2px;">(${cnt})</code>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
+                                        <button class="btn btn-outline" style="padding:2px 5px; font-size:0.67rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); background:rgba(56,189,248,0.08); height:22px; line-height:1;"
+                                            onclick="whitelistDomain('${escapeHtml(dom)}', '${currentSheetIp}', 'client')"
+                                            title="Permitir ${escapeHtml(dom)} solo para este dispositivo (${currentSheetIp})">
+                                            🔓 Este
+                                        </button>
+                                        <button class="btn btn-outline" style="padding:2px 5px; font-size:0.67rem; color:#a78bfa; border-color:rgba(167,139,250,0.4); background:rgba(167,139,250,0.08); height:22px; line-height:1;"
+                                            onclick="whitelistDomain('${escapeHtml(dom)}', '${currentSheetIp}', 'global')"
+                                            title="Permitir ${escapeHtml(dom)} para toda la red">
+                                            🌐 Global
+                                        </button>
+                                    </div>
+                                </div>`;
+                        }).join('');
+                    })()}
                 </div>
             </div>
         `;
@@ -6236,6 +6285,46 @@ async function openDeviceSheet(mac, ipHint = '') {
     document.getElementById('ds-events').innerHTML = evs.length
         ? evs.map(e => `<div>• <strong>${new Date(e.time || e.ts * 1000).toLocaleString()}</strong> — ${e.event === 'online' ? '🟢 Conectado' : (e.event === 'offline' ? '⚪ Desconectado' : '🆕 Detectado')} (${e.ip || '—'})</div>`).join('')
         : '<div>Sin eventos registrados aún.</div>';
+}
+
+async function whitelistDomain(domain, ip, mode) {
+    if (!domain) return;
+    const modeTxt = mode === 'client' ? `solo para este dispositivo (${ip || 'este cliente'})` : 'para toda la red local';
+    if (!confirm(`¿Desbloquear el dominio "${domain}" en AdGuard Home ${modeTxt}?`)) return;
+    try {
+        const res = await fetch('/api/dns/whitelist', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ domain, ip, mode })
+        });
+        const data = await res.json();
+        showMessage(data.message);
+        if (data.status === 'success') {
+            openDeviceSheet(currentSheetMac, currentSheetIp);
+        }
+    } catch (e) {
+        showMessage('Error al desbloquear dominio: ' + e);
+    }
+}
+
+async function unwhitelistDomain(domain, ip, ruleEnc) {
+    if (!domain) return;
+    if (!confirm(`¿Volver a bloquear el dominio "${domain}" eliminando la regla de excepción en AdGuard Home?`)) return;
+    try {
+        const rule = decodeURIComponent(ruleEnc || '');
+        const res = await fetch('/api/dns/unwhitelist', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ domain, ip, rule })
+        });
+        const data = await res.json();
+        showMessage(data.message);
+        if (data.status === 'success') {
+            openDeviceSheet(currentSheetMac, currentSheetIp);
+        }
+    } catch (e) {
+        showMessage('Error al eliminar excepción: ' + e);
+    }
 }
 
 function closeDeviceSheet() {
