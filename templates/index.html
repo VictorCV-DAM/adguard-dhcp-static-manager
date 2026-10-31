@@ -4863,33 +4863,27 @@ function onTopoSearchInput() {
     const inp = document.getElementById('topo-search');
     const clr = document.getElementById('topo-search-clear');
     const exactBtn = document.getElementById('topo-search-exact-btn');
+    
     topoState.searchQuery = (inp ? inp.value : '').trim().toLowerCase();
     if (clr) clr.style.display = topoState.searchQuery ? 'inline' : 'none';
 
-    // Al escribir, NO se marca Exacto automáticamente (solo se marca al pulsar Enter)
+    // Al teclear, desactivar Exacto para permitir búsqueda progresiva en vivo
     topoState.searchExact = false;
     if (exactBtn) exactBtn.classList.remove('active');
 
-    if (!topoState.searchQuery) {
-        clearTopoPin();
-    }
+    // Limpiar pin fijado al escribir para que la cámara y el mapa no se queden trabados
+    clearTopoPin();
 }
 
 function toggleTopoExactSearch() {
     topoState.searchExact = !topoState.searchExact;
     const exactBtn = document.getElementById('topo-search-exact-btn');
     if (exactBtn) {
-        if (topoState.searchExact) {
-            exactBtn.classList.add('active');
-        } else {
-            exactBtn.classList.remove('active');
-        }
+        if (topoState.searchExact) exactBtn.classList.add('active');
+        else exactBtn.classList.remove('active');
     }
     if (topoState.searchQuery) {
-        const m = topoState.nodes.find(n => nodeMatchesSearch(n));
-        if (m) {
-            focusTopoNode(m, 1.35);
-        }
+        focusFirstTopoMatch();
     }
 }
 
@@ -4907,23 +4901,30 @@ function clearTopoSearch() {
 
 function focusFirstTopoMatch() {
     if (!topoState.searchQuery) return;
-    // LO DE EXACTO SOLO SE MARCA AL PULSAR ENTER
     topoState.searchExact = true;
     const exactBtn = document.getElementById('topo-search-exact-btn');
     if (exactBtn) exactBtn.classList.add('active');
 
-    // Buscar coincidencia exacta
-    let m = topoState.nodes.find(n => nodeMatchesSearch(n));
-    if (!m) {
-        // Fallback si no hay exacto estricto
+    // Buscar todos los nodos que coinciden
+    let matches = topoState.nodes.filter(n => nodeMatchesSearch(n));
+
+    // Si con búsqueda exacta estricta no hay resultados, reintentar con búsqueda amplia
+    if (matches.length === 0) {
         topoState.searchExact = false;
         if (exactBtn) exactBtn.classList.remove('active');
-        m = topoState.nodes.find(n => nodeMatchesSearch(n));
+        matches = topoState.nodes.filter(n => nodeMatchesSearch(n));
     }
 
-    if (m) {
-        focusTopoNode(m, 1.35);
-        showMessage(`🎯 Coincidencia exacta: ${m.label || m.sub || 'Dispositivo'} enfocado y palpitante`);
+    if (matches.length === 1) {
+        // Coincidencia única: enfocar y clavar baliza palpitante
+        focusTopoNode(matches[0], 1.35);
+        showMessage(`🎯 Coincidencia: ${matches[0].label || matches[0].sub || 'Dispositivo'} enfocado`);
+    } else if (matches.length > 1) {
+        // Múltiples coincidencias (ej: '192.168.1' o 'halo'): mantenerlas todas resaltadas sin bloquear la cámara en una sola
+        clearTopoPin();
+        showMessage(`🎯 ${matches.length} nodos encontrados resaltados en el mapa`);
+    } else {
+        showMessage(`⚠️ Sin resultados para "${topoState.searchQuery}"`);
     }
 }
 
@@ -4951,22 +4952,32 @@ function nodeMatchesSearch(n) {
     // Tokens individuales del nombre para búsqueda exacta de hubs (ej: 'halo', 'wr841n', 'mercusys')
     const labelTokens = label.split(/[\s·\/\(\)\-_]+/).filter(Boolean);
 
-    // Solo se aplica coincidencia exacta si se ha pulsado Enter (o activado Exacto explícitamente)
+    // Modo coincidencia exacta (pulsando Enter o botón Exacto)
     if (topoState.searchExact) {
+        // 1. IP completa exacta (ej. '192.168.1.14' NO coincide con '.144' ni '.148')
         if (ips.some(ip => ip === q)) return true;
+        
+        // 2. Si el usuario buscó un prefijo de subred (ej: '192.168.1' o '192.168.1.')
+        if (/^(\d{1,3}\.){1,3}\d{0,3}$/.test(q)) {
+            const prefix = q.endsWith('.') ? q : q + '.';
+            if (ips.some(ip => ip === q || ip.startsWith(prefix))) return true;
+        }
+
+        // 3. MAC exacta
         if (mac && mac === q) return true;
+
+        // 4. Hostname exacto
         if (hostname && hostname === q) return true;
+
+        // 5. Nombre de nodo exacto o token exacto
         if (label === q || cleanLabel === q) return true;
         if (id === q || id === 'hub:' + q || id === 'dev:' + q) return true;
         if (labelTokens.includes(q)) return true;
-        // Si el término es una IP (ej: 192.168.1.249 o 192.168.1.1) y aparece en ips o sub
-        if (/^(\d{1,3}\.){3}\d{1,3}$/.test(q)) {
-            if (ips.includes(q) || sub.includes(q)) return true;
-        }
+
         return false;
     }
 
-    // Coincidencia estándar mientras se escribe antes de pulsar Enter
+    // Coincidencia estándar mientras se escribe
     const hay = `${label} ${cleanLabel} ${sub} ${hostname} ${ips.join(' ')} ${mac} ${id} ${(d.dev_vendor || '').toLowerCase()} ${(d.room || '').toLowerCase()}`;
     return hay.includes(q);
 }
@@ -6328,6 +6339,10 @@ function drawTopoFrame(now) {
             const pinned = topoState.pinnedTargetNode;
             const hov = pinned || topoState.hoverNode;
             const hasSearch = Boolean(topoState.searchQuery);
+            let hasMatches = false;
+            if (hasSearch) {
+                hasMatches = topoState.nodes.some(n => nodeMatchesSearch(n));
+            }
 
             const isLinkHighlighted = lk => {
                 if (!hov) return false;
@@ -6340,7 +6355,7 @@ function drawTopoFrame(now) {
             };
 
             const isNodeHighlighted = n => {
-                if (hasSearch) return nodeMatchesSearch(n);
+                if (hasSearch) return hasMatches ? nodeMatchesSearch(n) : true;
                 if (!hov) return true;
                 if (hov.id === n.id) return true;
                 if (hov.type === 'core') return n.type === 'hub' || n.type === 'core';
@@ -6404,7 +6419,7 @@ function drawTopoFrame(now) {
                             if (dSq < maxDistSq && dSq > 700) {
                                 linksCount++;
                                 const ratio = 1 - Math.sqrt(dSq) / maxDist;
-                                const dim = (hov || hasSearch || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
+                                const dim = (hov || (hasSearch && hasMatches) || pinned) ? (pinned ? 0.04 : 0.15) : 1.0;
                                 const userOp = (topoState.meshOpacity != null) ? topoState.meshOpacity : 0.35;
                                 const baseAlpha = a.online || b.online ? (userOp * 0.85) : (userOp * 0.42);
                                 const alpha = ratio * baseAlpha * dim;
@@ -6424,7 +6439,7 @@ function drawTopoFrame(now) {
             // 2. Dibujar enlaces principales (En modo Plexus: Zigzag articulado flotante con micro-estrellas en cada vértice; En modo Synapse: líneas directas)
             topoState.links.forEach(lk => {
                 const hi = isLinkHighlighted(lk);
-                const searchDim = hasSearch && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
+                const searchDim = (hasSearch && hasMatches) && !(nodeMatchesSearch(lk.from) || nodeMatchesSearch(lk.to));
                 const hovDim = hov && !hi;
 
                 // En modo Tráfico Real, los enlaces con consultas DNS activas brillan más y los enlaces en reposo se atenúan suavemente
@@ -6538,7 +6553,7 @@ function drawTopoFrame(now) {
                     p.t += p.speed * (usePlexus && !useSynapse ? 0.65 : 1.0) * freqSpeedMult * latMult;
                     if (p.t > 1) p.t -= 1;
                     if (hov && !isLinkHighlighted(lk)) return;
-                    if (hasSearch && !nodeMatchesSearch(lk.to)) return;
+                    if (hasSearch && hasMatches && !nodeMatchesSearch(lk.to)) return;
 
                     let px, py;
                     if (usePlexus) {
@@ -6716,14 +6731,19 @@ function drawTopoFrame(now) {
                 const matched = (hasSearch && nodeMatchesSearch(n)) || isTarget;
                 const hi = isNodeHighlighted(n) || isTarget;
 
-                // Dejar el resto del mapa fuertemente atenuado si hay un dispositivo enfocado o búsqueda
+                // Dejar el resto del mapa atenuado SOLO si hay coincidencias reales (¡NUNCA hacer desaparecer el mapa si hay 0 coincidencias!)
                 let nodeAlpha = 1.0;
                 if (pinned) {
-                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.25 : 0.04);
+                    nodeAlpha = isTarget ? 1.0 : (hi ? 0.35 : 0.08);
                 } else if (hasSearch) {
-                    nodeAlpha = matched ? 1.0 : 0.04;
+                    if (hasMatches) {
+                        nodeAlpha = matched ? 1.0 : 0.12;
+                    } else {
+                        // Cero coincidencias: mantener el mapa visible y no desaparecer
+                        nodeAlpha = 0.85;
+                    }
                 } else if (hov) {
-                    nodeAlpha = hi ? 1.0 : 0.15;
+                    nodeAlpha = hi ? 1.0 : 0.22;
                 }
                 ctx.globalAlpha = nodeAlpha;
 
