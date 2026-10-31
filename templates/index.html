@@ -246,7 +246,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 100005;
+            z-index: 100010 !important;
             padding: 20px;
         }
         .popup-modal {
@@ -1034,16 +1034,6 @@
         </div>
     </div>
 
-    <!-- POPUP MODAL CENTRADO EN PANTALLA -->
-    <div id="popup-overlay" onclick="if(event.target === this) closePopup()">
-        <div id="popup-modal" class="popup-modal">
-            <div id="popup-icon" class="popup-icon">ℹ️</div>
-            <h3 id="popup-title" class="popup-title">Información</h3>
-            <div id="popup-body" class="popup-body"></div>
-            <div id="popup-actions" class="popup-actions">
-                <button class="btn btn-primary" onclick="closePopup()">Aceptar</button>
-            </div>
-        </div>
     </div>
 
     <!-- MODAL DE SEGURIDAD (cambio de usuario / contraseña) -->
@@ -1720,6 +1710,18 @@
     </div>
 </div>
 
+<!-- POPUP MODAL CENTRADO EN PANTALLA (CAPA SUPERIOR ABSOLUTA) -->
+<div id="popup-overlay" style="display:none; position:fixed; inset:0; z-index:100010 !important; background:rgba(2, 6, 23, 0.75); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:20px;" onclick="if(event.target === this) closePopup()">
+    <div id="popup-modal" class="popup-modal">
+        <div id="popup-icon" class="popup-icon">ℹ️</div>
+        <h3 id="popup-title" class="popup-title">Información</h3>
+        <div id="popup-body" class="popup-body"></div>
+        <div id="popup-actions" class="popup-actions">
+            <button class="btn btn-primary" onclick="closePopup()">Aceptar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // --- Sesión: si el servidor responde 401 (sesión caducada/cerrada), volver al login ---
 (function () {
@@ -1995,6 +1997,7 @@ function showMessage(msg, mode = 'auto') {
         ? `<button class="btn btn-outline" onclick="closePopup()">Ocultar</button>`
         : `<button class="btn btn-primary" id="popup-ok-btn" onclick="closePopup()">Aceptar</button>`;
 
+    overlay.style.zIndex = '100010';
     overlay.style.display = 'flex';
     const okBtn = document.getElementById('popup-ok-btn');
     if (okBtn) okBtn.focus();
@@ -2016,6 +2019,7 @@ function showConfirmPopup(msg, onConfirm, btnText = 'Sí, continuar', btnClass =
         <button class="btn btn-outline" onclick="closePopup()">Cancelar</button>
         <button class="btn ${btnClass}" id="popup-confirm-btn">${btnText}</button>
     `;
+    overlay.style.zIndex = '100010';
     overlay.style.display = 'flex';
     const confirmBtn = document.getElementById('popup-confirm-btn');
     if (confirmBtn) {
