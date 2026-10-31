@@ -4967,6 +4967,7 @@ function focusFirstTopoMatch() {
 }
 
 function nodeMatchesSearch(n) {
+    if (!n) return false;
     const q = (topoState.searchQuery || '').trim().toLowerCase();
     if (!q) return false;
     const d = n.dev || {};
@@ -5045,24 +5046,34 @@ function resetTopoLayout() {
     triggerNeuralCascade();
 }
 
+function setTopoCamera(targetScale, targetPanX, targetPanY, smooth = true) {
+    if (isNaN(targetScale) || !isFinite(targetScale) || targetScale <= 0) targetScale = 0.85;
+    if (isNaN(targetPanX) || !isFinite(targetPanX)) targetPanX = 0;
+    if (isNaN(targetPanY) || !isFinite(targetPanY)) targetPanY = 0;
+    if (smooth) {
+        topoState.targetScale = targetScale;
+        topoState.targetPanX = targetPanX;
+        topoState.targetPanY = targetPanY;
+        topoState.smoothCamera = true;
+    } else {
+        topoState.scale = topoState.targetScale = targetScale;
+        topoState.panX = topoState.targetPanX = targetPanX;
+        topoState.panY = topoState.targetPanY = targetPanY;
+        topoState.smoothCamera = false;
+    }
+}
+
 function centerOnPoint(wx, wy, targetScale = null, smooth = true) {
     const canvas = document.getElementById('topo-canvas');
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    const sc = targetScale != null ? targetScale : topoState.scale;
+    let sc = targetScale != null ? targetScale : topoState.scale;
+    if (isNaN(sc) || !isFinite(sc) || sc <= 0) sc = 0.85;
+    if (isNaN(wx) || !isFinite(wx)) wx = 0;
+    if (isNaN(wy) || !isFinite(wy)) wy = 0;
     const px = canvas.width / (2 * dpr) - wx * sc;
     const py = canvas.height / (2 * dpr) - wy * sc;
-    if (smooth) {
-        topoState.targetScale = sc;
-        topoState.targetPanX = px;
-        topoState.targetPanY = py;
-        topoState.smoothCamera = true;
-    } else {
-        topoState.scale = topoState.targetScale = sc;
-        topoState.panX = topoState.targetPanX = px;
-        topoState.panY = topoState.targetPanY = py;
-        topoState.smoothCamera = false;
-    }
+    setTopoCamera(sc, px, py, smooth);
 }
 
 function fitTopoToScreen(smooth = true) {
@@ -6305,20 +6316,32 @@ function updateTopoTooltip(node, sx, sy) {
 
 function drawTopoFrame(now) {
     const tNow = now || performance.now();
-    if (currentMainTab === 'topology') {
-        const canvas = document.getElementById('topo-canvas');
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            const dpr = window.devicePixelRatio || 1;
-            const w = canvas.width / dpr;
-            const h = canvas.height / dpr;
+    const heartbeat = Math.pow(Math.max(0, Math.sin(tNow * 0.007)), 2.5);
+    const pulse = Math.sin(tNow * 0.009);
 
-            const usePlexus = (topoState.visualStyle === 'plexus');
-            const useStraight = (topoState.visualStyle === 'straight');
-            const useSynapse = (topoState.visualStyle === 'synapse');
+    try {
+        if (currentMainTab === 'topology') {
+            const canvas = document.getElementById('topo-canvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                const w = canvas.width / dpr;
+                const h = canvas.height / dpr;
 
-            // Interpolación suave de cámara (zoom / encuadre)
-            if (topoState.smoothCamera) {
+                const usePlexus = (topoState.visualStyle === 'plexus');
+                const useStraight = (topoState.visualStyle === 'straight');
+                const useSynapse = (topoState.visualStyle === 'synapse');
+
+                // Sanity check de cámara para evitar NaN
+                if (isNaN(topoState.scale) || !isFinite(topoState.scale) || topoState.scale <= 0) topoState.scale = 0.85;
+                if (isNaN(topoState.panX) || !isFinite(topoState.panX)) topoState.panX = 0;
+                if (isNaN(topoState.panY) || !isFinite(topoState.panY)) topoState.panY = 0;
+                if (isNaN(topoState.targetScale) || !isFinite(topoState.targetScale) || topoState.targetScale <= 0) topoState.targetScale = topoState.scale;
+                if (isNaN(topoState.targetPanX) || !isFinite(topoState.targetPanX)) topoState.targetPanX = topoState.panX;
+                if (isNaN(topoState.targetPanY) || !isFinite(topoState.targetPanY)) topoState.targetPanY = topoState.panY;
+
+                // Interpolación suave de cámara (zoom / encuadre)
+                if (topoState.smoothCamera) {
                 topoState.scale += (topoState.targetScale - topoState.scale) * 0.14;
                 topoState.panX += (topoState.targetPanX - topoState.panX) * 0.14;
                 topoState.panY += (topoState.targetPanY - topoState.panY) * 0.14;
@@ -7000,8 +7023,7 @@ function drawTopoFrame(now) {
                     ctx.save();
                     ctx.globalAlpha = 1.0;
                     const n = target;
-                    const heartbeat = Math.pow(Math.max(0, Math.sin(tNow * 0.007)), 2.5);
-                    const pulse = Math.sin(tNow * 0.009);
+                    // heartbeat y pulse ya inicializados de forma global para el frame
 
                     // A. Ondas continuas de radar sónar expansivo (3 anillos concéntricos fluorescentes ámbar/oro)
                     const radarSpeed = 0.042;
@@ -7116,7 +7138,11 @@ function drawTopoFrame(now) {
             ctx.restore();
         }
     }
+} catch (err) {
+    console.error('Error durante renderizado de topología:', err);
+} finally {
     topoState.animFrame = requestAnimationFrame(drawTopoFrame);
+}
 }
 
 function renderTopology() {
@@ -7539,9 +7565,10 @@ function focusTopoNode(nodeOrId, targetScale = 1.25) {
         : nodeOrId;
     if (!n) return;
 
-    // Centrar exactamente la coordenada (n.x, n.y) en el viewport del canvas
-    const px = (cw / 2) - n.x * targetScale;
-    const py = (ch / 2) - n.y * targetScale;
+    const nx = (n.x != null && !isNaN(n.x)) ? n.x : (n.baseX || 0);
+    const ny = (n.y != null && !isNaN(n.y)) ? n.y : (n.baseY || 0);
+    const px = (cw / 2) - nx * targetScale;
+    const py = (ch / 2) - ny * targetScale;
 
     setTopoCamera(targetScale, px, py, true);
     topoState.hoverNode = n;
@@ -7549,7 +7576,7 @@ function focusTopoNode(nodeOrId, targetScale = 1.25) {
     topoState.pinnedTargetNode = n;
     updateTopoPinnedBanner();
     n.flash = 1.0;
-    spawnNodeShockwave(n.x, n.y, n.color || '#38bdf8', 120);
+    spawnNodeShockwave(nx, ny, n.color || '#38bdf8', 120);
 }
 
 async function openDeviceSheet(mac, ipHint = '') {
