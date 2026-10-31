@@ -1368,12 +1368,14 @@
                         <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.12);" title="Disparar una onda de sinapsis neuronal desde el Router Principal hacia toda la red">
                             ⚡ Impulso
                         </button>
-                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.15);" title="Reorganizar automáticamente los nodos y clientes de forma equilibrada, amplia y sin solapamientos">
+                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.15);" title="Reorganizar automáticamente los nodos y clientes de forma equilibrada y amplia (Revertir con Ctrl+Z · Rehacer con Ctrl+Y)">
                             🪄 Auto-Organizar
                         </button>
-                        <button id="topo-btn-undo" class="topo-ctrl-btn" onclick="undoLastTopoAction()" disabled style="opacity:0.45; cursor:not-allowed;" title="Revertir el último cambio de posición en la topología">
-                            ↩️ Revertir
-                        </button>
+                        <span style="font-size:0.72rem; color:#94a3b8; display:inline-flex; align-items:center; gap:5px; user-select:none; background:rgba(15,23,42,0.65); padding:3px 8px; border-radius:6px; border:1px solid rgba(148,163,184,0.18); height:30px; line-height:1;" title="Atajos de teclado: Ctrl+Z para revertir / Ctrl+Y para rehacer posiciones">
+                            <kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 4px; font-family:monospace; font-size:0.68rem; color:#e2e8f0;">Ctrl+Z</kbd> Revertir
+                            <span style="opacity:0.35;">·</span>
+                            <kbd style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:3px; padding:1px 4px; font-family:monospace; font-size:0.68rem; color:#e2e8f0;">Ctrl+Y</kbd> Rehacer
+                        </span>
                     </div>
                     <div class="topo-controls-row">
                         <button id="topo-btn-offline" class="topo-ctrl-btn active" onclick="toggleTopoOffline()" title="Mostrar u ocultar dispositivos desconectados en la malla">
@@ -3605,25 +3607,34 @@ function cycleTopoVisualStyle() {
     triggerNeuralCascade();
 }
 
+// Sistema de Deshacer (Ctrl+Z) y Rehacer (Ctrl+Y) instantáneo sin popups ni confirmaciones
 function pushTopoUndo(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
     if (!topoState.undoHistory) topoState.undoHistory = [];
-    topoState.undoHistory.push(snapshot);
-    if (topoState.undoHistory.length > 35) topoState.undoHistory.shift();
-    updateTopoUndoBtn();
-}
-
-function updateTopoUndoBtn() {
-    const btn = document.getElementById('topo-btn-undo');
-    if (!btn) return;
-    const canUndo = topoState.undoHistory && topoState.undoHistory.length > 0;
-    btn.disabled = !canUndo;
-    btn.style.opacity = canUndo ? '1' : '0.45';
-    btn.style.cursor = canUndo ? 'pointer' : 'not-allowed';
-    btn.title = canUndo ? `Revertir último cambio (${topoState.undoHistory.length} disponibles)` : 'No hay cambios recientes que revertir';
+    if (!topoState.redoHistory) topoState.redoHistory = [];
+    topoState.undoHistory.push(JSON.parse(JSON.stringify(snapshot)));
+    if (topoState.undoHistory.length > 50) topoState.undoHistory.shift();
+    // Toda acción nueva limpia el historial de rehacer
+    topoState.redoHistory = [];
 }
 
 function undoLastTopoAction() {
+    undoTopo();
+}
+
+function updateTopoUndoBtn() {
+    // Sin botón en la UI: controlado exclusivamente por atajos de teclado Ctrl+Z / Ctrl+Y
+}
+
+function undoTopo() {
     if (!topoState.undoHistory || topoState.undoHistory.length === 0) return;
+    if (!topoState.redoHistory) topoState.redoHistory = [];
+
+    // Guardar estado actual en la pila de rehacer
+    topoState.redoHistory.push(JSON.parse(JSON.stringify(topoState.customPositions || {})));
+    if (topoState.redoHistory.length > 50) topoState.redoHistory.shift();
+
+    // Extraer y restaurar estado anterior
     const prevPositions = topoState.undoHistory.pop();
     topoState.customPositions = prevPositions || {};
     try {
@@ -3634,11 +3645,63 @@ function undoLastTopoAction() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(topoState.customPositions)
     }).catch(() => {});
-    updateTopoUndoBtn();
+
     buildTopoGraph(false);
     triggerNeuralCascade();
-    showMessage('Paso anterior revertido.');
 }
+
+function redoTopo() {
+    if (!topoState.redoHistory || topoState.redoHistory.length === 0) return;
+    if (!topoState.undoHistory) topoState.undoHistory = [];
+
+    // Guardar estado actual en la pila de deshacer
+    topoState.undoHistory.push(JSON.parse(JSON.stringify(topoState.customPositions || {})));
+    if (topoState.undoHistory.length > 50) topoState.undoHistory.shift();
+
+    // Extraer y restaurar estado siguiente
+    const nextPositions = topoState.redoHistory.pop();
+    topoState.customPositions = nextPositions || {};
+    try {
+        localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(topoState.customPositions));
+    } catch (e) {}
+    fetch('/api/topology/positions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(topoState.customPositions)
+    }).catch(() => {});
+
+    buildTopoGraph(false);
+    triggerNeuralCascade();
+}
+
+// Atajos globales para la topología: Ctrl+Z (Revertir) y Ctrl+Y / Ctrl+Shift+Z (Rehacer) sin popups
+window.addEventListener('keydown', function(e) {
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+    if (!isCtrlOrCmd) return;
+
+    // Si el usuario está escribiendo en un input, textarea o contenido editable, no interferir
+    const targetTag = (e.target && e.target.tagName) || '';
+    if (['INPUT', 'TEXTAREA'].includes(targetTag) || (e.target && e.target.isContentEditable)) {
+        return;
+    }
+
+    // Solo actuar si la vista de topología está visible
+    const topoView = document.getElementById('view-topology');
+    if (!topoView || topoView.style.display === 'none') return;
+
+    const key = (e.key || '').toLowerCase();
+    if (key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+            redoTopo();
+        } else {
+            undoTopo();
+        }
+    } else if (key === 'y') {
+        e.preventDefault();
+        redoTopo();
+    }
+});
 
 let _autoOrganizeCounter = 0;
 function smartAutoOrganizeTopology() {
