@@ -1586,8 +1586,7 @@
 
     <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
-            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();
-        updateStaticOrderWidgets(data.static_order_summary);">
+            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();">
             <div style="display:inline-flex; align-items:center; gap:8px;">
                 <button id="btn-toggle-table-width" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="toggleTableFullWidth()" title="Ampliar la caja de la tabla horizontalmente a pantalla ancha o restaurar (↔)">
                     <span id="icon-table-width">↔</span>
@@ -1630,6 +1629,9 @@
                     <button class="pill-btn" data-group="type" data-val="static" onclick="setFilter('type', 'static')">📌 Fijas <span class="pill-count" id="count-type-static">0</span></button>
                     <button class="pill-btn" data-group="type" data-val="dynamic" onclick="setFilter('type', 'dynamic')">⚡ Dinámicas <span class="pill-count" id="count-type-dynamic">0</span></button>
                 </div>
+                <button id="btn-sort-static-order" class="btn btn-outline" style="padding:4px 9px; font-size:0.75rem; border-radius:999px; margin-left:4px; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="sortByStaticOrder()" title="Ordenar la tabla por orden cronológico de fijación (#1 primera fijada, #N última)">
+                    ⇅ Orden de Fijadas (1 → N)
+                </button>
             </div>
 
             <!-- Grupo Servicios Web -->
@@ -2499,7 +2501,7 @@ const DEFAULT_COLUMNS = [
     { id: 'latency', label: 'Latencia / SO', visible: true, width: 135 },
     { id: 'seen', label: 'Visto / Ubicación', visible: false, width: 145 },
     { id: 'mac', label: 'MAC', visible: true, width: 145 },
-    { id: 'type', label: 'Tipo', visible: true, width: 100 },
+    { id: 'type', label: 'Tipo / Nº Fija', visible: true, width: 115 },
     { id: 'actions', label: 'Acciones', visible: true, width: 235 }
 ];
 
@@ -3211,6 +3213,7 @@ async function loadState(isManual = false) {
         renderGlobalNetworkMenu(data.network_links || []);
         renderTable();
         renderServicesCards();
+        updateStaticOrderWidgets(data.static_order_summary);
         updateTabsCounts();
         if (currentMainTab === 'ipmap') loadIpMap();
         else if (currentMainTab === 'topology') renderTopology();
@@ -3728,7 +3731,15 @@ function getSortValue(d, colId) {
         case 'ip': return ipToNum(d.ip);
         case 'arp': return ipToNum((d.live_ips && d.live_ips[0]) || '');
         case 'router': return (d.router_node || '').toLowerCase();
-        case 'type': return d.static ? 0 : 1;
+        case 'type':
+            // Si es estática y tiene número de orden (1, 2, 3...), ordenar por su orden cronológico exacto
+            if (d.static && d.static_order_idx != null) {
+                return d.static_order_idx;
+            }
+            if (d.static) return 90000;
+            return 99999;
+        case 'static_order':
+            return d.static_order_idx != null ? d.static_order_idx : 99999;
         case 'latency': return d.latency_ms != null ? d.latency_ms : 99999;
         case 'seen': return d.last_seen || '';
         default: return '';
@@ -9364,6 +9375,24 @@ function renderStaticOrderList() {
     container.innerHTML = html;
 }
 
+
+function sortByStaticOrder(toggle = true) {
+    switchMainTab('devices');
+    if (sortState.colId === 'type' && toggle) {
+        sortState.asc = !sortState.asc;
+    } else {
+        sortState.colId = 'type';
+        sortState.asc = true;
+    }
+    renderTable();
+    const btn = document.getElementById('btn-sort-static-order');
+    if (btn) {
+        btn.textContent = sortState.asc ? '⇅ Orden de Fijadas (1 → N) ▲' : '⇅ Orden de Fijadas (N → 1) ▼';
+        btn.style.background = 'rgba(56,189,248,0.2)';
+    }
+    showMessage(sortState.asc ? 'Tabla ordenada por orden de fijación: Primera a Última (1 → N)' : 'Tabla ordenada por orden de fijación: Última a Primera (N → 1)');
+}
+
 </script>
 
     <!-- MODAL: ORDEN DE FIJACIÓN DE IPS ESTÁTICAS -->
@@ -9373,7 +9402,12 @@ function renderStaticOrderList() {
                 <h3 style="margin:0; font-size:1.15rem; color:#38bdf8; display:flex; align-items:center; gap:8px;">
                     📌 Orden Cronológico de IPs Estáticas Fijadas
                 </h3>
-                <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem;" onclick="closeStaticOrderModal()">✕ Cerrar</button>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:0.78rem; font-weight:700; color:#38bdf8; border-color:#38bdf8;" onclick="closeStaticOrderModal(); sortByStaticOrder(false);" title="Aplicar orden a la tabla principal">
+                        ⇅ Ordenar Tabla Principal (1 → N)
+                    </button>
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem;" onclick="closeStaticOrderModal()">✕ Cerrar</button>
+                </div>
             </div>
 
             <!-- Tarjetas destacadas 1ª y Última -->
