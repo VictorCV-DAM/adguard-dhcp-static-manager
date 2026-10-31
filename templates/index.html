@@ -3905,18 +3905,56 @@ function smartAutoOrganizeTopology() {
     showMessage('✨ Topología auto-organizada: distribución inteligente, despejada y equilibrada.');
 }
 
+function centerTopoStageBox() {
+    const stage = document.getElementById('topo-stage');
+    if (!stage) return;
+    const container = stage.closest('.container') || stage.parentElement;
+    const containerW = container ? container.clientWidth : 1380;
+    const stageW = parseFloat(stage.style.width);
+    if (stageW && stageW > containerW) {
+        stage.style.marginLeft = ((containerW - stageW) / 2) + 'px';
+        try { localStorage.setItem('ag_topo_stage_margin_left', stage.style.marginLeft); } catch(e){}
+    } else {
+        stage.style.width = '100%';
+        stage.style.marginLeft = '';
+        try {
+            localStorage.removeItem('ag_topo_stage_width');
+            localStorage.removeItem('ag_topo_stage_margin_left');
+        } catch(e){}
+    }
+}
+
 function initTopoStageResizer() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
 
-    // Restaurar dimensiones y desplazamiento izquierdo previos guardados por el usuario
+    // Restaurar dimensiones y forzar centrado estricto respecto al contenedor de la web
     try {
         const savedH = localStorage.getItem('ag_topo_stage_height');
         const savedW = localStorage.getItem('ag_topo_stage_width');
         const savedML = localStorage.getItem('ag_topo_stage_margin_left');
         if (savedH) stage.style.height = savedH;
-        if (savedW && savedW !== '100%') stage.style.width = savedW;
-        if (savedML) stage.style.marginLeft = savedML;
+        if (savedW && savedW !== '100%') {
+            const container = stage.closest('.container') || stage.parentElement;
+            const containerW = container ? container.clientWidth : 1380;
+            const wVal = parseFloat(savedW);
+            // Si estaba guardado sin desplazamiento negativo, o desplazado a la derecha, re-centrar o volver a 100%
+            if (!savedML || parseFloat(savedML) >= 0) {
+                stage.style.width = '100%';
+                stage.style.marginLeft = '';
+                localStorage.removeItem('ag_topo_stage_width');
+                localStorage.removeItem('ag_topo_stage_margin_left');
+            } else if (wVal > containerW) {
+                stage.style.width = wVal + 'px';
+                stage.style.marginLeft = ((containerW - wVal) / 2) + 'px';
+            } else {
+                stage.style.width = '100%';
+                stage.style.marginLeft = '';
+            }
+        } else {
+            stage.style.width = '100%';
+            stage.style.marginLeft = '';
+        }
     } catch (e) {}
 
     const resizerL = document.getElementById('topo-resizer-l');
@@ -3949,6 +3987,29 @@ function initTopoStageResizer() {
         }
     }
 
+    // Resetear caja al doble clic en cualquiera de los tiradores
+    function resetStageBox() {
+        stage.style.width = '100%';
+        stage.style.marginLeft = '';
+        try {
+            localStorage.removeItem('ag_topo_stage_width');
+            localStorage.removeItem('ag_topo_stage_margin_left');
+        } catch(e) {}
+        const canvas = document.getElementById('topo-canvas');
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas) {
+            canvas.width = stage.clientWidth * dpr;
+            canvas.height = stage.clientHeight * dpr;
+        }
+        fitTopoToScreen(true);
+    }
+
+    [resizerL, resizerB, resizerR, resizerBL, resizerC].forEach(r => {
+        if (r) {
+            r.addEventListener('dblclick', resetStageBox);
+        }
+    });
+
     if (resizerL) resizerL.addEventListener('mousedown', e => startResize(e, 'l'));
     if (resizerB) resizerB.addEventListener('mousedown', e => startResize(e, 'b'));
     if (resizerR) resizerR.addEventListener('mousedown', e => startResize(e, 'r'));
@@ -3959,19 +4020,29 @@ function initTopoStageResizer() {
         if (!isResizing) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
+        const container = stage.closest('.container') || stage.parentElement;
+        const containerW = container ? container.clientWidth : 1380;
 
-        // Expansión / Contracción por la izquierda ('l' o 'bl')
+        // Expansión / Contracción simétrica por la izquierda ('l' o 'bl')
         if (resizeMode === 'l' || resizeMode === 'bl') {
             const newW = Math.max(480, startW - dx);
-            const actualDeltaW = newW - startW;
             stage.style.width = newW + 'px';
-            stage.style.marginLeft = (startML - actualDeltaW) + 'px';
+            if (newW > containerW) {
+                stage.style.marginLeft = ((containerW - newW) / 2) + 'px';
+            } else {
+                stage.style.marginLeft = '';
+            }
         }
 
-        // Expansión / Contracción por la derecha ('r' o 'c')
+        // Expansión / Contracción simétrica por la derecha ('r' o 'c')
         if (resizeMode === 'r' || resizeMode === 'c') {
             const newW = Math.max(480, startW + dx);
             stage.style.width = newW + 'px';
+            if (newW > containerW) {
+                stage.style.marginLeft = ((containerW - newW) / 2) + 'px';
+            } else {
+                stage.style.marginLeft = '';
+            }
         }
 
         // Expansión / Contracción por abajo ('b', 'bl', 'c')
@@ -4001,11 +4072,12 @@ function initTopoStageResizer() {
 
         try {
             localStorage.setItem('ag_topo_stage_height', stage.style.height);
-            if (stage.style.width) {
+            if (stage.style.width && stage.style.width !== '100%') {
                 localStorage.setItem('ag_topo_stage_width', stage.style.width);
-            }
-            if (stage.style.marginLeft) {
                 localStorage.setItem('ag_topo_stage_margin_left', stage.style.marginLeft);
+            } else {
+                localStorage.removeItem('ag_topo_stage_width');
+                localStorage.removeItem('ag_topo_stage_margin_left');
             }
         } catch (err) {}
 
@@ -4252,6 +4324,7 @@ function centerOnPoint(wx, wy, targetScale = null, smooth = true) {
 }
 
 function fitTopoToScreen(smooth = true) {
+    centerTopoStageBox();
     const canvas = document.getElementById('topo-canvas');
     if (!canvas || topoState.nodes.length === 0) return;
     const dpr = window.devicePixelRatio || 1;
