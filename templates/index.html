@@ -1851,6 +1851,120 @@
         </div>
     </div>
 
+    <!-- PESTAÑA: RADAR WI-FI Y MODO MONITOR (PLUGIN RF) -->
+    <div id="view-wifirf" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+            <div>
+                <h2 style="margin:0; font-size:1.35rem; color:#38bdf8; display:flex; align-items:center; gap:8px;">
+                    📡 Radar y Gestión de Radiofrecuencia Wi-Fi
+                    <span id="wifi-badge-mode" class="badge" style="font-size:0.75rem; background:rgba(56,189,248,0.18); color:#38bdf8; border:1px solid rgba(56,189,248,0.4);">Comprobando...</span>
+                </h2>
+                <p id="wifi-pi-info" style="margin:4px 0 0 0; font-size:0.82rem; color:var(--muted);">
+                    Pi: — · Interfaz: wlan0 / mon0
+                </p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="refreshWifiPluginUi(true)">🔄 Actualizar Diagnóstico</button>
+                <button class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="toggleWifiPluginFromConfig(false)">🔌 Desactivar Plugin</button>
+            </div>
+        </div>
+
+        <!-- Banner de Asistente de Preparación Masticada (si faltan dependencias) -->
+        <div id="wifi-assistant-box" style="display:none; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); border-radius:10px; padding:14px; margin-bottom:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <strong style="color:#fcd34d; font-size:0.95rem;">⚠️ Preparación del Entorno Wi-Fi Requerida</strong>
+                    <p style="margin:4px 0 0 0; font-size:0.82rem; color:#fde68a;">
+                        Se requiere instalar o preparar las herramientas <code>aircrack-ng</code> y <code>wireless-tools</code> en la Raspberry Pi para habilitar el modo monitor y escaneo en el aire.
+                    </p>
+                </div>
+                <button id="wifi-btn-install" class="btn btn-warning" style="font-weight:700; padding:8px 16px; font-size:0.85rem;" onclick="installWifiDeps()">
+                    🛠️ Instalar Dependencias y Preparar en 1 Clic
+                </button>
+            </div>
+        </div>
+
+        <!-- Controles Principales de Modo y Escaneo -->
+        <div style="background:#0f172a; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:18px;">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                <button class="btn btn-warning" style="flex:1; min-width:200px; padding:10px 14px; font-weight:700; font-size:0.88rem;" onclick="setWifiCardMode('monitor')">
+                    ⚡ Activar Modo Monitor (mon0)
+                </button>
+                <button class="btn btn-success" style="flex:1; min-width:200px; padding:10px 14px; font-weight:700; font-size:0.88rem;" onclick="setWifiCardMode('normal')">
+                    🌐 Activar Modo Normal (Managed / NetworkManager)
+                </button>
+                <button class="btn btn-primary" style="flex:1.2; min-width:240px; padding:10px 14px; font-weight:700; font-size:0.88rem;" onclick="scanWifiSpectrum()">
+                    📡 Escanear Dispositivos en el Aire (12s)
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabla / Radar de Resultados en el Aire -->
+        <div style="background:#0f172a; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <strong style="font-size:0.95rem; color:#f8fafc;">📡 Dispositivos Capturados en el Aire (airodump-ng)</strong>
+                <span id="wifi-scan-count" style="font-size:0.8rem; color:var(--muted);">0 detectados</span>
+            </div>
+            <div id="wifi-radar-results" style="overflow-x:auto;">
+                <p style="text-align:center; color:var(--muted); padding:30px 0; font-size:0.88rem;">
+                    Pulsa <strong>"📡 Escanear Dispositivos en el Aire"</strong> para iniciar la captura de tráfico RF cercano.
+                </p>
+            </div>
+        </div>
+
+        <!-- Acordeones de Modos Directo y Manual -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:14px; margin-bottom:18px;">
+            <details style="background:#0f172a; border:1px solid var(--border); border-radius:10px; padding:12px;">
+                <summary style="cursor:pointer; color:#38bdf8; font-weight:700; font-size:0.85rem;">🎯 Expulsión Directa con Autodetección de Canal</summary>
+                <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--muted); display:block; margin-bottom:3px;">BSSID del Router / Punto de Acceso (MAC AP):</label>
+                        <input type="text" id="wifi-auto-bssid" placeholder="Ej: AC:84:C6:D1:FF:44" style="width:100%; padding:6px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:monospace;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--muted); display:block; margin-bottom:3px;">MAC del Cliente Objetivo:</label>
+                        <input type="text" id="wifi-auto-client" placeholder="Ej: 4C:6B:B8:FB:E7:98" style="width:100%; padding:6px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:monospace;">
+                    </div>
+                    <button class="btn btn-warning" style="margin-top:6px; padding:8px; font-size:0.82rem; font-weight:700;" onclick="execWifiAutoDeauth()">
+                        ⚡ Ejecutar con Canal Automático
+                    </button>
+                </div>
+            </details>
+
+            <details style="background:#0f172a; border:1px solid var(--border); border-radius:10px; padding:12px;">
+                <summary style="cursor:pointer; color:#38bdf8; font-weight:700; font-size:0.85rem;">⚙️ Expulsión Manual Avanzada (Canal Fijo)</summary>
+                <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--muted); display:block; margin-bottom:3px;">BSSID del Router / AP:</label>
+                        <input type="text" id="wifi-manual-bssid" placeholder="Ej: AC:84:C6:D1:FF:44" style="width:100%; padding:6px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:monospace;">
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <div style="flex:2;">
+                            <label style="font-size:0.75rem; color:var(--muted); display:block; margin-bottom:3px;">MAC Cliente:</label>
+                            <input type="text" id="wifi-manual-client" placeholder="Ej: 4C:6B:B8:FB:E7:98" style="width:100%; padding:6px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:monospace;">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:0.75rem; color:var(--muted); display:block; margin-bottom:3px;">Canal:</label>
+                            <input type="number" id="wifi-manual-channel" value="1" min="1" max="14" style="width:100%; padding:6px 10px; background:#1e293b; border:1px solid var(--border); border-radius:6px; color:#f8fafc; font-family:monospace;">
+                        </div>
+                    </div>
+                    <button class="btn btn-danger" style="margin-top:6px; padding:8px; font-size:0.82rem; font-weight:700;" onclick="execWifiManualDeauth()">
+                        💥 Forzar Deauth en Canal Fijo
+                    </button>
+                </div>
+            </details>
+        </div>
+
+        <!-- Terminal de Logs en Vivo -->
+        <div style="background:#030712; border:1px solid var(--border); border-radius:12px; padding:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:0.8rem; color:#94a3b8; font-family:monospace;">💻 Terminal de Diagnóstico Wi-Fi (RF)</span>
+                <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem;" onclick="clearWifiTerminal()">Limpiar Salida</button>
+            </div>
+            <pre id="wifi-output" style="background:#000; color:#4ade80; padding:12px; border-radius:8px; font-family:'Courier New', monospace; font-size:0.8rem; line-height:1.45; min-height:140px; max-height:280px; overflow-y:auto; white-space:pre-wrap; margin:0;">root@Pi-Server:~# Plugin Wi-Fi inicializado listo para operar.</pre>
+        </div>
+    </div>
+
     <!-- PESTAÑA 6: DIAGNÓSTICO DE RED -->
     <div id="view-diagnostics" style="display:none;">
         <div class="card" style="margin-bottom:14px;">
