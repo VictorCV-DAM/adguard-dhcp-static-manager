@@ -1548,21 +1548,6 @@
                 Entradas fantasma (<code>00:00:00:00:00:00</code>): <strong id="lbl-ghost">0</strong> |
                 Caducadas: <strong id="lbl-expired">0</strong>
             </p>
-            <!-- Entrada de Orden Cronológico de Fijación -->
-            <div style="background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.22); border-radius:8px; padding:8px 12px; margin-bottom:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-                    <span style="font-size:0.83rem; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:6px;">
-                        📌 Orden de Fijación (<strong id="lbl-statics-total" style="color:#86efac;">0</strong> fijadas)
-                    </span>
-                    <button class="btn btn-outline" style="padding:2px 8px; font-size:0.74rem;" onclick="openStaticOrderModal()">
-                        📋 Ver Lista Numerada (1 → N)
-                    </button>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:5px; font-size:0.78rem;">
-                    <div>🥇 <strong>1ª Fijada:</strong> <span id="lbl-static-first" style="color:#86efac; font-weight:600;">—</span></div>
-                    <div>🏁 <strong>Última Fijada:</strong> <span id="lbl-static-last" style="color:#fcd34d; font-weight:600;">—</span></div>
-                </div>
-            </div>
             <!-- Fila unificada de tiempos de concesión: predefinidos y personalizado integrados -->
             <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
                 <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
@@ -1581,6 +1566,41 @@
                 </div>
             </div>
             <button id="btn-clean-junk" class="btn btn-warn" onclick="cleanJunk()">🧹 Purgar Concesiones Fantasma y Caducadas</button>
+        </div>
+
+        <!-- 3ª TARJETA INDEPENDIENTE: ORDEN DE FIJACIÓN DE IPS -->
+        <div class="card" id="card-static-order" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h3 style="margin:0; font-size:1.05rem; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+                        📌 Orden de Fijación de IPs
+                    </h3>
+                    <span class="badge" style="background:rgba(56,189,248,0.18); color:#38bdf8; font-weight:700; font-size:0.78rem; padding:3px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.4);">
+                        <strong id="lbl-statics-total" style="color:#86efac;">0</strong> fijadas
+                    </span>
+                </div>
+                <p style="margin:0 0 10px 0; font-size:0.80rem; color:var(--muted);">
+                    Histórico cronológico de reservas estáticas fijas en el servidor DHCP:
+                </p>
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+                    <div style="background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.74rem; color:#86efac; font-weight:700; text-transform:uppercase;">🥇 1ª Fijada:</span>
+                        <span id="lbl-static-first" style="font-size:0.82rem; font-weight:600; color:#f8fafc;">—</span>
+                    </div>
+                    <div style="background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.25); border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.74rem; color:#fde047; font-weight:700; text-transform:uppercase;">🏁 Última Fijada:</span>
+                        <span id="lbl-static-last" style="font-size:0.82rem; font-weight:600; color:#f8fafc;">—</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-outline" style="flex:1; padding:7px 10px; font-size:0.80rem; font-weight:700; color:#38bdf8; border-color:rgba(56,189,248,0.5); justify-content:center;" onclick="openStaticOrderModal()">
+                    📋 Ver Lista Numerada (1 → N)
+                </button>
+                <button class="btn btn-outline" style="padding:7px 10px; font-size:0.80rem;" onclick="sortByStaticOrder()" title="Ordenar la tabla principal por este orden">
+                    ⇅ Ordenar Tabla
+                </button>
+            </div>
         </div>
     </div>
 
