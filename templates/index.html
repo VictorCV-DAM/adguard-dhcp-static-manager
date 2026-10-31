@@ -8043,6 +8043,86 @@ function suggestFreeIpForSheet() {
     }
 }
 
+function refreshOpenDeviceSheetUi(mac, newIp, newHostname) {
+    if (typeof currentSheetMac === 'undefined' || currentSheetMac !== mac) return;
+    currentSheetIp = newIp;
+
+    // 1. Sincronizar dispositivo en allDevices
+    const dev = (typeof allDevices !== 'undefined' && Array.isArray(allDevices))
+        ? allDevices.find(d => d.mac === mac)
+        : null;
+    if (dev) {
+        dev.ip = newIp;
+        if (newHostname) dev.hostname = newHostname;
+        dev.static = true;
+    }
+
+    // 2. Título de la ficha
+    const titleEl = document.getElementById('ds-title');
+    if (titleEl && newHostname) {
+        titleEl.textContent = `🧾 ${newHostname}`;
+    }
+
+    // 3. Subtítulo con MAC, IP y Fabricante actualizados de inmediato
+    const subEl = document.getElementById('ds-subtitle');
+    if (subEl) {
+        const vendor = (dev && dev.dev_vendor) || 'Desconocido';
+        subEl.innerHTML = `
+            MAC: <code class="clickable-copy-pill" onclick="copyToClipboard('${mac}', 'MAC', this)" title="Haz clic para copiar la MAC al portapapeles">${mac} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code> · 
+            IP: <code class="clickable-copy-pill" onclick="copyToClipboard('${newIp}', 'IP', this)" title="Haz clic para copiar la IP al portapapeles">${newIp} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code> · 
+            Fabricante: <strong>${escapeHtml(vendor)}</strong>
+        `;
+    }
+
+    // 4. Badge DHCP Estática
+    const badge = document.getElementById('ds-dhcp-badge');
+    if (badge) {
+        badge.innerHTML = '<span class="badge badge-static">📌 IP Estática Fija</span>';
+    }
+
+    // 5. Botones de acción (Hacer Ping con la nueva IP, etc.)
+    const actBox = document.getElementById('ds-actions');
+    if (actBox) {
+        const blocked = dev ? !!dev.blocked : false;
+        actBox.innerHTML = `
+            <button class="btn ${blocked ? 'btn-success' : 'btn-danger'}" style="padding:6px 12px; font-size:0.8rem;" onclick="toggleBlockDevice('${mac}', ${!blocked})">
+                ${blocked ? '✅ Desbloquear Internet (DNS)' : '⛔ Cortar Internet (Bloquear DNS)'}
+            </button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">⚡ Wake-on-LAN (Encender)</button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="pingDevice('${newIp}')">📡 Hacer Ping</button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${escapeHtml(newHostname || (dev && dev.hostname) || '').replace(/'/g, "\\'")}', '${mac}', '${newIp}')">✏️ Editar Concesión DHCP</button>
+        `;
+    }
+
+    // 6. Recargar consultas DNS de AdGuard Home para la nueva IP
+    fetch(`/api/device/${encodeURIComponent(mac)}?ip=${encodeURIComponent(newIp)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (currentSheetMac !== mac) return;
+            const dns = data.dns;
+            const dnsEl = document.getElementById('ds-dns');
+            if (!dnsEl) return;
+            if (data.dns_error) {
+                dnsEl.innerHTML = `<div style="color:var(--muted);">${escapeHtml(data.dns_error)}</div>`;
+            } else if (!dns || !dns.total) {
+                dnsEl.innerHTML = `
+                    <div style="color:var(--muted); margin-bottom:10px;">Sin consultas recientes en el log actual para <code>${newIp}</code>.</div>
+                    <div style="padding-top:8px; border-top:1px solid rgba(255,255,255,0.08);">
+                        <div style="font-size:0.75rem; font-weight:700; color:#e0f2fe; margin-bottom:6px;">⚡ Reglas Rápidas de Dominio (AdGuard Home)</div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                            <input type="text" id="ds-custom-domain" placeholder="Escribe un dominio (ej. youtube.com)..."
+                                style="flex:1; min-width:170px; padding:6px 10px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
+                            <button type="button" class="btn btn-outline" style="padding:5px 9px; font-size:0.74rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="execCustomDns('whitelist_client')">🔓 Permitir (Este)</button>
+                            <button type="button" class="btn btn-outline" style="padding:5px 9px; font-size:0.74rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="execCustomDns('whitelist_global')">🌐 Permitir (Global)</button>
+                            <button type="button" class="btn btn-outline" style="padding:5px 9px; font-size:0.74rem; color:#f87171; border-color:rgba(248,113,113,0.4);" onclick="execCustomDns('block_client')">🚫 Bloquear (Este)</button>
+                            <button type="button" class="btn btn-outline" style="padding:5px 9px; font-size:0.74rem; color:#ef4444; border-color:rgba(239,68,68,0.4);" onclick="execCustomDns('block_global')">⛔ Bloquear (Global)</button>
+                        </div>
+                    </div>`;
+            }
+        })
+        .catch(() => {});
+}
+
 async function applyDhcpFromSheet() {
     const hostname = (document.getElementById('ds-edit-hostname')?.value || '').trim();
     const ip = (document.getElementById('ds-edit-ip')?.value || '').trim();
@@ -8102,11 +8182,9 @@ async function applyDhcpFromSheet() {
             }
         }
         if (ok || isWarn) {
-            currentSheetIp = ip;
-            document.getElementById('ds-title').textContent = `🧾 ${hostname}`;
-            const badge = document.getElementById('ds-dhcp-badge');
-            if (badge) badge.innerHTML = '<span class="badge badge-static">📌 IP Estática Fija</span>';
+            refreshOpenDeviceSheetUi(currentSheetMac, ip, hostname);
             await loadState(false);
+            refreshOpenDeviceSheetUi(currentSheetMac, ip, hostname);
         }
     } catch (e) {
         if (statusBox) {
