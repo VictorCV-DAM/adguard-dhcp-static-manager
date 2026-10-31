@@ -61,6 +61,8 @@ DEFAULT_ALERTS = {
     'smtp_pass': '',
     'smtp_to': '',
     'smtp_tls': True,
+    'email_notify_new_device': True,
+    'email_notify_device_connect': False,
     'notify_new_device': True,
     'notify_device_connect': False,
     'notify_service_down': True,
@@ -531,18 +533,25 @@ def send_alert(title, message, kind='info', force=False, cfg_override=None, emai
                 results.append(('webhook', False, str(e)))
         if a.get('email_enabled') or (force and a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to')):
             if a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to'):
-                ok, err = send_smtp_email(
-                    host=a.get('smtp_host') or 'smtp.gmail.com',
-                    port=a.get('smtp_port') or 587,
-                    user=a.get('smtp_user', '').strip(),
-                    password=a.get('smtp_pass', '').strip(),
-                    to_addr=a.get('smtp_to', '').strip(),
-                    subject=f"[Panel DHCP] {title}",
-                    body_text=message,
-                    body_html=email_html,
-                    use_tls=bool(a.get('smtp_tls', True))
-                )
-                results.append(('email', ok, err))
+                email_allowed = True
+                if not force:
+                    if kind == 'new_device' and not a.get('email_notify_new_device', True):
+                        email_allowed = False
+                    elif kind == 'online' and not a.get('email_notify_device_connect', False):
+                        email_allowed = False
+                if email_allowed:
+                    ok, err = send_smtp_email(
+                        host=a.get('smtp_host') or 'smtp.gmail.com',
+                        port=a.get('smtp_port') or 587,
+                        user=a.get('smtp_user', '').strip(),
+                        password=a.get('smtp_pass', '').strip(),
+                        to_addr=a.get('smtp_to', '').strip(),
+                        subject=f"[Panel DHCP] {title}",
+                        body_text=message,
+                        body_html=email_html,
+                        use_tls=bool(a.get('smtp_tls', True))
+                    )
+                    results.append(('email', ok, err))
         sent = 1 if any(r[1] for r in results) else 0
     db_exec('INSERT INTO events_log (ts, kind, title, message, sent) VALUES (?,?,?,?,?)',
             (now_ts(), kind, title, message, sent))
@@ -1044,6 +1053,62 @@ def api_alerts_test():
     ko = [f'{r[0]}: {r[2]}' for r in res if not r[1]]
     msg = (f'Enviado correctamente por: {", ".join(ok)}. ' if ok else '') + (f'Fallos → {" | ".join(ko)}' if ko else '')
     return jsonify({'status': 'success' if ok else 'error', 'message': msg or 'Sin resultados.'})
+
+
+@bp.route('/api/alerts/test-smtp', methods=['POST'])
+def api_alerts_test_smtp():
+    body = request.json or {}
+    a = get_alerts_cfg()
+    user = (body.get('smtp_user') or a.get('smtp_user') or '').strip()
+    password = (body.get('smtp_pass') or a.get('smtp_pass') or '').strip()
+    to_addr = (body.get('smtp_to') or a.get('smtp_to') or '').strip()
+    host = (body.get('smtp_host') or a.get('smtp_host') or 'smtp.gmail.com').strip()
+    try:
+        port = int(body.get('smtp_port') or a.get('smtp_port') or 587)
+    except Exception:
+        port = 587
+    use_tls = bool(body.get('smtp_tls', a.get('smtp_tls', True)))
+
+    if not user or not password or not to_addr:
+        return jsonify({'status': 'error', 'message': 'Faltan credenciales: se requiere correo remitente (usuario), contraseña de aplicación y destinatario.'})
+
+    test_title = '[Panel DHCP] 📧 Prueba de Configuración SMTP / Correo'
+    test_msg = f'¡Enhorabuena! El envío de correos mediante el servidor SMTP ({host}:{port}) está configurado correctamente y funcionando a la perfección.'
+    test_html = f"""<!DOCTYPE html>
+<html><body style="background:#0f172a; color:#e2e8f0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding:20px;">
+  <div style="max-width:600px; margin:0 auto; background:#1e293b; padding:24px; border-radius:12px; border:1px solid #10b981; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+    <h2 style="color:#10b981; margin-top:0;">✅ Prueba de Correo SMTP Exitosa</h2>
+    <p style="font-size:1rem; line-height:1.6; color:#f8fafc;">{test_msg}</p>
+    <div style="background:#0f172a; border-radius:8px; padding:12px; margin-top:16px; font-size:0.85rem; color:#94a3b8;">
+      Servidor SMTP: <strong>{host}:{port}</strong><br>
+      Remitente: <strong>{user}</strong><br>
+      Destinatario: <strong>{to_addr}</strong><br>
+      Seguridad TLS: <strong>{'Activada (STARTTLS)' if use_tls else 'Desactivada'}</strong><br>
+      Fecha/Hora: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong>
+    </div>
+    <p style="font-size:0.8rem; color:#64748b; margin-top:20px; border-top:1px solid #334155; padding-top:10px;">
+      Panel DHCP &copy; Raspberry Pi 4 · {datetime.now().year}
+    </p>
+  </div>
+</body></html>"""
+
+    ok, err = send_smtp_email(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        to_addr=to_addr,
+        subject=test_title,
+        body_text=test_msg,
+        body_html=test_html,
+        use_tls=use_tls
+    )
+    if ok:
+        db_exec('INSERT INTO events_log (ts, kind, title, message, sent) VALUES (?,?,?,?,?)',
+                (now_ts(), 'test', test_title, f'Correo de prueba enviado a {to_addr}', 1))
+        return jsonify({'status': 'success', 'message': f'Correo de prueba enviado correctamente a {to_addr}.'})
+    else:
+        return jsonify({'status': 'error', 'message': f'Error al enviar correo SMTP: {err}'})
 
 
 @bp.route('/api/events')

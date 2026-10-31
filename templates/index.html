@@ -2042,6 +2042,24 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- OPCIONES ESPECÍFICAS DE CORREO Y BOTÓN DE PRUEBA -->
+                <div style="margin-top:14px; padding:10px 12px; background:rgba(30,41,59,0.55); border-radius:8px; border:1px solid rgba(56,189,248,0.2); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.83rem; color:#e2e8f0; font-weight:600; margin:0;">
+                            <input type="checkbox" id="al-email-new-dev"> 🚨 Enviar email al conectarse un nuevo dispositivo a la red
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.79rem; color:#94a3b8; margin:0;">
+                            <input type="checkbox" id="al-email-dev-connect"> ⚡ Enviar email cuando cualquier dispositivo se reconecte
+                        </label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="smtp-test-status" style="font-size:0.78rem;"></span>
+                        <button type="button" class="btn btn-outline" id="btn-test-smtp" onclick="testSmtpEmail()" style="border-color:#38bdf8; color:#38bdf8; padding:5px 12px; font-size:0.8rem; font-weight:600;" title="Envía un correo de prueba con las credenciales indicadas">
+                            ✉️ Probar a enviar
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- OTROS CANALES -->
@@ -8145,6 +8163,8 @@ async function openAlertsModal() {
 
     document.getElementById('al-enabled').checked = !!cfg.enabled;
     document.getElementById('al-email-enabled').checked = !!cfg.email_enabled;
+    document.getElementById('al-email-new-dev').checked = cfg.email_notify_new_device !== false;
+    document.getElementById('al-email-dev-connect').checked = !!cfg.email_notify_device_connect;
     document.getElementById('al-smtp-user').value = cfg.smtp_user || '';
     document.getElementById('al-smtp-pass').value = cfg.smtp_pass || '';
     document.getElementById('al-smtp-to').value = cfg.smtp_to || '';
@@ -8172,6 +8192,8 @@ async function saveAlertsConfig() {
     const body = {
         enabled: document.getElementById('al-enabled').checked,
         email_enabled: document.getElementById('al-email-enabled').checked,
+        email_notify_new_device: document.getElementById('al-email-new-dev').checked,
+        email_notify_device_connect: document.getElementById('al-email-dev-connect').checked,
         smtp_user: document.getElementById('al-smtp-user').value.trim(),
         smtp_pass: document.getElementById('al-smtp-pass').value.trim(),
         smtp_to: document.getElementById('al-smtp-to').value.trim(),
@@ -8200,6 +8222,60 @@ async function testAlerts() {
     const res = await fetch('/api/alerts/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
     const data = await res.json();
     showMessage(data.message);
+}
+
+async function testSmtpEmail() {
+    const btn = document.getElementById('btn-test-smtp');
+    const statusEl = document.getElementById('smtp-test-status');
+    const user = document.getElementById('al-smtp-user').value.trim();
+    const pass = document.getElementById('al-smtp-pass').value.trim();
+    const to = document.getElementById('al-smtp-to').value.trim();
+    const host = document.getElementById('al-smtp-host').value.trim() || 'smtp.gmail.com';
+    const port = parseInt(document.getElementById('al-smtp-port').value, 10) || 587;
+
+    if (!user || !to) {
+        showMessage('Por favor, indica al menos el correo remitente (usuario) y el correo destinatario.', 'warn');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Probando...';
+    }
+    if (statusEl) {
+        statusEl.innerHTML = '<span style="color:#38bdf8;">⏳ Conectando...</span>';
+    }
+
+    try {
+        const res = await fetch('/api/alerts/test-smtp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                smtp_user: user,
+                smtp_pass: pass,
+                smtp_to: to,
+                smtp_host: host,
+                smtp_port: port,
+                smtp_tls: true
+            })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#10b981;">✅ Enviado</span>';
+            showMessage(data.message || `Correo de prueba enviado correctamente a ${to}.`);
+        } else {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">❌ Fallo</span>';
+            showMessage(data.message || 'Error al enviar el correo de prueba.', 'error');
+        }
+    } catch (e) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">❌ Error</span>';
+        showMessage('Error al conectar con el servidor: ' + e, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '✉️ Probar a enviar';
+        }
+    }
 }
 
 // --- EXPORTAR / IMPORTAR CONFIGURACIÓN Y CSV ---
