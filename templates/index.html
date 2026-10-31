@@ -1458,21 +1458,24 @@
                 Entradas fantasma (<code>00:00:00:00:00:00</code>): <strong id="lbl-ghost">0</strong> |
                 Caducadas: <strong id="lbl-expired">0</strong>
             </p>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
-                <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
-                <button class="btn btn-outline" onclick="setDuration(3600)">1 hora</button>
-                <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
-            </div>
-            <!-- Tiempo de concesión personalizado -->
-            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px; background:rgba(0,0,0,0.22); padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
-                <span style="font-size:0.78rem; color:var(--muted); font-weight:600;">Personalizado:</span>
-                <input type="number" id="custom-duration-val" min="1" placeholder="Ej: 24" style="width:75px; padding:4px 8px; font-size:0.8rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
-                <select id="custom-duration-unit" style="padding:4px 8px; font-size:0.8rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;">
-                    <option value="60">Minutos</option>
-                    <option value="3600" selected>Horas</option>
-                    <option value="86400">Días</option>
-                </select>
-                <button class="btn btn-outline" style="padding:4px 10px; font-size:0.8rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="setCustomDuration()">⏱️ Aplicar</button>
+            <!-- Fila unificada de tiempos de concesión: predefinidos a la izquierda y personalizado compacto a la derecha -->
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <button class="btn btn-outline" onclick="setDuration(43200)">Estable IoT (12 horas)</button>
+                    <button class="btn btn-outline" onclick="setDuration(3600)">1 hora</button>
+                    <button class="btn btn-outline" onclick="setDuration(300)">5 min</button>
+                </div>
+                <!-- Tiempo de concesión personalizado compacto alineado a la derecha -->
+                <div style="display:inline-flex; align-items:center; gap:5px; margin-left:auto; background:rgba(0,0,0,0.22); padding:3px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Personalizado:</span>
+                    <input type="number" id="custom-duration-val" min="1" placeholder="Ej: 24" style="width:62px; padding:3px 6px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc;" onkeydown="if(event.key==='Enter') setCustomDuration()">
+                    <select id="custom-duration-unit" style="width:auto; padding:3px 6px; font-size:0.78rem; background:#020617; border:1px solid var(--border); border-radius:6px; color:#f8fafc; cursor:pointer;">
+                        <option value="60">Min</option>
+                        <option value="3600" selected>Horas</option>
+                        <option value="86400">Días</option>
+                    </select>
+                    <button class="btn btn-outline" style="padding:3px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="setCustomDuration()" title="Aplicar tiempo de concesión personalizado">⏱️ Aplicar</button>
+                </div>
             </div>
             <button id="btn-clean-junk" class="btn btn-warn" onclick="cleanJunk()">🧹 Purgar Concesiones Fantasma y Caducadas</button>
         </div>
