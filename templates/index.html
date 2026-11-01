@@ -2193,7 +2193,7 @@
                         <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Fuerza la reconexión por red local a través del Router o nodos Mesh (y envía DHCPNAK)">
                             <input type="checkbox" id="ds-force-reconnect"> ⚡ Forzar por Router / Mesh (DHCPNAK) <span id="ds-connected-router-hint" style="color:var(--muted); font-size:0.73rem; margin-left:4px;"></span>
                         </label>
-                        <label id="ds-rf-reconnect-wrap" style="font-size:0.79rem; color:#38bdf8; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Emite una trama de expulsión por radiofrecuencia (802.11 RF) mediante la antena monitor de la Raspberry Pi">
+                        <label id="ds-rf-reconnect-wrap" style="font-size:0.79rem; color:#38bdf8; display:none; align-items:center; gap:6px; cursor:pointer;" title="Emite una trama de expulsión por radiofrecuencia (802.11 RF) mediante la antena monitor de la Raspberry Pi">
                             <input type="checkbox" id="ds-rf-reconnect"> 📡 Expulsión Forzosa por Radiofrecuencia (RF) <span id="ds-rf-status-hint" style="font-size:0.73rem; margin-left:4px;"></span>
                         </label>
                     </div>
@@ -2950,6 +2950,12 @@ function updateWifiTabVisibility(enabled) {
             const rfChk = document.getElementById('card-force-rf');
             if (rfChk) rfChk.checked = false;
         }
+    }
+    const dsRfWrap = document.getElementById('ds-rf-reconnect-wrap');
+    if (dsRfWrap && !enabled) {
+        dsRfWrap.style.display = 'none';
+        const dsRfChk = document.getElementById('ds-rf-reconnect');
+        if (dsRfChk) dsRfChk.checked = false;
     }
 }
 
@@ -8549,7 +8555,7 @@ async function openDeviceSheet(mac, ipHint = '') {
 
     if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Sin nombre)') ? dev.hostname : '';
     if (ipInp) ipInp.value = dev.ip || currentSheetIp || '';
-    if (forceChk) forceChk.checked = false;
+    if (forceChk) forceChk.checked = true;
 
     const rHint = document.getElementById('ds-connected-router-hint');
     if (rHint) {
@@ -8566,10 +8572,11 @@ async function openDeviceSheet(mac, ipHint = '') {
         const rfClient = scannedMap[mac.toLowerCase()] || (dev.rf_detected ? { channel: dev.rf_channel, bssid: dev.rf_bssid } : null);
 
         if (!rfEnabled) {
+            rfWrap.style.display = 'none';
             rfChk.disabled = true;
             rfChk.checked = false;
-            rfHint.innerHTML = '<span style="color:var(--muted);">(⚪ Módulo RF desactivado en Configuración)</span>';
         } else if (isCable) {
+            rfWrap.style.display = 'flex';
             rfChk.disabled = true;
             rfChk.checked = false;
             rfHint.innerHTML = '<span style="color:var(--muted);">(🚫 Conectado por Cable Ethernet)</span>';
