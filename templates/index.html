@@ -2047,25 +2047,62 @@
         <div id="diagnostics-container"></div>
     </div>
 
+    <!-- MODAL: SELECCIÓN DE ORIGEN DE FOTO (CÁMARA / GALERÍA) -->
+    <div id="photo-picker-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100020; justify-content:center; align-items:center; backdrop-filter:blur(3px); padding:16px;" onclick="if(event.target===this) closePhotoPickerModal()">
+        <div class="popup-modal" style="width:92%; max-width:400px; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8; text-align:center; box-shadow:0 12px 30px rgba(0,0,0,0.7);">
+            <div style="font-size:2rem; margin-bottom:6px;">📷</div>
+            <h3 style="margin:0 0 6px 0; font-size:1.15rem; color:#f8fafc; font-weight:700;">Foto del Dispositivo</h3>
+            <p style="font-size:0.83rem; color:#94a3b8; margin:0 0 18px 0;">¿De dónde deseas obtener la foto?</p>
+            
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <!-- Opción 1: Cámara -->
+                <button type="button" class="btn" style="background:#0284c7; color:#fff; padding:12px 16px; border-radius:10px; font-weight:600; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:10px; border:none; cursor:pointer;" onclick="triggerPhotoCamera()">
+                    <span style="font-size:1.3rem;">📸</span>
+                    <span>Hacer Foto (Usar Cámara)</span>
+                </button>
+                
+                <!-- Opción 2: Galería / Archivos -->
+                <button type="button" class="btn" style="background:#334155; color:#f1f5f9; padding:12px 16px; border-radius:10px; font-weight:600; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:10px; border:1px solid rgba(255,255,255,0.15); cursor:pointer;" onclick="triggerPhotoGallery()">
+                    <span style="font-size:1.3rem;">🖼️</span>
+                    <span>Galería / Google Fotos / Archivos</span>
+                </button>
+
+                <!-- Opción 3: Eliminar Foto actual si existe -->
+                <button type="button" id="photo-picker-btn-delete" class="btn" style="background:rgba(239,68,68,0.15); color:#f87171; padding:10px 14px; border-radius:10px; font-weight:500; font-size:0.86rem; display:none; align-items:center; justify-content:center; gap:8px; border:1px solid rgba(239,68,68,0.3); cursor:pointer;" onclick="closePhotoPickerModal(); removeDevicePhoto()">
+                    <span>🗑️</span>
+                    <span>Eliminar Foto Actual</span>
+                </button>
+            </div>
+
+            <button type="button" class="btn btn-outline" style="margin-top:16px; width:100%; padding:9px; font-size:0.85rem; color:#94a3b8; border-color:rgba(148,163,184,0.3);" onclick="closePhotoPickerModal()">
+                ✕ Cancelar
+            </button>
+        </div>
+    </div>
+
     <!-- MODAL: FICHA TÉCNICA COMPLETA DE DISPOSITIVO -->
     <div id="device-sheet-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99998; justify-content:center; align-items:center; backdrop-filter:blur(4px); padding:16px;" onclick="if(event.target===this) closeDeviceSheet()">
         <div class="popup-modal" style="width:96%; max-width:860px; max-height:90vh; overflow-y:auto; text-align:left; background:#1e293b; border-radius:14px; padding:22px; border:1px solid #38bdf8;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:14px; margin-bottom:14px; flex-wrap:wrap;">
                 <div style="display:flex; align-items:center; gap:14px;">
                     <!-- Foto / Avatar del dispositivo -->
-                    <div style="position:relative; width:68px; height:68px; border-radius:12px; border:2px solid rgba(56,189,248,0.45); background:#0f172a; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; box-shadow:0 4px 14px rgba(0,0,0,0.45);">
+                    <div id="ds-photo-container" onclick="openPhotoPickerModal()" style="position:relative; width:68px; height:68px; border-radius:12px; border:2px solid rgba(56,189,248,0.45); background:#0f172a; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; box-shadow:0 4px 14px rgba(0,0,0,0.45); cursor:pointer;" title="Toca para cambiar la foto (Cámara o Galería)">
                         <img id="ds-photo-img" src="" style="width:100%; height:100%; object-fit:cover; display:none;" alt="Foto del dispositivo" />
                         <div id="ds-photo-placeholder" style="font-size:1.9rem; color:#64748b; line-height:1; user-select:none;">📱</div>
+                        <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.65); color:#38bdf8; font-size:0.6rem; text-align:center; padding:1px 0; font-weight:600;">📷</div>
                     </div>
                     <div>
                         <h3 id="ds-title" style="margin:0; font-size:1.2rem; color:#f8fafc; display:flex; align-items:center; gap:8px;">🧾 Ficha de Dispositivo</h3>
                         <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
                         <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
-                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="document.getElementById('ds-photo-file').click()" title="Subir o cambiar foto del dispositivo">📷 Cambiar Foto</button>
+                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="openPhotoPickerModal()" title="Subir o cambiar foto del dispositivo (Cámara o Galería)">📷 Cambiar Foto</button>
                             <button class="btn btn-outline" id="ds-photo-btn-delete" style="padding:2px 7px; font-size:0.72rem; color:#f87171; border-color:rgba(248,113,113,0.35); display:none;" onclick="removeDevicePhoto()" title="Eliminar foto">🗑️ Quitar Foto</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar archivo comprimido (.zip) con ficha técnica y carpeta de imágenes">📥 Exportar Ficha (.zip)</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#34d399; border-color:rgba(52,211,153,0.4);" onclick="document.getElementById('ds-import-file').click()" title="Restaurar o importar ficha técnica con imágenes (.zip o .json)">📤 Importar Ficha</button>
                             <input type="file" id="ds-import-file" accept=".zip,.json" style="display:none;" onchange="importSingleDeviceSheet(event)" />
+                            <!-- Inputs de archivo: Cámara directa para móviles/Android y Galería / Selector de archivos -->
+                            <input type="file" id="ds-photo-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleDevicePhotoUpload(event)" />
+                            <input type="file" id="ds-photo-gallery" accept="image/*" style="display:none;" onchange="handleDevicePhotoUpload(event)" />
                             <input type="file" id="ds-photo-file" accept="image/*" style="display:none;" onchange="handleDevicePhotoUpload(event)" />
                         </div>
                     </div>
@@ -7949,6 +7986,41 @@ let portScanTimer = null;
 // =====================================================================
 //  Gestión de Fotos de Dispositivos y Navegación a Topología
 // =====================================================================
+function openPhotoPickerModal() {
+    const modal = document.getElementById('photo-picker-overlay');
+    if (!modal) return;
+    const btnDel = document.getElementById('photo-picker-btn-delete');
+    const img = document.getElementById('ds-photo-img');
+    const hasPhoto = img && img.src && img.src.length > 0 && img.style.display !== 'none';
+    if (btnDel) {
+        btnDel.style.display = hasPhoto ? 'flex' : 'none';
+    }
+    modal.style.display = 'flex';
+}
+
+function closePhotoPickerModal() {
+    const modal = document.getElementById('photo-picker-overlay');
+    if (modal) modal.style.display = 'none';
+}
+
+function triggerPhotoCamera() {
+    closePhotoPickerModal();
+    const cam = document.getElementById('ds-photo-camera');
+    if (cam) {
+        cam.value = '';
+        cam.click();
+    }
+}
+
+function triggerPhotoGallery() {
+    closePhotoPickerModal();
+    const gal = document.getElementById('ds-photo-gallery');
+    if (gal) {
+        gal.value = '';
+        gal.click();
+    }
+}
+
 function handleDevicePhotoUpload(ev) {
     const file = ev.target.files && ev.target.files[0];
     if (!file) return;
