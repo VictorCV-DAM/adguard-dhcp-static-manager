@@ -1705,8 +1705,6 @@ def build_state(force_refresh=False):
 
         live_ips = list(arp.get(mac, []))
         halo_info = halo_client_map.get(mac)
-        if not live_ips and halo_info and halo_info.get("online") and ip:
-            live_ips.append(ip)
 
         mismatch_ip = None
         for lip in live_ips:
