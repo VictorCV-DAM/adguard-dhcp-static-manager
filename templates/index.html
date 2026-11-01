@@ -149,6 +149,14 @@
             white-space: normal;
             position: relative;
         }
+        .so-table {
+            table-layout: auto !important;
+            width: 100% !important;
+        }
+        .so-table th, .so-table td {
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
         .row-web-menu {
             position: absolute;
             right: 0;
@@ -9765,14 +9773,14 @@ function renderStaticOrderList() {
     }
     
     let html = `
-        <table style="width:100%; min-width:680px; border-collapse:collapse; font-size:0.82rem; text-align:left;">
+        <table class="so-table" style="width:100%; min-width:720px; border-collapse:collapse; font-size:0.82rem; text-align:left; table-layout:auto !important;">
             <thead>
                 <tr style="border-bottom:1px solid var(--border); color:#38bdf8; background:#111827; position:sticky; top:0; z-index:2;">
-                    <th style="padding:10px 10px; width:80px; min-width:80px; white-space:nowrap; overflow:visible;">Nº Orden</th>
+                    <th style="padding:10px 10px; width:95px; min-width:95px; white-space:nowrap; overflow:visible;">Nº Orden</th>
                     <th style="padding:10px 10px; min-width:180px;">Dispositivo Fijo</th>
-                    <th style="padding:10px 10px; width:115px; min-width:115px;">Dirección IP</th>
-                    <th style="padding:10px 10px; width:135px; min-width:135px;">MAC</th>
-                    <th style="padding:10px 10px; text-align:right; width:155px; min-width:155px; white-space:nowrap; overflow:visible;">Acciones</th>
+                    <th style="padding:10px 10px; width:120px; min-width:120px; white-space:nowrap;">Dirección IP</th>
+                    <th style="padding:10px 10px; width:140px; min-width:140px; white-space:nowrap;">MAC</th>
+                    <th style="padding:10px 10px; text-align:right; width:180px; min-width:180px; white-space:nowrap; overflow:visible;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -9819,13 +9827,15 @@ function renderStaticOrderList() {
                         ${item.mac}
                     </code>
                 </td>
-                <td style="padding:8px 10px; text-align:right; white-space:nowrap; width:155px; min-width:155px; overflow:visible;">
-                    <button class="btn btn-outline" style="padding:3px 7px; font-size:0.73rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); margin-right:4px;" onclick="quickPing(this, '${item.ip}')" title="Hacer Ping a ${item.ip}">
-                        ⚡ Ping
-                    </button>
-                    <button class="btn btn-outline" style="padding:3px 8px; font-size:0.73rem; white-space:nowrap;" onclick="closeStaticOrderModal(); openDeviceSheet('${item.mac}', '${item.ip}')" title="Abrir ficha técnica">
-                        👁️ Ficha
-                    </button>
+                <td style="padding:8px 10px; text-align:right; white-space:nowrap; width:180px; min-width:180px; overflow:visible;">
+                    <div style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; white-space:nowrap;">
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:0.73rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); flex-shrink:0; white-space:nowrap;" onclick="quickPing(this, '${item.ip}')" title="Hacer Ping a ${item.ip}">
+                            ⚡ Ping
+                        </button>
+                        <button class="btn btn-outline" style="padding:3px 9px; font-size:0.73rem; flex-shrink:0; white-space:nowrap;" onclick="closeStaticOrderModal(); openDeviceSheet('${item.mac}', '${item.ip}')" title="Abrir ficha técnica">
+                            👁️ Ficha
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -9850,7 +9860,7 @@ function renderStaticOrderList() {
                     <span>⚙️ Estáticas Manuales detectadas por ARP (${filteredManuals.length})</span>
                     <span style="font-size:0.72rem; color:var(--muted); font-weight:400;">Configuradas en el propio aparato o infraestructura (sin reserva DHCP en AdGuard)</span>
                 </div>
-                <table style="width:100%; border-collapse:collapse; font-size:0.80rem;">
+                <table class="so-table" style="width:100%; border-collapse:collapse; font-size:0.80rem; table-layout:auto !important;">
                     <tbody>
         `;
         filteredManuals.forEach(mItem => {
@@ -9868,13 +9878,15 @@ function renderStaticOrderList() {
                     <td style="padding:6px 8px; font-family:monospace; color:var(--muted); font-size:0.74rem;">
                         ${mItem.mac}
                     </td>
-                    <td style="padding:6px 10px; text-align:right; white-space:nowrap; width:165px; min-width:165px; overflow:visible;">
-                        <button class="btn btn-outline" style="padding:3px 7px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); margin-right:4px;" onclick="quickPing(this, '${mItem.ip}')" title="Hacer Ping a ${mItem.ip}">
-                            ⚡ Ping
-                        </button>
-                        <button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; white-space:nowrap;" onclick="closeStaticOrderModal(); openDeviceSheet('${mItem.mac}', '${mItem.ip}')" title="Crear reserva fija oficial en AdGuard para que tenga orden #">
-                            📌 Fijar
-                        </button>
+                    <td style="padding:6px 10px; text-align:right; white-space:nowrap; width:180px; min-width:180px; overflow:visible;">
+                        <div style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; white-space:nowrap;">
+                            <button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); flex-shrink:0; white-space:nowrap;" onclick="quickPing(this, '${mItem.ip}')" title="Hacer Ping a ${mItem.ip}">
+                                ⚡ Ping
+                            </button>
+                            <button class="btn btn-outline" style="padding:3px 9px; font-size:0.72rem; flex-shrink:0; white-space:nowrap;" onclick="closeStaticOrderModal(); openDeviceSheet('${mItem.mac}', '${mItem.ip}')" title="Crear reserva fija oficial en AdGuard para que tenga orden #">
+                                📌 Fijar
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
