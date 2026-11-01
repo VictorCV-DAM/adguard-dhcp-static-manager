@@ -3332,6 +3332,8 @@ function copyHunterSummary(mac) {
         showMessage('Resumen forense copiado al portapapeles.');
     });
 }
+
+async function loadConfig() {
     const res = await fetch('/api/config');
     const data = await res.json();
     const c = data.config || {};
