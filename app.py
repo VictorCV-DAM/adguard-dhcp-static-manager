@@ -33,33 +33,30 @@ def add_no_cache_headers(response):
     response.headers['Pragma'] = 'no-cache'
     return response
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.environ.get('DHCP_MANAGER_CONFIG', os.path.join(BASE_DIR, 'config.json'))
-HALO_CACHE_FILE = '/tmp/halo_topology_cache.json'
+LEASES_PATH = '/home/yo/servicios/adguard-work/data/leases.json'
+YAML_PATH = '/home/yo/servicios/adguard-conf/AdGuardHome.yaml'
+CONFIG_PATH = '/home/yo/dhcp-panel/config.json'
 
 DEFAULT_CONFIG = {
-    "leases_path": "/opt/adguardhome/work/data/leases.json",
-    "yaml_path": "/opt/adguardhome/conf/AdGuardHome.yaml",
-    "docker_container": "adguardhome",
-    "adguard_url": "http://127.0.0.1:8080",
-    "adguard_user": "admin",
+    "adguard_url": "http://192.168.1.249:8080",
+    "adguard_user": "victorlike",
     "adguard_pass": "",
     "custom_service_names": {},
     "routers": [
         {
-            "id": "primary-ap",
-            "name": "Primary TP-Link AP",
+            "id": "tplink-wr841n",
+            "name": "TP-Link WR841N",
             "type": "tplink_wr841n",
-            "ip": "192.168.0.2",
+            "ip": "192.168.1.10",
             "user": "admin",
             "password": "",
             "enabled": True
         },
         {
-            "id": "mesh-ap",
-            "name": "Mesh Wi-Fi System",
+            "id": "mercusys-halo",
+            "name": "Mercusys Halo H80X",
             "type": "mercusys_halo",
-            "ip": "192.168.0.3, 192.168.0.4, 192.168.0.5",
+            "ip": "192.168.1.11, 192.168.1.12, 192.168.1.13",
             "user": "admin",
             "password": "",
             "enabled": True
@@ -67,74 +64,77 @@ DEFAULT_CONFIG = {
     ]
 }
 
+# Diccionario de prefijos MAC (OUI) conocidos -> (Fabricante, Clase sugerida, Icono)
 OUI_DATABASE = {
-    "b8:27:eb": ("Raspberry Pi Foundation", "Server / SBC", "🍓"),
-    "dc:a6:32": ("Raspberry Pi Foundation", "Server / SBC", "🍓"),
-    "e4:5f:01": ("Raspberry Pi Foundation", "Server / SBC", "🍓"),
-    "28:cd:c1": ("Raspberry Pi Foundation", "Server / SBC", "🍓"),
-    "00:50:56": ("VMware Virtual NIC", "Virtual Machine / Server", "🖥️"),
-    "00:0c:29": ("VMware Virtual NIC", "Virtual Machine / Server", "🖥️"),
-    "ac:84:c6": ("TP-Link Technologies", "Router / Access Point", "🖧"),
-    "e0:d3:62": ("TP-Link Technologies", "Router / Access Point", "🖧"),
-    "30:16:9d": ("Mercusys / TP-Link", "Mesh Wi-Fi Node", "🖧"),
-    "00:14:5c": ("Eminent / Intronics (EM4590)", "Repeater / Access Point", "📶"),
-    "dc:4f:22": ("Espressif Systems (ESP8266)", "Microcontroller / IoT", "🎛️"),
-    "60:01:94": ("Espressif Systems (ESP8266)", "Microcontroller / IoT", "🎛️"),
-    "7c:87:ce": ("Espressif Systems (ESP32/8266)", "Microcontroller / IoT", "🎛️"),
-    "e0:72:a1": ("Espressif Systems (ESP32)", "ESP Smart Lighting / Sensor", "🎛️"),
-    "7c:b9:4c": ("Bouffalo Lab (BL602 Sonoff/eWeLink)", "Smart Plug / Relay IoT", "🔌"),
-    "a8:80:55": ("Tuya / eWeLink Smart IoT", "Smart Plug / IoT Device", "🔌"),
-    "80:64:7c": ("Sonoff / Tuya Smart", "Smart Lighting / Home IoT", "💡"),
-    "08:65:f0": ("Leedarson / Tuya Smart", "Smart Bulb", "💡"),
-    "3c:0b:59": ("Tuya / Smart Lighting", "Smart LED Strip / Bar", "💡"),
-    "48:e1:e9": ("Meross Technology", "Smart Switch / Plug", "🔌"),
-    "34:29:8f": ("Meross Technology", "Smart Switch / Plug", "🔌"),
-    "c4:82:e1": ("IoT Smart Device", "Smart Home Sensor / Relay", "🔌"),
-    "78:0f:77": ("BroadLink", "Universal IR / RF Hub", "📡"),
-    "20:df:b9": ("Google Inc.", "Smart Speaker (Google Home)", "🔊"),
-    "d4:f5:47": ("Google Inc.", "Smart Speaker (Google Nest)", "🔊"),
-    "d8:8c:79": ("Google Inc.", "Smart Speaker (Nest Audio)", "🔊"),
-    "dc:e5:5b": ("Google Inc.", "Smart Display (Nest Hub)", "🖥️"),
-    "00:f6:20": ("Google Inc.", "Streaming Player (Chromecast)", "📺"),
-    "64:9a:63": ("Ring LLC (Amazon)", "Smart Doorbell / Intercom", "🔔"),
-    "78:8b:2a": ("Xiaomi / Chuangmi", "IP Security Camera", "📷"),
-    "a4:f0:0f": ("IP Camera", "IP Security Camera", "📷"),
-    "c4:dd:57": ("EZVIZ / Hikvision Smart", "Smart IP Camera", "📷"),
-    "b4:60:ed": ("Xiaomi / Careli", "Smart Kitchen Appliance", "🍳"),
-    "28:f5:2b": ("Smart Home Appliance", "Robot Vacuum", "🧹"),
-    "4c:6b:b8": ("Smart TV / Media", "Smart Television", "📺"),
-    "00:e0:4c": ("Realtek Semiconductor", "Ethernet Adapter / MiniPC", "🖥️"),
-    "1c:bf:ce": ("2.5GbE Network Adapter", "2.5G NIC / Workstation", "🖥️"),
-    "84:47:09": ("Intel / MiniPC Ethernet", "MiniPC / Home Server", "🖥️"),
-    "84:9e:56": ("MiniPC Wireless", "MiniPC / Home Server", "🖥️"),
-    "e8:80:88": ("Realtek / PC Ethernet", "Desktop / Gaming Laptop", "💻"),
-    "d4:ab:61": ("Intel Wi-Fi", "Desktop / Gaming Laptop", "💻"),
-    "48:65:ee": ("Intel Wi-Fi", "Desktop / Gaming Laptop", "💻"),
-    "5c:ba:ef": ("Intel Wi-Fi", "Laptop / Notebook", "💻"),
-    "ec:b5:0a": ("Mediatek Mobile", "Smartphone / Mobile Device", "📱"),
-    "e8:3d:c1": ("Smart Button / BLE Gateway", "IoT Smart Button", "🔘"),
+    "b8:27:eb": ("Raspberry Pi Foundation", "Servidor / SBC", "🍓"),
+    "dc:a6:32": ("Raspberry Pi Foundation", "Servidor / SBC", "🍓"),
+    "e4:5f:01": ("Raspberry Pi Foundation", "Servidor / SBC", "🍓"),
+    "28:cd:c1": ("Raspberry Pi Foundation", "Servidor / SBC", "🍓"),
+    "00:50:56": ("VMware Virtual NIC", "Máquina Virtual / Servidor", "🖥️"),
+    "00:0c:29": ("VMware Virtual NIC", "Máquina Virtual / Servidor", "🖥️"),
+    "ac:84:c6": ("TP-Link Technologies", "Router / Punto de Acceso", "🖧"),
+    "e0:d3:62": ("TP-Link Technologies", "Router / Punto de Acceso", "🖧"),
+    "30:16:9d": ("Mercusys / TP-Link", "Nodo Mesh Wi-Fi", "🖧"),
+    "00:14:5c": ("Eminent / Intronics (EM4590)", "Repetidor / Punto de Acceso", "📶"),
+    "dc:4f:22": ("Espressif Systems (ESP8266)", "Microcontrolador / IoT", "🎛️"),
+    "60:01:94": ("Espressif Systems (ESP8266)", "Microcontrolador / IoT", "🎛️"),
+    "7c:87:ce": ("Espressif Systems (ESP32/8266)", "Microcontrolador / IoT", "🎛️"),
+    "e0:72:a1": ("Espressif Systems (ESP32)", "Iluminación / Sensor ESP", "🎛️"),
+    "7c:b9:4c": ("Bouffalo Lab (BL602 Sonoff/eWeLink)", "Enchufe / Relé Smart IoT", "🔌"),
+    "a8:80:55": ("Tuya / eWeLink Smart IoT", "Enchufe / Dispositivo IoT", "🔌"),
+    "80:64:7c": ("Sonoff / Tuya Smart", "Iluminación / Domótica IoT", "💡"),
+    "08:65:f0": ("Leedarson / Tuya Smart", "Bombilla Inteligente", "💡"),
+    "3c:0b:59": ("Tuya / Smart Lighting", "Barra / Tira LED Smart", "💡"),
+    "48:e1:e9": ("Meross Technology", "Interruptor / Enchufe Smart", "🔌"),
+    "34:29:8f": ("Meross Technology", "Interruptor / Enchufe Smart", "🔌"),
+    "c4:82:e1": ("IoT Smart Device", "Domótica / Sensor IoT", "🔌"),
+    "78:0f:77": ("BroadLink (Hangzhou Gubei)", "Mando Universal IR / RF", "📡"),
+    "20:df:b9": ("Google Inc.", "Altavoz Inteligente (Google Home)", "🔊"),
+    "d4:f5:47": ("Google Inc.", "Altavoz Inteligente (Google Nest)", "🔊"),
+    "d8:8c:79": ("Google Inc.", "Altavoz Inteligente (Nest Audio)", "🔊"),
+    "dc:e5:5b": ("Google Inc.", "Pantalla Inteligente (Nest Hub)", "🖥️"),
+    "00:f6:20": ("Google Inc.", "Reproductor Streaming (Chromecast)", "📺"),
+    "64:9a:63": ("Ring LLC (Amazon)", "Timbre / Videoportero Smart", "🔔"),
+    "78:8b:2a": ("Xiaomi / Chuangmi", "Cámara Vigilancia IP", "📷"),
+    "a4:f0:0f": ("IP Camera / Oukitel", "Cámara Vigilancia IP", "📷"),
+    "c4:dd:57": ("EZVIZ / Hikvision Smart", "Cámara / Dispositivo Smart", "📷"),
+    "b4:60:ed": ("Xiaomi / Careli", "Electrodoméstico Smart", "🍳"),
+    "28:f5:2b": ("Robot Vacuum / Smart Home", "Robot Aspirador", "🧹"),
+    "4c:6b:b8": ("Smart TV / Media", "Televisor Inteligente", "📺"),
+    "00:e0:4c": ("Realtek Semiconductor", "Adaptador Ethernet / MiniPC", "🖥️"),
+    "1c:bf:ce": ("Shenzhen Century Xinyang (2.5GbE)", "Adaptador Red 2.5G / PC", "🖥️"),
+    "84:47:09": ("GMKtec / Intel Ethernet", "MiniPC / Servidor", "🖥️"),
+    "84:9e:56": ("GMKtec Wireless", "MiniPC / Servidor", "🖥️"),
+    "e8:80:88": ("Lenovo / Realtek Ethernet", "PC / Portátil Gaming", "💻"),
+    "d4:ab:61": ("Intel / Lenovo Wi-Fi", "PC / Portátil Gaming", "💻"),
+    "48:65:ee": ("Intel / Lenovo Legion", "PC / Portátil Gaming", "💻"),
+    "5c:ba:ef": ("Intel / Windows Laptop", "Ordenador Portátil", "💻"),
+    "ec:b5:0a": ("Oukitel / Mediatek", "Smartphone / Dispositivo Móvil", "📱"),
+    "e8:3d:c1": ("Smart Button / BLE Gateway", "Pulsador / Sensor IoT", "🔘"),
     "10:00:20": ("Apple Inc.", "iPhone / iPad", "📱"),
-    "80:8a:bd": ("Samsung Electronics", "Samsung Smartphone", "📱"),
-    "bc:35:1e": ("Tuya Smart Inc.", "Smart Plug / Switch", "🔌"),
-    "fc:3c:d7": ("Tuya Smart Inc.", "Smart Plug / Switch", "🔌"),
-    "d4:ad:fc": ("Shenzhen Intellirocks (Govee)", "Smart Lighting", "💡"),
-    "d8:c8:0c": ("Tuya Smart Inc.", "Smart Light Bulb", "💡"),
-    "c0:f8:53": ("Tuya Smart Inc.", "Smart Home IoT", "🔌"),
-    "f8:17:2d": ("Tuya / Espressif", "Smart Home IoT", "🔌"),
-    "3c:8d:20": ("Google Inc.", "Google Nest Device", "🔊")
+    "80:8a:bd": ("Samsung Electronics", "Smartphone Samsung", "📱"),
+    "bc:35:1e": ("Tuya Smart Inc.", "Enchufe / Interruptor Smart", "🔌"),
+    "fc:3c:d7": ("Tuya Smart Inc.", "Enchufe / Interruptor Smart", "🔌"),
+    "d4:ad:fc": ("Shenzhen Intellirocks (Govee)", "Iluminación Inteligente", "💡"),
+    "d8:c8:0c": ("Tuya Smart Inc.", "Bombilla Inteligente", "💡"),
+    "c0:f8:53": ("Tuya Smart Inc.", "Dispositivo Domótico IoT", "🔌"),
+    "f8:17:2d": ("Tuya / Espressif", "Dispositivo Domótico IoT", "🔌"),
+    "3c:8d:20": ("Google Inc.", "Altavoz / Dispositivo Google", "🔊")
 }
 
-HALO_NICKNAME_MAP = {
-    "study": "Study",
-    "hallway": "Hallway",
-    "living_room": "Living Room",
-    "livingroom": "Living Room",
-    "bedroom": "Bedroom",
-    "master_bedroom": "Master Bedroom",
-    "kitchen": "Kitchen",
-    "office": "Office",
-    "garage": "Garage",
-    "garden": "Garden"
+HALO_NICKNAME_TRANSLATIONS = {
+    "study": "Estudio",
+    "hallway": "Pasillo",
+    "living_room": "Salón",
+    "livingroom": "Salón",
+    "bedroom": "Dormitorio",
+    "master_bedroom": "Hab. Principal",
+    "kitchen": "Cocina",
+    "office": "Despacho",
+    "garage": "Garaje",
+    "garden": "Jardín",
+    "upstairs": "Planta Alta",
+    "downstairs": "Planta Baja"
 }
 
 FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -155,7 +155,7 @@ FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 
 
 # =====================================================================
-# RSA + AES-CBC Client for Mercusys Halo / TP-Link Mesh LuCI API
+# Cliente criptográfico RSA + AES-CBC para Mercusys Halo (LuCI API)
 # =====================================================================
 def _rsa_encrypt_pkcs1(text, n_hex, e_hex):
     n_int = int(n_hex, 16)
@@ -300,27 +300,19 @@ class MercusysHaloSession:
         except Exception as e:
             return False, f"Excepción en Halo: {e}"
 
-    def fetch_mesh_topology(self, configured_ips, ip_to_mac_hint=None):
+    def fetch_mesh_topology(self, configured_ips, ip_to_mac_hint=None, router_base_name="Mercusys Halo"):
         if not self.stok:
             if not self.login():
                 return {}, {}
 
         ip_to_mac_hint = ip_to_mac_hint or {}
-        nodes = []
-        for idx, cip in enumerate(configured_ips):
-            cip = cip.strip()
-            if not cip:
-                continue
-            mac_colon = ip_to_mac_hint.get(cip, "")
-            if mac_colon:
-                nodes.append({
-                    "device_ip": cip,
-                    "mac": mac_colon.upper().replace(":", "-"),
-                    "role": "master" if idx == 0 else "slave",
-                    "nickname": f"Node {idx + 1}"
-                })
+        default_nicknames = {
+            "192.168.1.11": "Mi habitación",
+            "192.168.1.12": "Estudio",
+            "192.168.1.13": "Pasillo"
+        }
 
-        # 1. Always query device_list first to initialize internal mesh topology in Halo firmware
+        # 1. Consultar siempre device_list para inicializar la topología interna en el firmware Halo H80X
         nodes = []
         try:
             devs = self._post_encrypted("/admin/device?form=device_list", {"operation": "read"}, timeout=10)
@@ -330,11 +322,11 @@ class MercusysHaloSession:
         except Exception:
             pass
 
-        # 2. Fallback to configured IPs if device_list failed or incomplete
+        # 2. Si device_list no respondió, fallback a las IPs configuradas con ip_to_mac_hint o MACs conocidas
         known_halo_fallback = [
-            {"device_ip": "192.168.1.11", "mac": "30-16-9D-2B-61-54", "role": "master", "nickname": "Halo 1"},
-            {"device_ip": "192.168.1.12", "mac": "30-16-9D-2B-62-60", "role": "slave", "nickname": "Halo 2"},
-            {"device_ip": "192.168.1.13", "mac": "30-16-9D-2B-5F-F0", "role": "slave", "nickname": "Halo 3"}
+            {"device_ip": "192.168.1.11", "mac": "30-16-9D-2B-61-54", "role": "master", "nickname": "Mi habitación"},
+            {"device_ip": "192.168.1.12", "mac": "30-16-9D-2B-62-60", "role": "slave", "nickname": "Estudio"},
+            {"device_ip": "192.168.1.13", "mac": "30-16-9D-2B-5F-F0", "role": "slave", "nickname": "Pasillo"}
         ]
         if not nodes or len(nodes) < len(known_halo_fallback):
             for idx, cip in enumerate(configured_ips):
@@ -353,12 +345,13 @@ class MercusysHaloSession:
                         "device_ip": cip,
                         "mac": mac_colon.upper().replace(":", "-"),
                         "role": "master" if idx == 0 else "slave",
-                        "nickname": f"Node {idx + 1}"
+                        "nickname": default_nicknames.get(cip, f"Nodo {idx + 1}")
                     })
 
         if not nodes:
             return {}, {}
 
+        # Ordenar los nodos según el orden de IPs configuradas (ej. .11 = Halo 1, .12 = Halo 2, .13 = Halo 3)
         ip_index_map = {ip.strip(): idx + 1 for idx, ip in enumerate(configured_ips) if ip.strip()}
         nodes_sorted = sorted(
             nodes,
@@ -371,10 +364,10 @@ class MercusysHaloSession:
         master_label = "Halo 1"
         for idx, d in enumerate(nodes_sorted):
             dip = d.get("device_ip", "")
-            raw_nick = (d.get("nickname") or "").strip()
-            nick = HALO_NICKNAME_MAP.get(raw_nick.lower(), raw_nick)
+            raw_nick = (d.get("nickname") or default_nicknames.get(dip, "")).strip()
+            nick = HALO_NICKNAME_TRANSLATIONS.get(raw_nick.lower(), raw_nick)
             num = ip_index_map.get(dip, idx + 1)
-            short_name = f"Halo {num}" + (f" ({nick})" if nick and nick != f"Node {num}" else "")
+            short_name = f"Halo {num}" + (f" ({nick})" if nick else "")
             if d.get("role") == "master":
                 master_label = short_name
 
@@ -382,17 +375,17 @@ class MercusysHaloSession:
             dmac = d.get("mac", "")
             dip = d.get("device_ip", "")
             role = d.get("role", "slave")
-            raw_nick = (d.get("nickname") or "").strip()
-            nick = HALO_NICKNAME_MAP.get(raw_nick.lower(), raw_nick)
+            raw_nick = (d.get("nickname") or default_nicknames.get(dip, "")).strip()
+            nick = HALO_NICKNAME_TRANSLATIONS.get(raw_nick.lower(), raw_nick)
             num = ip_index_map.get(dip, idx + 1)
-            node_label = f"Halo {num}" + (f" ({nick})" if nick and nick != f"Node {num}" else "")
+            node_label = f"Halo {num}" + (f" ({nick})" if nick else "")
 
             if role == "master":
                 node_info_by_ip[dip] = {
-                    "label": f"{node_label} · Master Node",
+                    "label": f"{node_label} · Nodo Principal",
                     "node_short": node_label,
                     "role": "master",
-                    "tooltip": f"Mesh Master Node ({dip}) · MAC {dmac}"
+                    "tooltip": f"Nodo Maestro Mesh ({dip}) · MAC {dmac}"
                 }
             else:
                 node_info_by_ip[dip] = {
@@ -400,10 +393,12 @@ class MercusysHaloSession:
                     "node_short": node_label,
                     "role": "slave",
                     "parent_node": master_label,
-                    "tooltip": f"Mesh Satellite Node ({dip}) connected to {master_label} · MAC {dmac}"
+                    "tooltip": f"Nodo Satélite Mesh ({dip}) conectado a {master_label} · MAC {dmac}"
                 }
 
+            # 2. Consultar clientes conectados específicamente a este nodo Halo (con timeout holgado para el nodo maestro)
             try:
+                time.sleep(0.35)
                 c_resp = self._post_encrypted(
                     "/admin/client?form=client_list",
                     {"operation": "read", "params": {"device_mac": dmac}},
@@ -423,17 +418,25 @@ class MercusysHaloSession:
                         continue
                     conn_type = (c.get("connection_type") or "").lower()
                     if conn_type in ("band5", "band5_2"):
-                        band_str, band_full = "5G", "Wi-Fi 5 GHz"
-                        medium, medium_label = "wifi", "Wi-Fi 5 GHz"
+                        band_str = "5G"
+                        band_full = "Wi-Fi 5 GHz"
+                        medium = "wifi"
+                        medium_label = "Wi-Fi 5 GHz"
                     elif conn_type == "band2_4":
-                        band_str, band_full = "2.4G", "Wi-Fi 2.4 GHz"
-                        medium, medium_label = "wifi", "Wi-Fi 2.4 GHz"
+                        band_str = "2.4G"
+                        band_full = "Wi-Fi 2.4 GHz"
+                        medium = "wifi"
+                        medium_label = "Wi-Fi 2.4 GHz"
                     elif conn_type == "wired":
-                        band_str, band_full = "LAN", "Wired Ethernet"
-                        medium, medium_label = "cable", "Wired Ethernet"
+                        band_str = "LAN"
+                        band_full = "Cable Ethernet"
+                        medium = "cable"
+                        medium_label = "Cable Ethernet"
                     else:
-                        band_str, band_full = conn_type, conn_type
-                        medium, medium_label = "wifi", "Wi-Fi"
+                        band_str = conn_type
+                        band_full = conn_type
+                        medium = "wifi"
+                        medium_label = "Wi-Fi"
 
                     try:
                         cname = base64.b64decode(c.get("name", "")).decode("utf-8", errors="ignore").strip()
@@ -443,9 +446,9 @@ class MercusysHaloSession:
                         cname = ""
 
                     display_label = node_label
-                    tooltip = f"Connected to {node_label} ({dip}) via {band_full}"
+                    tooltip = f"Conectado a {node_label} ({dip}) vía {band_full}"
                     if cname:
-                        tooltip += f" | Mesh Name: {cname}"
+                        tooltip += f" | Nombre en Halo: {cname}"
 
                     client_map[cmac] = {
                         "node_label": display_label,
@@ -466,6 +469,8 @@ class MercusysHaloSession:
         return client_map, node_info_by_ip
 
 
+# Caché en memoria y disco de sesiones Mercusys Halo para respuesta instantánea en la web
+HALO_CACHE_FILE = '/tmp/halo_topology_cache.json'
 _HALO_SESSIONS = {}
 _HALO_CACHE = {
     "timestamp": 0.0,
@@ -505,7 +510,7 @@ def _refresh_halo_cache_sync(router, ip_to_mac_hint=None):
             if not session:
                 session = MercusysHaloSession(master_ip, pwd)
                 _HALO_SESSIONS[key] = session
-            cmap, ninfo = session.fetch_mesh_topology(ips, ip_to_mac_hint)
+            cmap, ninfo = session.fetch_mesh_topology(ips, ip_to_mac_hint, router.get("name") or "Mercusys Halo")
             if cmap or ninfo:
                 now_ts = time.time()
                 if cmap:
@@ -528,6 +533,7 @@ def _refresh_halo_cache_sync(router, ip_to_mac_hint=None):
 
 
 def get_mercusys_halo_data(router, ip_to_mac_hint=None, wait_if_empty=False):
+    """Obtiene el mapa de clientes por nodo Halo usando caché de 25s y refresco asíncrono."""
     _load_halo_disk_cache()
     now = time.time()
     age = now - _HALO_CACHE["timestamp"]
@@ -544,6 +550,7 @@ def get_mercusys_halo_data(router, ip_to_mac_hint=None, wait_if_empty=False):
 
 
 def is_locally_administered_mac(mac):
+    """Detecta si el bit U/L del primer octeto está activo (MAC aleatoria de iOS/Android)."""
     try:
         first_byte = int(mac.split(':')[0], 16)
         return bool(first_byte & 0b00000010)
@@ -552,6 +559,7 @@ def is_locally_administered_mac(mac):
 
 
 def predict_device_info(hostname, mac, halo_info=None):
+    """Predice de forma heurística la clase de dispositivo y fabricante combinando Hostname + Halo + OUI + tipo de MAC."""
     halo_name = (halo_info or {}).get("halo_name", "")
     halo_type = (halo_info or {}).get("client_type", "")
     h = f"{hostname or ''} {halo_name}".lower()
@@ -561,86 +569,90 @@ def predict_device_info(hostname, mac, halo_info=None):
     vendor_info = OUI_DATABASE.get(oui)
     vendor_name = vendor_info[0] if vendor_info else None
     if halo_name and halo_name.lower() not in (hostname or '').lower():
-        vendor_name = f"{vendor_name} · {halo_name}" if vendor_name else f"Mesh: {halo_name}"
+        vendor_name = f"{vendor_name} · {halo_name}" if vendor_name else f"Halo: {halo_name}"
 
+    # 1. Reglas por patrones claros en el nombre de host / nombre en Halo
     if any(k in h for k in ['mercusys', 'halo', 'tplink', 'mikrotik', 'router', 'tp-link', 'ap-']):
-        return "Router / Access Point", vendor_name or "Network Infrastructure", "🖧", "infra"
+        return "Router / Punto de Acceso", vendor_name or "Equipo de Red", "🖧", "infra"
     if any(k in h for k in ['enchufe', 'switch', 'plug', 'meross']):
-        return "Smart Plug / Switch", vendor_name or "Wi-Fi Smart Relay", "🔌", "iot"
+        return "Enchufe / Interruptor Smart", vendor_name or "Domótica Wi-Fi", "🔌", "iot"
     if any(k in h for k in ['bulb', 'tira-led', 'barra-de-luz', 'luces', 'ambilight', 'ambiligth', 'led']):
-        return "Smart Lighting", vendor_name or "Wi-Fi Smart LED", "💡", "iot"
+        return "Iluminación Inteligente", vendor_name or "Smart LED Wi-Fi", "💡", "iot"
     if any(k in h for k in ['pulsador', 'button', 'sensor']):
-        return "Smart Button / Sensor", vendor_name or "IoT Sensor", "🔘", "iot"
+        return "Sensor / Pulsador Smart", vendor_name or "Sensor IoT", "🔘", "iot"
     if any(k in h for k in ['camera', 'cam', 'ipcam', 'ipc0', 'ipc1', 'ring', 't30-', 'chuangmi', 'ezviz']) or re.search(r'(^|[\-_ ])ipc', h):
-        return "IP Camera / Doorbell", vendor_name or "IP Security", "📷", "security"
+        return "Cámara / Videoportero IP", vendor_name or "Seguridad IP", "📷", "security"
     if any(k in h for k in ['pi-server', 'raspberry']):
-        return "Server / Raspberry Pi", vendor_name or "Raspberry Pi", "🍓", "server"
+        return "Servidor / Raspberry Pi", vendor_name or "Raspberry Pi", "🍓", "server"
     if any(k in h for k in ['ha-vm', 'homeassistant', 'vm']):
-        return "Server / Virtual Machine", vendor_name or "Hypervisor VM", "🖥️", "server"
+        return "Servidor / Máquina Virtual", vendor_name or "Hypervisor VM", "🖥️", "server"
     if any(k in h for k in ['minipc', 'server', 'gmktec']):
-        return "MiniPC / Local Server", vendor_name or "Home Server", "🖥️", "server"
+        return "MiniPC / Servidor Local", vendor_name or "PC Server", "🖥️", "server"
     if any(k in h for k in ['legion', 'laptop', 'desktop', 'adapt-2.5g']) or re.search(r'(^|[\-_ ])pc([\-_ ]|$)', h):
-        return "PC / Laptop", vendor_name or "Personal Computer", "💻", "pc"
+        return "PC / Portátil", vendor_name or "Ordenador Personal", "💻", "pc"
     if any(k in h for k in ['brli', 'broadlink', 'ir-rf', 'rmpro']):
-        return "Universal IR/RF Remote", vendor_name or "BroadLink", "📡", "iot"
+        return "Controlador Universal IR/RF", vendor_name or "BroadLink", "📡", "iot"
     if any(k in h for k in ['esp-', 'esp_', 'esp32', 'esp8266', 'lwip', 'bl602', 'bouffalo']):
-        return "IoT Microcontroller", vendor_name or "ESP / BL602 Chip", "🎛️", "iot"
+        return "Módulo IoT / Microcontrolador", vendor_name or "Chip ESP / BL602", "🎛️", "iot"
     if any(k in h for k in ['google-home', 'nest-mini', 'nest-audio']):
-        return "Smart Speaker", vendor_name or "Google Nest", "🔊", "media"
+        return "Altavoz Inteligente", vendor_name or "Google Nest", "🔊", "media"
     if any(k in h for k in ['nest-hub', 'echo-show']):
-        return "Smart Display", vendor_name or "Google Nest Hub", "🖥️", "media"
+        return "Pantalla Inteligente", vendor_name or "Google Nest Hub", "🖥️", "media"
     if any(k in h for k in ['chromecast', 'tv-del-', 'smart-tv', 'box']):
-        return "Smart TV / Streaming", vendor_name or "Media Player", "📺", "media"
+        return "Smart TV / Streaming", vendor_name or "Multimedia TV", "📺", "media"
     if any(k in h for k in ['fryer', 'sweeper', 'vacuum', 'careli', 'autopack']):
-        return "Smart Home Appliance", vendor_name or "Smart Appliance", "🏠", "iot"
+        return "Electrodoméstico Inteligente", vendor_name or "Smart Appliance", "🏠", "iot"
     if any(k in h for k in ['tab-', 'galaxy-tab', 'ipad']):
         return "Tablet", vendor_name or "Android / iOS Tablet", "📱", "mobile"
     if any(k in h for k in ['iphone', 'galaxy', 's10', 'a40', 'a50', 'sm-', 'realme', 'oppo', 'oneplus', 'honor', 'oukitel', 'samsung']):
-        return "Smartphone", vendor_name or "Android / iOS Phone", "📱", "mobile"
+        return "Smartphone", vendor_name or "Móvil Android / iOS", "📱", "mobile"
 
+    # 2. Si el nombre es genérico (ej. 192-168-1-xxx o wlan0), inferimos por OUI
     if vendor_info:
         return vendor_info[1], vendor_name, vendor_info[2], "iot"
 
+    # 3. Tipo reportado por Mercusys Halo (iot_device, phone, pc, tablet)
     if halo_type == "iot_device":
-        return "Smart IoT Device", vendor_name or f"OUI {oui.upper()}", "🔌", "iot"
+        return "Dispositivo Domótico IoT", vendor_name or f"OUI {oui.upper()}", "🔌", "iot"
     if halo_type == "phone":
-        return "Smartphone", vendor_name or "Mobile Device", "📱", "mobile"
+        return "Smartphone", vendor_name or "Móvil Wi-Fi", "📱", "mobile"
 
+    # 4. Si usa MAC localmente administrada (MAC privada/aleatoria), casi seguro es un móvil/tablet moderno
     if is_locally_administered_mac(m):
-        return "Smartphone / Tablet (Private MAC)", vendor_name or "Randomized MAC (iOS / Android)", "📱", "mobile"
+        return "Smartphone / Tablet (MAC Privada)", vendor_name or "MAC Aleatoria (iOS / Android)", "📱", "mobile"
 
-    return "Network / IoT Device", vendor_name or f"OUI {oui.upper()}", "❓", "other"
+    return "Dispositivo de Red / IoT", vendor_name or f"OUI {oui.upper()}", "❓", "other"
 
 
 def is_wireless_only_device(dev_class, dev_cat, hostname, mac):
-    """Determines whether a device lacks an Ethernet port by physical hardware design."""
+    """Determina si un dispositivo por su naturaleza física de hardware carece de puerto Ethernet."""
     wireless_classes = {
-        "Smart Speaker",
-        "Smart Display",
-        "Smart Lighting",
-        "Smart Plug / Switch",
-        "Smart Button / Sensor",
-        "Universal IR/RF Remote",
-        "IoT Microcontroller",
-        "Smart Home Appliance",
+        "Altavoz Inteligente",
+        "Pantalla Inteligente",
+        "Iluminación Inteligente",
+        "Enchufe / Interruptor Smart",
+        "Sensor / Pulsador Smart",
+        "Controlador Universal IR/RF",
+        "Módulo IoT / Microcontrolador",
+        "Electrodoméstico Inteligente",
         "Smartphone",
         "Tablet",
-        "Smartphone / Tablet (Private MAC)",
-        "Smart IoT Device",
-        "IP Camera / Doorbell",
+        "Smartphone / Tablet (MAC Privada)",
+        "Dispositivo Domótico IoT",
+        "Cámara / Videoportero IP",
         "Smart TV / Streaming",
-        "Robot Vacuum"
+        "Robot Aspirador"
     }
     if dev_class in wireless_classes:
         return True
     if dev_cat in ("iot", "mobile", "media"):
         return True
-    if dev_class in ("Network / IoT Device", "Smart IoT Device", "Smart Home IoT"):
+    if dev_class == "Dispositivo de Red / IoT":
         return True
     h = (hostname or "").lower()
     if any(k in h for k in [
         "wifi", "wlan", "nest", "google", "meross", "tuya", "sonoff", "bulb",
-        "esp-", "esp_", "esp32", "esp8266", "ring", "tab-", "chuangmi",
+        "esp-", "esp_", "esp32", "esp8266", "ring", "tab-", "oukitel", "chuangmi",
         "bl602", "lwip", "t30-", "smart"
     ]):
         return True
@@ -665,7 +677,7 @@ CANDIDATE_WEB_PORTS = [
 ]
 
 def probe_http_service(ip, port):
-    """Verifies whether a port on a host is a real, accessible HTTP/HTTPS web service."""
+    """Verifica si un puerto en un host es un servicio web HTTP/HTTPS real y accesible."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(0.08)
@@ -676,7 +688,7 @@ def probe_http_service(ip, port):
     except Exception:
         return None
 
-    # Probe real HTTP or HTTPS
+    # Probar HTTP o HTTPS real
     protos = ['https', 'http'] if port in (443, 8006, 8443, 9443) else ['http', 'https']
     for proto in protos:
         url = f"{proto}://{ip}:{port}/" if port not in (80, 443) else f"{proto}://{ip}/"
@@ -690,7 +702,7 @@ def probe_http_service(ip, port):
                 server = resp.headers.get('Server', '')
                 return {'port': port, 'proto': proto, 'url': url, 'code': code, 'title': title, 'server': server, 'body': content}
         except urllib.error.HTTPError as e:
-            # Only allow auth challenges or genuine web redirects (exclude 404 to skip headless API endpoints)
+            # Solo permitir códigos de autenticación o redirección web real (descartar 404 para evitar APIs sin frontend)
             if e.code in (401, 403, 301, 302, 307, 308):
                 content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ""
                 title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
@@ -702,7 +714,7 @@ def probe_http_service(ip, port):
 
 
 def scan_device_verified_services(ip):
-    """Scans candidate ports concurrently and returns only verified web services."""
+    """Escanea concurrentemente los puertos candidatos y devuelve solo servicios web verificados."""
     ip = (ip or '').strip()
     if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip:
         return []
@@ -712,7 +724,7 @@ def scan_device_verified_services(ip):
 
 
 def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True, custom_service_names=None):
-    """Returns strictly real and verified web management links."""
+    """Devuelve única y exclusivamente servicios web reales y accesibles verificados."""
     ip = (ip or '').strip()
     if not ip or ip in ('0.0.0.0', '127.0.0.1') or ':' in ip or not is_active:
         return []
@@ -732,7 +744,7 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             router_name = r.get('name') or 'Router'
             break
 
-    is_router = (ip in ('192.168.1.1', '192.168.0.1') or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
+    is_router = (ip == '192.168.1.1' or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
 
     now = time.time()
     cached = _SERVICE_SCAN_CACHE.get(ip)
@@ -769,7 +781,7 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
         t_low = title.lower()
         b_low = body.lower()
 
-        # Intelligent SPA detection and known services recognition
+        # Detección y reconocimiento inteligente de aplicaciones SPA y servicios conocidos
         if 'immich' in b_low or 'immich' in t_low or port == 2283:
             label = f"Immich (:{port})"
         elif port == 32400 or 'plex' in b_low or 'plex' in t_low:
@@ -794,20 +806,20 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
         elif ip == '192.168.1.249' and port == 8080:
             label = "AdGuard Home (:8080)"
         elif ip == '192.168.1.249' and port == 5001:
-            label = "DHCP Panel (:5001)"
+            label = "Panel DHCP (:5001)"
         elif ip == '192.168.1.249' and port == 5000:
-            label = "Wi-Fi Panel (:5000)"
-        elif ip in ('192.168.1.1', '192.168.0.1'):
-            label = f"Gateway Router ({proto.upper()})"
+            label = "Panel Wi-Fi (:5000)"
+        elif ip == '192.168.1.1':
+            label = f"Router Fibra ({proto.upper()})"
         elif ip == '192.168.1.9' or 'em4590' in h_lower:
-            label = f"Wi-Fi Repeater EM4590 ({proto.upper()})"
-        elif ip in ('192.168.1.10', '192.168.0.2') or 'wr841n' in h_lower:
-            label = f"TP-Link WR841N ({proto.upper()})"
+            label = f"Web Repetidor EM4590 ({proto.upper()})"
+        elif ip == '192.168.1.10' or 'wr841n' in h_lower:
+            label = f"Web TP-Link WR841N ({proto.upper()})"
         elif ip in halo_node_info or 'mercusys-halo' in h_lower:
-            lbl = halo_node_info.get(ip, {}).get('label', f'Halo Node ({ip})')
-            label = f"{lbl} ({proto.upper()})"
+            lbl = halo_node_info.get(ip, {}).get('label', f'Nodo Halo ({ip})')
+            label = f"Web {lbl} ({proto.upper()})"
         elif is_router_cfg:
-            label = f"{router_name} ({proto.upper()})"
+            label = f"Web {router_name} ({proto.upper()})"
         elif 'proxmox' in b_low or 'proxmox' in t_low or port == 8006:
             label = "Proxmox VE (:8006)"
         elif 'portainer' in b_low or 'portainer' in t_low or port in (9000, 9443):
@@ -825,9 +837,9 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
         elif title and len(title) < 40 and not any(k in t_low for k in ['http 40', '404', 'error', 'default site', 'unauthorized']):
             label = f"{title} (:{port})"
         elif is_router:
-            label = f"Router Web UI ({proto.upper()})"
+            label = f"Panel Router ({proto.upper()})"
         else:
-            label = f"Web ({proto.upper()})" if port in (80, 443) else f"Web Service (:{port})"
+            label = f"Web ({proto.upper()})" if port in (80, 443) else f"Servicio Web (:{port})"
 
         add_link(label, url, port=port)
 
@@ -844,20 +856,23 @@ def load_config():
                     routers = []
                     if saved.get('tplink_ip') or saved.get('tplink_pass'):
                         routers.append({
-                            "id": "primary-ap",
-                            "name": "Primary TP-Link AP",
+                            "id": "tplink-wr841n",
+                            "name": "TP-Link WR841N",
                             "type": "tplink_wr841n",
-                            "ip": saved.get('tplink_ip', '192.168.0.2'),
+                            "ip": saved.get('tplink_ip', '192.168.1.10'),
                             "user": saved.get('tplink_user', 'admin'),
                             "password": saved.get('tplink_pass', ''),
                             "enabled": bool(saved.get('tplink_enabled', True))
                         })
                     if saved.get('halo_ip') or saved.get('halo_pass'):
+                        halo_ip = saved.get('halo_ip', '192.168.1.11')
+                        if halo_ip.strip() == '192.168.1.11':
+                            halo_ip = '192.168.1.11, 192.168.1.12, 192.168.1.13'
                         routers.append({
-                            "id": "mesh-ap",
-                            "name": "Mesh Wi-Fi System",
+                            "id": "mercusys-halo",
+                            "name": "Mercusys Halo H80X",
                             "type": "mercusys_halo",
-                            "ip": saved.get('halo_ip', '192.168.0.3, 192.168.0.4, 192.168.0.5'),
+                            "ip": halo_ip,
                             "user": "admin",
                             "password": saved.get('halo_pass', ''),
                             "enabled": True
@@ -869,23 +884,32 @@ def load_config():
     return cfg
 
 
+def save_config(new_cfg):
+    cfg = load_config()
+    if 'adguard_url' in new_cfg:
+        cfg['adguard_url'] = new_cfg['adguard_url']
+    if 'adguard_user' in new_cfg:
+        cfg['adguard_user'] = new_cfg['adguard_user']
+    if 'adguard_pass' in new_cfg:
+        cfg['adguard_pass'] = new_cfg['adguard_pass']
+    if 'custom_service_names' in new_cfg and isinstance(new_cfg['custom_service_names'], dict):
+        cfg['custom_service_names'] = new_cfg['custom_service_names']
+    if 'alerts' in new_cfg and isinstance(new_cfg['alerts'], dict):
+        cfg['alerts'] = new_cfg['alerts']
+    if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
+        cfg['routers'] = new_cfg['routers']
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, indent=2)
+    # Invalidar caché de Mercusys por si cambiaron credenciales o IPs
+    _HALO_CACHE["timestamp"] = 0.0
+    return cfg
+
+
 def save_config_raw(cfg):
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, indent=2)
     _HALO_CACHE["timestamp"] = 0.0
     return cfg
-
-
-def save_config(new_cfg):
-    cfg = load_config()
-    for k in ('leases_path', 'yaml_path', 'docker_container', 'adguard_url', 'adguard_user', 'adguard_pass'):
-        if k in new_cfg:
-            cfg[k] = new_cfg[k]
-    if 'custom_service_names' in new_cfg and isinstance(new_cfg['custom_service_names'], dict):
-        cfg['custom_service_names'] = new_cfg['custom_service_names']
-    if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
-        cfg['routers'] = new_cfg['routers']
-    return save_config_raw(cfg)
 
 
 def run_sudo(cmd_list):
@@ -914,18 +938,16 @@ def check_adguard_available():
 
 
 def read_leases():
-    cfg = load_config()
-    res = run_sudo(['cat', cfg['leases_path']])
+    res = run_sudo(['cat', LEASES_PATH])
     if res.returncode != 0 or not res.stdout.strip():
         return {"version": 1, "leases": []}
     return json.loads(res.stdout)
 
 
 def write_leases(data):
-    cfg = load_config()
     payload = json.dumps(data, separators=(',', ':'))
     proc = subprocess.run(
-        ['sudo', 'tee', cfg['leases_path']],
+        ['sudo', 'tee', LEASES_PATH],
         input=payload,
         capture_output=True,
         text=True,
@@ -935,8 +957,7 @@ def write_leases(data):
 
 
 def get_lease_duration():
-    cfg = load_config()
-    res = run_sudo(['cat', cfg['yaml_path']])
+    res = run_sudo(['cat', YAML_PATH])
     if res.returncode != 0:
         return 43200
     m = re.search(r'dhcpv4:.*?lease_duration:\s*(\d+)', res.stdout, re.DOTALL)
@@ -944,8 +965,7 @@ def get_lease_duration():
 
 
 def set_lease_duration_yaml(seconds):
-    cfg = load_config()
-    res = run_sudo(['cat', cfg['yaml_path']])
+    res = run_sudo(['cat', YAML_PATH])
     if res.returncode != 0:
         return False
     content = res.stdout
@@ -957,7 +977,7 @@ def set_lease_duration_yaml(seconds):
         flags=re.DOTALL
     )
     proc = subprocess.run(
-        ['sudo', 'tee', cfg['yaml_path']],
+        ['sudo', 'tee', YAML_PATH],
         input=new_content,
         capture_output=True,
         text=True,
@@ -982,6 +1002,7 @@ def get_arp_table():
 
 
 def query_router_associated_macs(router):
+    """Devuelve el conjunto de MACs asociadas a un router TP-Link WR841N."""
     rtype = router.get('type', 'tplink_wr841n')
     first_ip = (router.get('ip') or '').split(',')[0].strip()
     user = (router.get('user') or 'admin').strip()
@@ -1120,11 +1141,11 @@ def verify_ip_l2(ip, target_mac=None, iface="eth0", timeout=2):
         return alive, None
 
 def test_adguard_credentials(cfg):
-    url = (cfg.get('adguard_url') or 'http://127.0.0.1:8080').rstrip('/')
+    url = (cfg.get('adguard_url') or 'http://192.168.1.249:8080').rstrip('/')
     user = (cfg.get('adguard_user') or '').strip()
     pwd = (cfg.get('adguard_pass') or '').strip()
     if not user or not pwd:
-        return False, "AdGuard Home username or password is empty."
+        return False, "Usuario o contraseña de AdGuard Home vacíos."
     try:
         cj = http.cookiejar.CookieJar()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
@@ -1137,10 +1158,10 @@ def test_adguard_credentials(cfg):
         )
         with opener.open(req, timeout=5) as resp:
             if resp.status == 200:
-                return True, "AdGuard Home API authentication successful."
+                return True, "Autenticación con API de AdGuard Home correcta."
     except Exception as e:
-        return False, f"AdGuard Home login error: {str(e)}"
-    return False, "Could not authenticate with AdGuard Home."
+        return False, f"Error en login de AdGuard Home: {str(e)}"
+    return False, "No se pudo autenticar en AdGuard Home."
 
 
 def ip_sort_key(ip_str):
@@ -1156,11 +1177,11 @@ def index():
 
 
 # ==========================================================================
-#  AUTHENTICATION (login, "keep me signed in", password change, revocation)
+#  AUTENTICACIÓN (login, "mantener sesión iniciada", cambio de contraseña)
 # ==========================================================================
 AUTH_PATH = os.environ.get('DHCP_PANEL_AUTH_PATH') or os.path.join(os.path.dirname(CONFIG_PATH), 'auth.json')
 _AUTH_LOCK = threading.Lock()
-_LOGIN_ATTEMPTS = {}  # {ip: [failed attempt timestamps]}
+_LOGIN_ATTEMPTS = {}  # {ip: [timestamps de intentos fallidos]}
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SEC = 300
 REMEMBER_DAYS = 365
@@ -1221,6 +1242,7 @@ def is_logged_in():
 
 
 def _client_ip():
+    # Se usa la IP real de la conexión (X-Forwarded-For es falsificable)
     return request.remote_addr or 'unknown'
 
 
@@ -1243,12 +1265,12 @@ def require_login():
         return None
     if not auth_configured():
         if request.path.startswith('/api/'):
-            return jsonify({'status': 'error', 'auth_required': True, 'message': 'Create an admin user first.'}), 401
+            return jsonify({'status': 'error', 'auth_required': True, 'message': 'Configura primero un usuario.'}), 401
         return redirect(url_for('setup'))
     if is_logged_in():
         return None
     if request.path.startswith('/api/'):
-        return jsonify({'status': 'error', 'auth_required': True, 'message': 'Session expired. Please sign in again.'}), 401
+        return jsonify({'status': 'error', 'auth_required': True, 'message': 'Sesión caducada. Inicia sesión de nuevo.'}), 401
     return redirect(url_for('login', next=request.path))
 
 
@@ -1270,11 +1292,11 @@ def setup():
         pw = request.form.get('password') or ''
         pw2 = request.form.get('password2') or ''
         if len(user) < 3:
-            error = 'Username must be at least 3 characters.'
+            error = 'El usuario debe tener al menos 3 caracteres.'
         elif len(pw) < 6:
-            error = 'Password must be at least 6 characters.'
+            error = 'La contraseña debe tener al menos 6 caracteres.'
         elif pw != pw2:
-            error = 'Passwords do not match.'
+            error = 'Las contraseñas no coinciden.'
         else:
             a = load_auth()
             a['username'] = user
@@ -1295,7 +1317,7 @@ def login():
     ip = _client_ip()
     if request.method == 'POST':
         if _too_many_attempts(ip):
-            error = f'Too many failed attempts. Please wait {LOGIN_WINDOW_SEC // 60} minutes.'
+            error = f'Demasiados intentos fallidos. Espera {LOGIN_WINDOW_SEC // 60} minutos.'
         else:
             user = (request.form.get('username') or '').strip()
             pw = request.form.get('password') or ''
@@ -1309,7 +1331,7 @@ def login():
                 return redirect(nxt)
             _LOGIN_ATTEMPTS.setdefault(ip, []).append(time.time())
             left = LOGIN_MAX_ATTEMPTS - len(_LOGIN_ATTEMPTS[ip])
-            error = 'Invalid username or password.' + (f' {left} attempt(s) remaining.' if left > 0 else '')
+            error = 'Usuario o contraseña incorrectos.' + (f' Te quedan {left} intentos.' if left > 0 else '')
     return render_template('login.html', mode='login', error=error)
 
 
@@ -1327,19 +1349,20 @@ def api_change_password():
     new_user = (req.get('username') or '').strip()
     a = load_auth()
     if not check_password_hash(a.get('password_hash', ''), current):
-        return jsonify({'status': 'error', 'message': 'Current password is incorrect.'})
+        return jsonify({'status': 'error', 'message': 'La contraseña actual no es correcta.'})
     if new_user and len(new_user) < 3:
-        return jsonify({'status': 'error', 'message': 'Username must be at least 3 characters.'})
+        return jsonify({'status': 'error', 'message': 'El usuario debe tener al menos 3 caracteres.'})
     if new_pw and len(new_pw) < 6:
-        return jsonify({'status': 'error', 'message': 'New password must be at least 6 characters.'})
+        return jsonify({'status': 'error', 'message': 'La nueva contraseña debe tener al menos 6 caracteres.'})
     if new_user:
         a['username'] = new_user
     if new_pw:
         a['password_hash'] = generate_password_hash(new_pw)
+    # Invalidar el resto de sesiones y mantener la actual
     a['session_version'] = int(a.get('session_version', 1)) + 1
     save_auth(a)
     _start_session(a['username'], session.permanent)
-    return jsonify({'status': 'success', 'message': 'Credentials updated. All other open sessions have been signed out.'})
+    return jsonify({'status': 'success', 'message': 'Credenciales actualizadas. Las demás sesiones abiertas se han cerrado.'})
 
 
 @app.route('/api/auth/logout-all', methods=['POST'])
@@ -1348,7 +1371,7 @@ def api_logout_all():
     a['session_version'] = int(a.get('session_version', 1)) + 1
     save_auth(a)
     _start_session(a['username'], session.permanent)
-    return jsonify({'status': 'success', 'message': 'All other sessions on other devices have been signed out.'})
+    return jsonify({'status': 'success', 'message': 'Se han cerrado todas las demás sesiones (otros dispositivos).'})
 
 
 @app.route('/api/auth/me', methods=['GET'])
@@ -1368,7 +1391,7 @@ def api_config():
         return jsonify({'status': 'success', 'config': load_config()})
     new_cfg = request.json or {}
     saved = save_config(new_cfg)
-    msgs = [f"Configuration saved ({len(saved.get('routers', []))} router(s) configured)."]
+    msgs = [f"Configuración guardada ({len(saved.get('routers', []))} routers configurados)."]
     if saved.get('adguard_pass'):
         _, msg_ag = test_adguard_credentials(saved)
         msgs.append(msg_ag)
@@ -1376,7 +1399,7 @@ def api_config():
 
 
 def probe_router_http(ip):
-    """Probes an IP on port 80 searching for signatures of known router/AP web interfaces."""
+    """Sondea una IP en el puerto 80 buscando firmas de interfaz web de routers conocidos."""
     url = f"http://{ip}/"
     req = urllib.request.Request(
         url,
@@ -1390,7 +1413,7 @@ def probe_router_http(ip):
             text = raw_body.decode("utf-8", errors="ignore")
             headers = dict(resp.headers)
 
-            # Detect HTML meta-refresh (e.g. Mercusys redirecting to /webpages/index.html)
+            # Detectar si hay meta-refresh HTML (ej. Mercusys redirigiendo a /webpages/index.html)
             m_refresh = re.search(r'<meta[^>]+http-equiv=["\']refresh["\'][^>]+content=["\'][^;]+;\s*URL=([^"\']+)["\']', text, re.IGNORECASE)
             if m_refresh:
                 redir_target = m_refresh.group(1).strip()
@@ -1414,41 +1437,41 @@ def probe_router_http(ip):
 
 
 def discover_network_routers(current_routers=None):
-    """Scans the local network discovering routers/access points and returns candidate configs."""
+    """Escanea la red local identificando routers/puntos de acceso y genera una lista lista para configurar."""
     cfg = load_config()
     existing_list = current_routers if current_routers is not None else cfg.get('routers', [])
 
     candidates = set()
-    # 1. Common default gateway and router infrastructure IPs
+    # 1. Gateways / IPs habituales de routers e infraestructura
     for gip in ["192.168.1.1", "192.168.1.10", "192.168.1.11", "192.168.1.12", "192.168.1.13", "192.168.1.254", "192.168.0.1", "192.168.0.254"]:
         candidates.add(gip)
 
-    # 2. AdGuard Home active leases
+    # 2. IPs de leases de AdGuard Home
     leases_data = read_leases()
     for l in leases_data.get('leases', []):
         lip = l.get('ip')
         if lip:
             candidates.add(lip)
 
-    # 3. ARP table entries
+    # 3. IPs de la tabla ARP
     arp_table = get_arp_table()
     for mac, ip_list in arp_table.items():
         for aip in ip_list:
             if aip:
                 candidates.add(aip)
 
-    # 4. Currently configured router IPs
+    # 4. IPs ya en routers existentes
     for r in existing_list:
         for rip in (r.get('ip') or '').split(','):
             rip_s = rip.strip()
             if rip_s:
                 candidates.add(rip_s)
 
-    # Discard loopback and local host IP
+    # Descartar IP local del servidor Pi y localhost
     candidates.discard("192.168.1.249")
     candidates.discard("127.0.0.1")
 
-    # Concurrent probing
+    # Sondeo concurrente
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
         results = list(executor.map(probe_router_http, sorted(list(candidates))))
 
@@ -1519,7 +1542,7 @@ def discover_network_routers(current_routers=None):
                 "name": "OpenWrt / LuCI AP",
                 "user": "root"
             })
-        # 5. Wi-Fi Repeater (e.g. Eminent EM4590, Realtek RTL8196/RTL8192, Boa server with Wifi-Repeater realm)
+        # 5. Repetidor Wi-Fi (ej. Eminent EM4590, Realtek RTL8196/RTL8192, Boa server con realm Wifi-Repeater)
         elif "wifi-repeater" in auth_header or "repeater" in auth_header or "em4590" in auth_header or "realtek" in text.lower() or ("boa" in server and ("repeater" in auth_header or "router" in auth_header or "wireless" in auth_header or "wireless" in title_lower)):
             mac_candidate = ""
             for m_k, ips_k in arp_table.items():
@@ -1527,14 +1550,14 @@ def discover_network_routers(current_routers=None):
                     mac_candidate = m_k.lower()
                     break
             is_eminent = "wifi-repeater" in auth_header or "em4590" in auth_header or mac_candidate.startswith("00:14:5c")
-            disp_name = "Wi-Fi Repeater EM4590 (Eminent)" if is_eminent else "Wi-Fi Repeater / AP"
+            disp_name = "Repetidor Wi-Fi EM4590 (Eminent)" if is_eminent else "Repetidor Wi-Fi / AP"
             discovered.append({
                 "ip": ip,
                 "type": "generic_ap",
                 "name": disp_name,
                 "user": "admin"
             })
-        # 6. Generic router web interface or HTTP auth
+        # 6. Router genérico con título web o autenticación HTTP
         elif title and any(k in title_lower for k in ["router", "ap", "access point", "modem", "gateway", "fibra", "wifi", "livebox"]):
             discovered.append({
                 "ip": ip,
@@ -1546,11 +1569,11 @@ def discover_network_routers(current_routers=None):
             discovered.append({
                 "ip": ip,
                 "type": "generic_ap",
-                "name": f"Access Point / Router ({ip})",
+                "name": f"Punto de Acceso / Router ({ip})",
                 "user": "admin"
             })
 
-    # Grouping & merging logic
+    # Agrupación y fusión inteligente con los routers ya existentes
     halo_ips = []
     other_discovered = []
     for d in discovered:
@@ -1561,7 +1584,7 @@ def discover_network_routers(current_routers=None):
 
     final_routers = []
 
-    # 1. Mercusys Halo Mesh group
+    # 1. Agrupación Mercusys Halo (nodos satélites juntos en una sola fila)
     if halo_ips:
         sorted_halo_ips = sorted(halo_ips, key=lambda x: [int(p) if p.isdigit() else 0 for p in x.split('.')])
         joined_halo_ips = ", ".join(sorted_halo_ips)
@@ -1586,7 +1609,7 @@ def discover_network_routers(current_routers=None):
                 "enabled": True
             })
 
-    # 2. Other discovered routers
+    # 2. Otros routers detectados
     for d in other_discovered:
         dip = d["ip"]
         matched = None
@@ -1609,7 +1632,7 @@ def discover_network_routers(current_routers=None):
                 "enabled": True
             })
 
-    # 3. Preserve user-configured routers that may be offline during scan
+    # 3. Conservar cualquier router configurado previamente que no haya respondido al sondeo
     for r in existing_list:
         r_id = r.get("id")
         already_included = any(fr.get("id") == r_id for fr in final_routers)
@@ -1620,7 +1643,7 @@ def discover_network_routers(current_routers=None):
                 final_routers.append(r)
 
     names = [r.get("name") or r.get("ip") for r in final_routers]
-    msg = f"Discovered {len(final_routers)} router(s)/access point(s) on your network ({', '.join(names)})."
+    msg = f"Se han detectado {len(final_routers)} routers/puntos de acceso en tu red ({', '.join(names)})."
     return final_routers, msg
 
 
@@ -1637,6 +1660,7 @@ def api_discover_routers():
 
 
 def build_state(force_refresh=False):
+    """Construye el estado completo de la red (dispositivos, servicios, enlaces)."""
     cfg = load_config()
     adguard_available = check_adguard_available()
     routers = cfg.get('routers', [])
@@ -1648,8 +1672,8 @@ def build_state(force_refresh=False):
     router_mac_map = {}
     halo_client_map = {}
     halo_node_info = {}
-    infra_ips = set()
-    fallback_lan_name = 'Main Router / LAN'
+    infra_ips = {'192.168.1.1'}
+    fallback_lan_name = 'Router Principal / LAN'
 
     ip_to_mac_hint = {}
     for m_arp, ips_arp in arp.items():
@@ -1674,7 +1698,7 @@ def build_state(force_refresh=False):
                 router_mac_map[m] = {
                     "label": rname,
                     "type": "tplink",
-                    "tooltip": f"Connected via Wi-Fi to {rname} ({r.get('ip')})"
+                    "tooltip": f"Conectado directamente por Wi-Fi a {rname} ({r.get('ip')})"
                 }
         elif rtype == 'mercusys_halo':
             cmap, ninfo = get_mercusys_halo_data(r, ip_to_mac_hint=ip_to_mac_hint, wait_if_empty=False)
@@ -1703,7 +1727,7 @@ def build_state(force_refresh=False):
         if ':' in ip:
             continue
 
-        # Prevent duplicate rows if AdGuard Home stored duplicate leases with the same (MAC, IP)
+        # Evitar registros duplicados si AdGuard Home guardó la misma tupla (MAC, IP) repetida en leases.json
         lease_key = (mac, ip)
         if lease_key in seen_leases:
             continue
@@ -1728,12 +1752,12 @@ def build_state(force_refresh=False):
 
         router_tooltip = ""
         conn_medium = "offline"
-        conn_medium_label = "Offline"
+        conn_medium_label = "Desconectado"
 
         is_infra_node = (
             ip in halo_node_info or ip in infra_ips or
             any(k in hostname.lower() for k in ['mercusys-halo', 'wr841n', 'em4590']) or
-            dev_class in ["Router / Access Point", "Repeater / Access Point"]
+            dev_class in ["Router / Punto de Acceso", "Repetidor / Punto de Acceso"]
         )
 
         if ip in halo_node_info:
@@ -1742,24 +1766,25 @@ def build_state(force_refresh=False):
             router_tooltip = halo_node_info[ip]["tooltip"]
             router_type = 'infra'
             conn_medium = 'cable'
-            conn_medium_label = 'Wired Ethernet'
-        elif ip in ('192.168.1.1', '192.168.1.249') or 'gateway' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
-            router_node = 'Gateway / LAN'
-            router_tooltip = f'Core Gateway device ({ip})'
+            conn_medium_label = 'Cable Ethernet'
+        elif ip in ('192.168.1.1', '192.168.1.249') or 'router-principal' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
+            router_node = 'Router Principal / LAN'
+            router_tooltip = f'Equipo Central / Pasarela ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
-            conn_medium_label = 'Wired Ethernet'
+            conn_medium_label = 'Cable Ethernet'
         elif is_infra_node:
+            # Identificar el equipo específico de infraestructura
             if 'wr841n' in hostname.lower() or ip == '192.168.1.10':
                 router_node = 'TP-Link WR841N'
             elif 'em4590' in hostname.lower() or ip == '192.168.1.9':
-                router_node = 'Wi-Fi Repeater EM4590'
+                router_node = 'Repetidor Wi-Fi EM4590'
             else:
-                router_node = hostname or 'AP / Router'
-            router_tooltip = f'Network infrastructure device ({ip})'
+                router_node = hostname or 'Punto de Acceso / Router'
+            router_tooltip = f'Equipo de infraestructura de red ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
-            conn_medium_label = 'Wired Ethernet'
+            conn_medium_label = 'Cable Ethernet'
         elif mac in router_mac_map:
             router_node = router_mac_map[mac]["label"]
             router_tooltip = router_mac_map[mac]["tooltip"]
@@ -1774,26 +1799,26 @@ def build_state(force_refresh=False):
             conn_medium_label = halo_info.get("medium_label", "Wi-Fi")
         elif live_ips:
             if is_wireless:
-                router_node = 'Gateway / Wi-Fi'
-                router_tooltip = 'Wireless device connected to primary gateway (192.168.1.1)'
+                router_node = 'Router Principal / Wi-Fi'
+                router_tooltip = 'Dispositivo Wi-Fi conectado a la red principal (192.168.1.1)'
                 router_type = 'wifi'
                 conn_medium = 'wifi'
                 conn_medium_label = 'Wi-Fi'
             else:
                 router_node = fallback_lan_name
-                router_tooltip = 'Connected via wired Ethernet / Switch'
+                router_tooltip = 'Conectado por red cableada (LAN / Switch)'
                 router_type = 'lan'
                 conn_medium = 'cable'
-                conn_medium_label = 'Wired Ethernet'
+                conn_medium_label = 'Cable Ethernet'
         else:
-            router_node = 'Offline'
-            router_tooltip = 'No recent activity in ARP or Wi-Fi nodes'
+            router_node = 'Desconectado'
+            router_tooltip = 'Sin actividad reciente en ARP ni en nodos Wi-Fi'
             router_type = 'offline'
             conn_medium = 'offline'
-            conn_medium_label = 'Offline'
+            conn_medium_label = 'Desconectado'
 
         devices.append({
-            'hostname': hostname or '(Unnamed)',
+            'hostname': hostname or '(Sin nombre)',
             'mac': mac,
             'ip': ip,
             'static': is_static,
@@ -1817,7 +1842,7 @@ def build_state(force_refresh=False):
     seen_ips = {d['ip'] for d in devices if d.get('ip')}
     seen_macs = {d['mac'].lower() for d in devices if d.get('mac')}
 
-    # Active devices detected via ARP without an AdGuard DHCP lease (e.g. manual static IPs / infrastructure)
+    # Dispositivos activos detectados vía ARP que no tengan concesión DHCP en AdGuard (IPs fijas manuales o infraestructura)
     for arp_mac, arp_ips in arp.items():
         m = (arp_mac or '').lower()
         if m in ('', '00:00:00:00:00:00') or m in seen_macs:
@@ -1828,6 +1853,7 @@ def build_state(force_refresh=False):
             if aip in ('127.0.0.1', '192.168.1.249'):
                 continue
 
+            # Determinar nombre del host
             hostname = ""
             for r in routers:
                 r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
@@ -1837,11 +1863,11 @@ def build_state(force_refresh=False):
 
             if not hostname:
                 if aip == '192.168.1.1':
-                    hostname = 'gateway-router'
+                    hostname = 'router-principal-gateway'
                 elif m.startswith('00:14:5c') or aip == '192.168.1.9':
                     hostname = 'wifi-repeater-em4590'
                 else:
-                    hostname = f"device-{aip.replace('.', '-')}"
+                    hostname = f"192-168-1-{aip.split('.')[-1]}"
 
             halo_info = halo_client_map.get(m)
             dev_class, dev_vendor, dev_icon, dev_cat = predict_device_info(hostname, m, halo_info)
@@ -1850,7 +1876,7 @@ def build_state(force_refresh=False):
             is_infra_node = (
                 aip in halo_node_info or aip in infra_ips or
                 any(k in hostname.lower() for k in ['mercusys-halo', 'wr841n', 'em4590']) or
-                dev_class in ["Router / Access Point", "Repeater / Access Point"]
+                dev_class in ["Router / Punto de Acceso", "Repetidor / Punto de Acceso"]
             )
 
             router_tooltip = ""
@@ -1860,24 +1886,24 @@ def build_state(force_refresh=False):
                 router_tooltip = halo_node_info[aip]["tooltip"]
                 router_type = 'infra'
                 conn_medium = 'cable'
-                conn_medium_label = 'Wired Ethernet'
-            elif aip in ('192.168.1.1', '192.168.1.249') or 'gateway' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
-                router_node = 'Gateway / LAN'
-                router_tooltip = f'Core Gateway device ({aip})'
+                conn_medium_label = 'Cable Ethernet'
+            elif aip in ('192.168.1.1', '192.168.1.249') or 'router-principal' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
+                router_node = 'Router Principal / LAN'
+                router_tooltip = f'Equipo Central / Pasarela ({aip})'
                 router_type = 'infra'
                 conn_medium = 'cable'
-                conn_medium_label = 'Wired Ethernet'
+                conn_medium_label = 'Cable Ethernet'
             elif is_infra_node:
                 if 'wr841n' in hostname.lower() or aip == '192.168.1.10':
                     router_node = 'TP-Link WR841N'
                 elif 'em4590' in hostname.lower() or aip == '192.168.1.9':
-                    router_node = 'Wi-Fi Repeater EM4590'
+                    router_node = 'Repetidor Wi-Fi EM4590'
                 else:
-                    router_node = hostname or 'AP / Router'
-                router_tooltip = f'Network infrastructure device ({aip})'
+                    router_node = hostname or 'Punto de Acceso / Router'
+                router_tooltip = f'Equipo de infraestructura de red ({aip})'
                 router_type = 'infra'
                 conn_medium = 'cable'
-                conn_medium_label = 'Wired Ethernet'
+                conn_medium_label = 'Cable Ethernet'
             elif m in router_mac_map:
                 router_node = router_mac_map[m]["label"]
                 router_tooltip = router_mac_map[m]["tooltip"]
@@ -1892,17 +1918,17 @@ def build_state(force_refresh=False):
                 conn_medium_label = halo_info.get("medium_label", "Wi-Fi")
             else:
                 if is_wireless:
-                    router_node = 'Gateway / Wi-Fi'
-                    router_tooltip = 'Wireless device connected to primary gateway (192.168.1.1)'
+                    router_node = 'Router Principal / Wi-Fi'
+                    router_tooltip = 'Dispositivo Wi-Fi conectado a la red principal (192.168.1.1)'
                     router_type = 'wifi'
                     conn_medium = 'wifi'
                     conn_medium_label = 'Wi-Fi'
                 else:
                     router_node = fallback_lan_name
-                    router_tooltip = 'Connected via wired Ethernet / Switch'
+                    router_tooltip = 'Conectado por red cableada (LAN / Switch)'
                     router_type = 'lan'
                     conn_medium = 'cable'
-                    conn_medium_label = 'Wired Ethernet'
+                    conn_medium_label = 'Cable Ethernet'
 
             devices.append({
                 'hostname': hostname,
@@ -1928,10 +1954,10 @@ def build_state(force_refresh=False):
             })
             seen_ips.add(aip)
 
-    # Include Raspberry Pi local host if not already in devices
+    # Incluir el propio servidor Raspberry Pi (host local) si no está en la lista de IPs
     if '192.168.1.249' not in seen_ips:
         devices.append({
-            'hostname': 'pi-server (Local Host)',
+            'hostname': 'pi-server (Servidor Local)',
             'mac': 'b8:27:eb:a0:ff:6e',
             'ip': '192.168.1.249',
             'static': True,
@@ -1940,12 +1966,12 @@ def build_state(force_refresh=False):
             'expired': False,
             'live_ips': ['192.168.1.249'],
             'mismatch_ip': None,
-            'router_node': 'Gateway / LAN',
-            'router_tooltip': 'Local host running AdGuard Home and DHCP Manager',
+            'router_node': 'Router Principal / LAN',
+            'router_tooltip': 'Host local donde se ejecuta AdGuard Home y este panel',
             'router_type': 'lan',
             'conn_medium': 'cable',
-            'conn_medium_label': 'Wired Ethernet',
-            'dev_class': 'Server / Raspberry Pi',
+            'conn_medium_label': 'Cable Ethernet',
+            'dev_class': 'Servidor / Raspberry Pi',
             'dev_vendor': 'Raspberry Pi Foundation',
             'dev_icon': '🍓',
             'dev_cat': 'server',
@@ -1954,7 +1980,7 @@ def build_state(force_refresh=False):
         })
         seen_ips.add('192.168.1.249')
 
-    # Fast parallel pre-scan of common web ports for all active devices
+    # Pre-escaneo rápido y concurrente de puertos web para todos los dispositivos activos en la red
     active_ips = set()
     for d in devices:
         if d.get('live_ips'):
@@ -1969,6 +1995,7 @@ def build_state(force_refresh=False):
                 active_ips.add(x.strip())
 
     now = time.time()
+    force_refresh = bool(force_refresh)
     if force_refresh:
         _SERVICE_SCAN_CACHE.clear()
 
@@ -1984,7 +2011,7 @@ def build_state(force_refresh=False):
                 except Exception:
                     _SERVICE_SCAN_CACHE[a_ip] = (now, [])
 
-    # Update web_links for all devices with detected services
+    # Actualizar web_links para todos los dispositivos con los servicios recién descubiertos
     custom_names = cfg.get('custom_service_names', {})
     for d in devices:
         is_active = bool(d.get('live_ips')) or d['ip'] in ('192.168.1.1', '192.168.1.249')
@@ -2002,14 +2029,14 @@ def build_state(force_refresh=False):
 
     devices.sort(key=lambda d: (not d['static'], ip_sort_key(d['ip'])))
 
-    # Global network infrastructure links for the top quick-access dropdown
+    # Construir lista global de enlaces a infraestructura para el menú superior
     global_network_links = []
     for r in routers:
         r_name = r.get('name') or 'Router'
         r_ips = [x.strip() for x in (r.get('ip') or '').split(',') if x.strip()]
         for rip in r_ips:
             node_title = halo_node_info.get(rip, {}).get('label', r_name) if r.get('type') == 'mercusys_halo' else r_name
-            icon = "🌐" if r.get('type') == 'mercusys_halo' else ("📶" if any(k in r_name.lower() for k in ["repeater", "em4590"]) else "🖧")
+            icon = "🌐" if r.get('type') == 'mercusys_halo' else ("📶" if any(k in r_name.lower() for k in ["repetidor", "em4590"]) else "🖧")
             global_network_links.append({
                 'name': node_title,
                 'ip': rip,
@@ -2018,13 +2045,19 @@ def build_state(force_refresh=False):
             })
 
     existing_link_ips = {l['ip'] for l in global_network_links}
-    if '192.168.1.1' not in existing_link_ips and '192.168.0.1' not in existing_link_ips:
-        gw = '192.168.1.1'
+    if '192.168.1.1' not in existing_link_ips:
         global_network_links.insert(0, {
-            'name': 'Gateway Router',
-            'ip': gw,
-            'url': f'http://{gw}',
+            'name': 'Router Principal de Fibra',
+            'ip': '192.168.1.1',
+            'url': 'http://192.168.1.1',
             'icon': '🏠'
+        })
+    if '192.168.1.9' not in existing_link_ips:
+        global_network_links.append({
+            'name': 'Repetidor Wi-Fi EM4590 (Eminent)',
+            'ip': '192.168.1.9',
+            'url': 'http://192.168.1.9',
+            'icon': '📶'
         })
 
     global_network_links.append({
@@ -2146,8 +2179,8 @@ def build_state(force_refresh=False):
 
 @app.route('/api/state', methods=['GET'])
 def api_state():
-    force_refresh = bool(request.args.get('refresh') or request.args.get('force'))
-    state = build_state(force_refresh=force_refresh)
+    force = bool(request.args.get('refresh') or request.args.get('force'))
+    state = build_state(force_refresh=force)
     extras.enrich_state(state)
     return jsonify(state)
 
@@ -2159,7 +2192,7 @@ def api_rename_service():
         url = (data.get('url') or '').strip()
         custom_name = (data.get('name') or '').strip()
         if not url:
-            return jsonify({'success': False, 'error': 'Service URL not specified'}), 400
+            return jsonify({'success': False, 'error': 'URL de servicio no especificada'}), 400
 
         cfg = load_config()
         if 'custom_service_names' not in cfg or not isinstance(cfg['custom_service_names'], dict):
@@ -2174,6 +2207,7 @@ def api_rename_service():
             cfg['custom_service_names'].pop(norm_url + '/', None)
 
         save_config(cfg)
+
         return jsonify({'success': True, 'custom_service_names': cfg['custom_service_names']})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -2194,16 +2228,22 @@ def api_assign_static():
     if not check_adguard_available():
         return jsonify({'status': 'error', 'message': 'Modo Autónomo: La asignación DHCP estática en servidor requiere AdGuard Home activo.'}), 400
 
-    # Obtener IP previa de la MAC antes de purgar
+    # Obtener IP previa y estado de la MAC antes de purgar
     old_ip = None
+    old_hostname = None
+    was_static = False
     try:
         curr_data = read_leases()
         for l in curr_data.get('leases', []):
             if (l.get('mac') or '').lower() == mac:
                 old_ip = (l.get('ip') or '').strip()
+                old_hostname = (l.get('hostname') or '').strip()
+                was_static = bool(l.get('static', False))
                 break
     except Exception:
         pass
+
+    is_same_static_ip = bool(old_ip and old_ip == ip and was_static)
 
     run_sudo(['docker', 'stop', 'adguardhome'])
     removed = 0
@@ -2233,17 +2273,24 @@ def api_assign_static():
     finally:
         run_sudo(['docker', 'start', 'adguardhome'])
 
-    # Colocar la MAC recién asignada al final de la lista histórica para que sea inmediatamente la Última Fijada
-    try:
-        order_cfg = load_config()
-        som = order_cfg.get('static_order_macs', [])
-        if mac in som:
-            som.remove(mac)
-        som.append(mac)
-        order_cfg['static_order_macs'] = som
-        save_config_raw(order_cfg)
-    except Exception:
-        pass
+    # Si la IP ha cambiado o es una fijación nueva, actualizar orden para que sea la Última Fijada.
+    # Si solo se ha renombrado una IP fija existente, preservar su puesto/orden original sin moverla.
+    if not is_same_static_ip:
+        try:
+            order_cfg = load_config()
+            som = order_cfg.get('static_order_macs', [])
+            if mac in som:
+                som.remove(mac)
+            som.append(mac)
+            order_cfg['static_order_macs'] = som
+            save_config_raw(order_cfg)
+        except Exception:
+            pass
+
+    # Si la IP no ha cambiado y ya era estática, solo se ha renombrado: NO desconectar ni expulsar el aparato
+    if is_same_static_ip:
+        rename_msg = f"✅ Nombre actualizado a '{hostname}' para la IP fija {ip} ({mac}) en AdGuard Home. Al mantenerse la misma IP, el dispositivo no ha necesitado desconectarse de la red."
+        return jsonify({'status': 'success', 'verified': True, 'message': rename_msg})
 
     base_msg = f'IP estática {ip} guardada en AdGuard Home para {hostname} ({mac}).'
     if removed > 0:
@@ -2352,10 +2399,7 @@ def api_delete_lease():
     mac = (req.get('mac') or '').strip().lower()
     ip = (req.get('ip') or '').strip()
 
-    cfg = load_config()
-    container = cfg.get('docker_container', 'adguardhome')
-
-    run_sudo(['docker', 'stop', container])
+    run_sudo(['docker', 'stop', 'adguardhome'])
     try:
         data = read_leases()
         old_leases = data.get('leases', [])
@@ -2366,7 +2410,19 @@ def api_delete_lease():
         data['leases'] = new_leases
         write_leases(data)
     finally:
-        run_sudo(['docker', 'start', container])
+        run_sudo(['docker', 'start', 'adguardhome'])
+
+    # Colocar la MAC recién asignada al final de la lista histórica para que sea inmediatamente la Última Fijada
+    try:
+        order_cfg = load_config()
+        som = order_cfg.get('static_order_macs', [])
+        if mac in som:
+            som.remove(mac)
+        som.append(mac)
+        order_cfg['static_order_macs'] = som
+        save_config_raw(order_cfg)
+    except Exception:
+        pass
 
     if ip:
         try:
@@ -2374,16 +2430,13 @@ def api_delete_lease():
         except Exception:
             pass
 
-    return jsonify({'status': 'success', 'message': f'Lease / record {ip} ({mac}) removed successfully.'})
+    return jsonify({'status': 'success', 'message': f'Concesión / registro {ip} ({mac}) eliminado correctamente.'})
 
 
 @app.route('/api/clean-junk', methods=['POST'])
 def api_clean_junk():
     now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    cfg = load_config()
-    container = cfg.get('docker_container', 'adguardhome')
-
-    run_sudo(['docker', 'stop', container])
+    run_sudo(['docker', 'stop', 'adguardhome'])
     removed_count = 0
     try:
         data = read_leases()
@@ -2434,11 +2487,23 @@ def api_clean_junk():
         data['leases'] = clean_leases
         write_leases(data)
     finally:
-        run_sudo(['docker', 'start', container])
+        run_sudo(['docker', 'start', 'adguardhome'])
+
+    # Colocar la MAC recién asignada al final de la lista histórica para que sea inmediatamente la Última Fijada
+    try:
+        order_cfg = load_config()
+        som = order_cfg.get('static_order_macs', [])
+        if mac in som:
+            som.remove(mac)
+        som.append(mac)
+        order_cfg['static_order_macs'] = som
+        save_config_raw(order_cfg)
+    except Exception:
+        pass
 
     return jsonify({
         'status': 'success',
-        'message': f'Cleanup complete: removed {removed_count} ghost, expired, or duplicate lease(s).'
+        'message': f'Limpieza completada: se eliminaron {removed_count} concesiones fantasma, caducadas o duplicadas.'
     })
 
 
@@ -2446,17 +2511,14 @@ def api_clean_junk():
 def api_set_duration():
     req = request.json or {}
     seconds = int(req.get('seconds', 43200))
-    cfg = load_config()
-    container = cfg.get('docker_container', 'adguardhome')
-
-    run_sudo(['docker', 'stop', container])
+    run_sudo(['docker', 'stop', 'adguardhome'])
     try:
         set_lease_duration_yaml(seconds)
     finally:
-        run_sudo(['docker', 'start', container])
+        run_sudo(['docker', 'start', 'adguardhome'])
     return jsonify({
         'status': 'success',
-        'message': f'DHCP lease duration updated to {seconds} seconds ({seconds // 60} min).'
+        'message': f'Tiempo de concesión DHCP actualizado a {seconds} segundos ({seconds // 60} min).'
     })
 
 
@@ -2476,7 +2538,7 @@ except Exception as _e_wifi:
 
 extras.init_app(app, {
     'CONFIG_PATH': CONFIG_PATH,
-    'YAML_PATH': DEFAULT_CONFIG['yaml_path'],
+    'YAML_PATH': YAML_PATH,
     'load_config': load_config,
     'save_config_raw': save_config_raw,
     'build_state': build_state,

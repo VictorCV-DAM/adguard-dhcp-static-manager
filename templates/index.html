@@ -4325,12 +4325,13 @@ function fillForm(hostname, mac, ip) {
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
     const forceChk = document.getElementById('card-force-reconnect');
-    if (forceChk) forceChk.checked = true;
 
     // Adaptar casilla RF según si el plugin está activo y el medio de conexión (cable vs wifi)
     const dev = (typeof allDevices !== 'undefined' && Array.isArray(allDevices))
         ? allDevices.find(d => (d.mac || '').toLowerCase() === (mac || '').toLowerCase())
         : null;
+    const isAlreadyStaticDev = !!(dev && dev.static && dev.ip === ip);
+    if (forceChk) forceChk.checked = !isAlreadyStaticDev;
     const isCable = dev && (dev.conn_medium === 'cable');
     const rfEnabled = !!(wifiPluginState && wifiPluginState.enabled);
     const cardRfWrap = document.getElementById('card-rf-reconnect-wrap');
@@ -4370,7 +4371,15 @@ function fillForm(hostname, mac, ip) {
             if (hint) hint.textContent = `(Sugerida IP fija libre: ${freeIp} en vez de la dinámica ${ip})`;
         }
     } else {
-        if (hint) hint.textContent = '';
+        const isAlreadyStatic = dev && dev.static;
+        const isSameIp = dev && (dev.ip === ip || (dev.live_ips && dev.live_ips.includes(ip)));
+        if (isAlreadyStatic && isSameIp) {
+            if (forceChk) forceChk.checked = false;
+            if (cardRfChk && !cardRfChk.disabled) cardRfChk.checked = false;
+            if (hint) hint.innerHTML = '<span style="color:#86efac; font-size:0.75rem;">(✏️ Modo renombrar: la IP se mantiene, no requiere reconexión de red)</span>';
+        } else {
+            if (hint) hint.textContent = '';
+        }
     }
 
     // Desplazar suavemente hasta el formulario solo si es necesario, y destacar el recuadro
@@ -8593,7 +8602,8 @@ async function openDeviceSheet(mac, ipHint = '') {
 
     if (hostInp) hostInp.value = (dev.hostname && dev.hostname !== '(Sin nombre)') ? dev.hostname : '';
     if (ipInp) ipInp.value = dev.ip || currentSheetIp || '';
-    if (forceChk) forceChk.checked = true;
+    const isAlreadyStaticDev = !!(dev.static && dev.ip === (dev.ip || currentSheetIp));
+    if (forceChk) forceChk.checked = !isAlreadyStaticDev;
 
     const rHint = document.getElementById('ds-connected-router-hint');
     if (rHint) {
@@ -8620,7 +8630,7 @@ async function openDeviceSheet(mac, ipHint = '') {
             rfHint.innerHTML = '<span style="color:var(--muted);">(🚫 Conectado por Cable Ethernet)</span>';
         } else if (rfClient) {
             rfChk.disabled = false;
-            rfChk.checked = true;
+            rfChk.checked = !isAlreadyStaticDev;
             const chan = (rfClient.channel || dev.rf_channel) ? `Canal ${rfClient.channel || dev.rf_channel}` : 'Canal detectado';
             rfHint.innerHTML = `<span style="color:#86efac; font-weight:700;">(🟢 En cobertura RF · ${chan})</span>`;
         } else {
