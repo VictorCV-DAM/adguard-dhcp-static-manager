@@ -3341,7 +3341,7 @@ async function manualRefresh() {
     await loadState(true);
 }
 
-async function loadState(isManual = false) {
+async function loadState(isManual = false, showToast = isManual) {
     loadSavedTableFilterState();
     if (isRefreshing) return;
     isRefreshing = true;
@@ -3416,7 +3416,7 @@ async function loadState(isManual = false) {
         lastRefreshTime = new Date();
         updateRefreshTimestamp();
 
-        if (isManual) {
+        if (showToast) {
             showMessage('Lista de dispositivos y servicios actualizada');
         }
     } catch (e) {
@@ -3606,6 +3606,8 @@ async function saveServiceName(url, name) {
         closeRenameServiceModal();
         renderServicesCards();
         renderTable();
+        isRefreshing = false;
+        await loadState(true, false);
     } catch (e) {
         showMessage('Error al guardar el nombre: ' + e.message);
     }
@@ -4404,7 +4406,19 @@ async function assignStaticFromCard() {
         });
         const data = await res.json();
         showMessage(data.message || 'Guardado correctamente');
-        loadState();
+
+        // Forzar refresco inmediato de toda la lista y vista previa
+        isRefreshing = false;
+        await loadState(true, false);
+
+        // Limpiar el formulario y los hints de la tarjeta
+        document.getElementById('in-hostname').value = '';
+        document.getElementById('in-mac').value = '';
+        document.getElementById('in-ip').value = '';
+        const hint = document.getElementById('card-ip-hint');
+        if (hint) hint.textContent = '';
+        const rfHint = document.getElementById('card-rf-status-hint');
+        if (rfHint) rfHint.textContent = '';
     } catch(e) {
         showMessage('Error al guardar IP: ' + e.message, 'error');
     }
