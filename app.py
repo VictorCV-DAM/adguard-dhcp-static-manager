@@ -2228,10 +2228,14 @@ def api_assign_static():
     if not check_adguard_available():
         return jsonify({'status': 'error', 'message': 'Modo Autónomo: La asignación DHCP estática en servidor requiere AdGuard Home activo.'}), 400
 
+    force_override_ip = bool(req.get('force_override_ip', False))
+    allow_duplicate_name = bool(req.get('allow_duplicate_name', False))
+
     # Obtener IP previa y estado de la MAC antes de purgar
     old_ip = None
     old_hostname = None
     was_static = False
+    curr_data = {}
     try:
         curr_data = read_leases()
         for l in curr_data.get('leases', []):
@@ -2245,6 +2249,38 @@ def api_assign_static():
 
     is_same_static_ip = bool(old_ip and old_ip == ip and was_static)
 
+    # 1. Protección contra colisión de IP con otra MAC
+    conflict_ip_dev = None
+    conflict_name_dev = None
+    for l in (curr_data.get('leases', []) if curr_data else []):
+        l_mac = (l.get('mac') or '').lower()
+        l_ip = (l.get('ip') or '').strip()
+        l_host = (l.get('hostname') or '').strip()
+        if l_mac != mac:
+            if l_ip == ip:
+                conflict_ip_dev = l
+            if l_host and l_host.lower() == hostname.lower():
+                conflict_name_dev = l
+
+    if conflict_ip_dev and not force_override_ip:
+        c_name = conflict_ip_dev.get('hostname') or '(Sin nombre)'
+        c_mac = conflict_ip_dev.get('mac') or ''
+        return jsonify({
+            'status': 'error',
+            'ip_conflict': True,
+            'message': f"⛔ Conflicto de IP: La dirección {ip} ya está asignada a '{c_name}' ({c_mac}). Operación cancelada para evitar perder ese dispositivo. Libera o cambia primero la IP del otro equipo."
+        }), 409
+
+    # 2. Protección contra nombres idénticos duplicados
+    if conflict_name_dev and not allow_duplicate_name:
+        c_mac = conflict_name_dev.get('mac') or ''
+        c_ip = conflict_name_dev.get('ip') or ''
+        return jsonify({
+            'status': 'error',
+            'name_conflict': True,
+            'message': f"⚠️ Nombre duplicado: Ya existe otro dispositivo con el nombre '{hostname}' (MAC: {c_mac}, IP: {c_ip}). Asignar el mismo nombre exacto provoca colisiones en DNS y extravío de equipos. Elige un nombre distintivo (por ejemplo, '{hostname} 2')."
+        }), 409
+
     run_sudo(['docker', 'stop', 'adguardhome'])
     removed = 0
     try:
@@ -2255,7 +2291,8 @@ def api_assign_static():
         for l in old_leases:
             l_mac = (l.get('mac') or '').lower()
             l_ip = (l.get('ip') or '').strip()
-            if l_mac == mac or l_ip == ip:
+            # No purgar concesiones de otras MACs salvo que se haya forzado expresamente
+            if l_mac == mac or (l_ip == ip and force_override_ip):
                 removed += 1
                 continue
             new_leases.append(l)

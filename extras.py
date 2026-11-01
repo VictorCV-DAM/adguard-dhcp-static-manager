@@ -747,6 +747,52 @@ def enrich_state(state):
             l['history'] = (hist.get(l['url']) or [])[-40:]
             l['first_seen'] = iso(sr.get('first_seen'))
 
+    # Dispositivos recordados en panel.db que estén desconectados (sin lease activo ni ARP)
+    existing_macs = {norm_mac(d.get('mac')) for d in state.get('devices', []) if d.get('mac')}
+    predict_fn = D.get('predict_device_info') or (lambda h, m, x: ('Dispositivo', 'Desconocido', '📱', 'other'))
+    for row_mac, row in devs.items():
+        if not row_mac or row_mac in existing_macs or row_mac == '00:00:00:00:00:00':
+            continue
+        h = row.get('hostname') or '(Sin nombre)'
+        dev_class, dev_vendor, dev_icon, dev_cat = predict_fn(h, row_mac, None)
+        try:
+            row_tags = json.loads(row.get('tags') or '[]')
+        except Exception:
+            row_tags = []
+        state.setdefault('devices', []).append({
+            'hostname': h,
+            'mac': row_mac,
+            'ip': row.get('last_ip') or '',
+            'static': False,
+            'expires': '',
+            'expired': False,
+            'live_ips': [],
+            'mismatch_ip': None,
+            'router_node': 'Desconectado',
+            'router_tooltip': 'Dispositivo guardado en historial (actualmente desconectado)',
+            'router_type': 'offline',
+            'conn_medium': 'offline',
+            'conn_medium_label': 'Desconectado',
+            'dev_class': dev_class,
+            'dev_vendor': dev_vendor,
+            'dev_icon': dev_icon,
+            'dev_cat': dev_cat,
+            'first_seen': iso(row.get('first_seen')),
+            'last_seen': iso(row.get('last_seen')),
+            'notes': row.get('notes') or '',
+            'room': row.get('room') or '',
+            'photo': row.get('photo') or '',
+            'tags': row_tags,
+            'known': bool(row.get('known', 1)),
+            'latency_ms': None,
+            'ttl': row.get('ttl'),
+            'os_guess': os_guess(row.get('ttl'), dev_class),
+            'random_mac': bool(is_lam(row_mac)),
+            'blocked': False,
+            'web_links': [],
+            'open_ports': []
+        })
+
     # Servicios recordados que ya no se detectan → caídos
     dev_by_mac = {norm_mac(d.get('mac')): d for d in state.get('devices', [])}
     down = []
