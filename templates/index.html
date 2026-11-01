@@ -3309,7 +3309,7 @@ function renderMacHunterResults(d) {
 
             <!-- BOTONES DE ACCIÓN RÁPIDA -->
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px; flex-wrap:wrap;">
-                <button type="button" class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="copyHunterSummary('${mac}')">📋 Copiar Resumen</button>
+                <button type="button" class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="copyHunterSummary('${mac}', this)">📋 Copiar Resumen</button>
                 <button type="button" class="btn btn-primary" style="font-size:0.8rem; padding:6px 14px;" onclick="fillFormFromHunter('${escapeHtml((haData && haData.name) || ag.hostname || '')}', '${mac}', '${ag.assigned_ip || (hist.past_ips && hist.past_ips[0]) || ''}')">✏️ Fijar IP Estática a este Dispositivo</button>
             </div>
         </div>
@@ -3324,13 +3324,13 @@ function fillFormFromHunter(name, mac, ip) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function copyHunterSummary(mac) {
+function copyHunterSummary(mac, btn = null) {
     const container = document.getElementById('hunter-results-container');
     if (!container) return;
     const txt = container.innerText;
-    navigator.clipboard.writeText(`=== INFORME FORENSE MAC ${mac} ===\n\n` + txt).then(() => {
-        showMessage('Resumen forense copiado al portapapeles.');
-    });
+    const report = `=== INFORME FORENSE MAC ${mac} ===\n\n` + txt;
+    copyToClipboard(report, 'Copiado', btn);
+    showMessage('Resumen forense copiado al portapapeles.');
 }
 
 async function loadConfig() {

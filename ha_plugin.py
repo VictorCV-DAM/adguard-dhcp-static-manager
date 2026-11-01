@@ -13,6 +13,7 @@ import base64
 import urllib.request
 import urllib.error
 import threading
+import re
 from typing import Dict, List, Any, Optional
 
 # Caché en memoria para evitar consultas lentas
@@ -35,62 +36,118 @@ def norm_mac(mac: str) -> str:
     return mac.strip().lower()
 
 # ---------------------------------------------------------------------------
-# WebSocket Client RFC 6455 en Python puro (sin dependencias externas)
+# WebSocket Client RFC 6455 en Python puro (con buffer de handshake y tramas)
 # ---------------------------------------------------------------------------
-def _ws_handshake(host: str, port: int, path: str = "/api/websocket", timeout: float = 6.0) -> socket.socket:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    s.connect((host, port))
-    key = base64.b64encode(os.urandom(16)).decode()
-    req = (
-        f"GET {path} HTTP/1.1\r\n"
-        f"Host: {host}:{port}\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        f"Sec-WebSocket-Key: {key}\r\n"
-        "Sec-WebSocket-Version: 13\r\n\r\n"
-    )
-    s.sendall(req.encode())
-    resp = s.recv(4096).decode(errors="ignore")
-    if "101 Switching Protocols" not in resp:
-        s.close()
-        raise Exception(f"Fallo en handshake WebSocket: {resp.splitlines()[0] if resp else 'Sin respuesta'}")
-    return s
+class HAWebSocketClient:
+    def __init__(self, host: str, port: int, path: str = "/api/websocket", timeout: float = 6.0):
+        self.host = host
+        self.port = port
+        self.path = path
+        self.timeout = timeout
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.s.settimeout(timeout)
+        self._buf = bytearray()
 
-def _ws_send(s: socket.socket, data_str: str):
-    data = data_str.encode('utf-8')
-    mask = os.urandom(4)
-    length = len(data)
-    if length < 126:
-        hdr = bytearray([0x81, 0x80 | length])
-    elif length < 65536:
-        hdr = bytearray([0x81, 0x80 | 126]) + struct.pack(">H", length)
-    else:
-        hdr = bytearray([0x81, 0x80 | 127]) + struct.pack(">Q", length)
-    masked = bytearray(b ^ mask[i % 4] for i, b in enumerate(data))
-    s.sendall(hdr + mask + masked)
+    def connect(self):
+        self.s.connect((self.host, self.port))
+        key = base64.b64encode(os.urandom(16)).decode()
+        req = (
+            f"GET {self.path} HTTP/1.1\r\n"
+            f"Host: {self.host}:{self.port}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        self.s.sendall(req.encode())
 
-def _ws_recv(s: socket.socket) -> Optional[str]:
-    hdr = s.recv(2)
-    if len(hdr) < 2:
-        return None
-    b1, b2 = hdr[0], hdr[1]
-    length = b2 & 0x7f
-    if length == 126:
-        raw_len = s.recv(2)
-        if len(raw_len) < 2: return None
-        length = struct.unpack(">H", raw_len)[0]
-    elif length == 127:
-        raw_len = s.recv(8)
-        if len(raw_len) < 8: return None
-        length = struct.unpack(">Q", raw_len)[0]
-    payload = bytearray()
-    while len(payload) < length:
-        chunk = s.recv(min(65536, length - len(payload)))
-        if not chunk:
-            break
-        payload.extend(chunk)
-    return payload.decode('utf-8', errors='ignore')
+        resp = bytearray()
+        while b"\r\n\r\n" not in resp:
+            chunk = self.s.recv(4096)
+            if not chunk:
+                raise Exception("Conexión cerrada durante handshake HTTP")
+            resp.extend(chunk)
+
+        header_bytes, rest = resp.split(b"\r\n\r\n", 1)
+        if b"101 Switching Protocols" not in header_bytes:
+            raise Exception("Handshake HTTP fallido: " + header_bytes.decode('utf-8', errors='ignore'))
+        
+        self._buf.extend(rest)
+
+    def _read_exact(self, n: int) -> bytearray:
+        while len(self._buf) < n:
+            chunk = self.s.recv(max(4096, n - len(self._buf)))
+            if not chunk:
+                raise Exception("Conexión cerrada prematuramente")
+            self._buf.extend(chunk)
+        res = self._buf[:n]
+        del self._buf[:n]
+        return res
+
+    def send(self, data_str: str):
+        data = data_str.encode('utf-8')
+        mask = os.urandom(4)
+        length = len(data)
+        if length < 126:
+            hdr = bytearray([0x81, 0x80 | length])
+        elif length < 65536:
+            hdr = bytearray([0x81, 0x80 | 126]) + struct.pack(">H", length)
+        else:
+            hdr = bytearray([0x81, 0x80 | 127]) + struct.pack(">Q", length)
+        masked = bytearray(b ^ mask[i % 4] for i, b in enumerate(data))
+        self.s.sendall(hdr + mask + masked)
+
+    def recv(self) -> Optional[str]:
+        while True:
+            try:
+                hdr = self._read_exact(2)
+            except Exception:
+                return None
+            b1, b2 = hdr[0], hdr[1]
+            opcode = b1 & 0x0F
+            is_masked = bool(b2 & 0x80)
+            length = b2 & 0x7F
+
+            if length == 126:
+                try:
+                    length = struct.unpack(">H", self._read_exact(2))[0]
+                except Exception:
+                    return None
+            elif length == 127:
+                try:
+                    length = struct.unpack(">Q", self._read_exact(8))[0]
+                except Exception:
+                    return None
+
+            mask = self._read_exact(4) if is_masked else None
+            try:
+                payload = self._read_exact(length)
+            except Exception:
+                return None
+
+            if mask:
+                payload = bytearray(b ^ mask[i % 4] for i, b in enumerate(payload))
+
+            if opcode == 0x8: # Close
+                self.close()
+                return None
+            elif opcode == 0x9: # Ping
+                pong = bytearray([0x8A, 0])
+                try:
+                    self.s.sendall(pong)
+                except Exception:
+                    pass
+                continue
+            elif opcode == 0xA: # Pong
+                continue
+            elif opcode in (0x1, 0x2): # Text or Binary
+                return payload.decode('utf-8', errors='ignore')
+
+    def close(self):
+        try:
+            self.s.close()
+        except Exception:
+            pass
 
 def _parse_url_host_port(url_str: str):
     url = url_str.strip().rstrip('/')
@@ -144,19 +201,20 @@ def test_ha_instance(url: str, token: str) -> Dict[str, Any]:
     # 2. Probar WebSocket para comprobar device_registry
     dev_count = 0
     try:
-        s = _ws_handshake(host, port, timeout=5.0)
-        init_raw = _ws_recv(s)
-        _ws_send(s, json.dumps({"type": "auth", "access_token": token}))
-        auth_raw = _ws_recv(s)
+        ws = HAWebSocketClient(host, port, timeout=5.0)
+        ws.connect()
+        init_raw = ws.recv()
+        ws.send(json.dumps({"type": "auth", "access_token": token}))
+        auth_raw = ws.recv()
         auth_data = json.loads(auth_raw or "{}")
         if auth_data.get("type") != "auth_ok":
-            s.close()
+            ws.close()
             return {"success": False, "message": "WebSocket: Token rechazado por Home Assistant"}
 
         # Pedir lista de dispositivos
-        _ws_send(s, json.dumps({"id": 1, "type": "config/device_registry/list"}))
-        devs_raw = _ws_recv(s)
-        s.close()
+        ws.send(json.dumps({"id": 1, "type": "config/device_registry/list"}))
+        devs_raw = ws.recv()
+        ws.close()
 
         if devs_raw:
             d_json = json.loads(devs_raw)
@@ -188,31 +246,32 @@ def fetch_instance_catalog(instance: Dict[str, Any]) -> Dict[str, Dict[str, Any]
     res_map = {}
 
     try:
-        s = _ws_handshake(host, port, timeout=6.0)
-        _ws_recv(s) # auth_required
-        _ws_send(s, json.dumps({"type": "auth", "access_token": token}))
-        auth_raw = _ws_recv(s)
+        ws = HAWebSocketClient(host, port, timeout=6.0)
+        ws.connect()
+        ws.recv() # auth_required
+        ws.send(json.dumps({"type": "auth", "access_token": token}))
+        auth_raw = ws.recv()
         auth_data = json.loads(auth_raw or "{}")
         if auth_data.get("type") != "auth_ok":
-            s.close()
+            ws.close()
             return {}
 
         # 1. Device registry
-        _ws_send(s, json.dumps({"id": 1, "type": "config/device_registry/list"}))
-        devs_raw = _ws_recv(s)
+        ws.send(json.dumps({"id": 1, "type": "config/device_registry/list"}))
+        devs_raw = ws.recv()
         devices = json.loads(devs_raw or "{}").get("result", [])
 
         # 2. Entity registry
-        _ws_send(s, json.dumps({"id": 2, "type": "config/entity_registry/list"}))
-        ents_raw = _ws_recv(s)
+        ws.send(json.dumps({"id": 2, "type": "config/entity_registry/list"}))
+        ents_raw = ws.recv()
         entities = json.loads(ents_raw or "{}").get("result", [])
 
         # 3. Area registry
-        _ws_send(s, json.dumps({"id": 3, "type": "config/area_registry/list"}))
-        areas_raw = _ws_recv(s)
-        areas = {a['id']: a.get('name') for a in json.loads(areas_raw or "{}").get("result", [])}
+        ws.send(json.dumps({"id": 3, "type": "config/area_registry/list"}))
+        areas_raw = ws.recv()
+        areas = {(a.get('area_id') or a.get('id')): a.get('name') for a in json.loads(areas_raw or "{}").get("result", []) if isinstance(a, dict)}
 
-        s.close()
+        ws.close()
 
         # Mapa de entidades por device_id
         dev_to_ents = {}
@@ -245,12 +304,24 @@ def fetch_instance_catalog(instance: Dict[str, Any]) -> Dict[str, Dict[str, Any]
 
         # Procesar dispositivos y extraer MACs
         for dev in devices:
-            macs = []
+            macs = set()
+            # 1. Conexiones (MAC estándar)
             for conn in dev.get('connections', []):
                 if isinstance(conn, (list, tuple)) and len(conn) >= 2:
                     if str(conn[0]).lower() == 'mac':
                         m = norm_mac(str(conn[1]))
-                        if m: macs.append(m)
+                        if m: macs.add(m)
+
+            # 2. Identificadores (Tuya, eWeLink, ESPHome, Tasmota)
+            for ident in dev.get('identifiers', []):
+                if isinstance(ident, (list, tuple)) and len(ident) >= 2:
+                    val = str(ident[1]).strip()
+                    if re.fullmatch(r'[0-9a-fA-F]{12}', val):
+                        m = norm_mac(val)
+                        if m: macs.add(m)
+                    elif len(val) >= 12 and re.match(r'^[0-9a-fA-F]{12}$', val[-12:]):
+                        m = norm_mac(val[-12:])
+                        if m: macs.add(m)
 
             if not macs:
                 continue
@@ -296,8 +367,8 @@ def fetch_instance_catalog(instance: Dict[str, Any]) -> Dict[str, Dict[str, Any]
             for m in macs:
                 res_map[m] = item_info
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[HA-Plugin] Error al obtener catálogo de {inst_name}: {e}")
 
     return res_map
 
@@ -410,6 +481,9 @@ def hunt_mac_forensics(target_mac_raw: str, cfg: Dict[str, Any], state: Dict[str
     if ha_enabled:
         ha_map = get_ha_mac_map(cfg)
         ha_info = ha_map.get(mac)
+        if not ha_info:
+            ha_map = get_ha_mac_map(cfg, force_refresh=True)
+            ha_info = ha_map.get(mac)
 
     # 3. Malla Wi-Fi y Topología
     mesh_info = None
@@ -468,6 +542,7 @@ def hunt_mac_forensics(target_mac_raw: str, cfg: Dict[str, Any], state: Dict[str
 def _lookup_oui(prefix: str, full_mac: str) -> Dict[str, Any]:
     """Identifica fabricante, chipsets típicos y tipo de dispositivo por prefijo OUI."""
     OUI_DATABASE = {
+        "DC:4F:22": {"vendor": "Espressif Systems Inc. (Tuya IoT)", "family": "Espressif / Tuya Smart Socket", "chip": "ESP8266 / ESP32 / Tuya Wi-Fi", "type": "Enchufe / Interruptor Inteligente Smart"},
         "D0:27:03": {"vendor": "Shenzhen Sonoff Technology Co., Ltd. (SONOFF)", "family": "Sonoff / eWeLink", "chip": "Bouffalo Lab (BL602) / ESP8266", "type": "Enchufe / Interruptor Inteligente Wi-Fi"},
         "60:01:94": {"vendor": "Espressif Systems Inc.", "family": "ESP8266 / NodeMCU", "chip": "ESP8266 Wi-Fi SoC", "type": "Módulo IoT / Microcontrolador Domótico"},
         "24:4C:AB": {"vendor": "Espressif Systems Inc.", "family": "ESP32", "chip": "ESP32 Dual-Core Wi-Fi+BLE", "type": "Módulo IoT / Domótica"},
@@ -539,14 +614,16 @@ def _build_hunter_diagnosis(mac, oui, ha, mesh, adguard, history, ping) -> Dict[
     status_label = "Desconocido"
     badge_type = "warn"
 
-    if ha and ha.get("data"):
-        d = ha["data"]
-        name = d.get("name") or "Sin nombre"
+    d = ha.get("data") if (isinstance(ha, dict) and "data" in ha) else ha
+    if d and isinstance(d, dict) and (d.get("name") or d.get("device_id")):
+        name = d.get("name") or "Dispositivo Smart"
         inst = d.get("instance_name") or "Home Assistant"
         status_label = f"Identificado en {inst} como «{name}»"
         badge_type = "success"
 
-        if not adguard.get("live_ips") and not (ping and ping.get("alive")):
+        if adguard.get("assigned_ip"):
+            recs.append(f"El dispositivo tiene IP asignada en AdGuard Home: {adguard.get('assigned_ip')}.")
+        elif not adguard.get("live_ips") and not (ping and ping.get("alive")):
             recs.append("El dispositivo está controlado en Home Assistant pero no responde en la red local ni tiene lease DHCP en AdGuard.")
             recs.append("Causa probable: Se comunica por NUBE (WebSocket eWeLink/Tuya) o conserva una IP fija antigua del router.")
             recs.append("Solución recomendada: Desconecta el dispositivo de la corriente 5 segundos y vuelve a enchufarlo para forzar petición DHCP a AdGuard.")
