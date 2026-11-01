@@ -1072,8 +1072,20 @@ def trigger_router_reconnect(router, mac):
 
 
 def ping_ip(ip):
-    res = subprocess.run(['ping', '-c', '1', '-W', '1', ip], capture_output=True, text=True)
-    return res.returncode == 0
+    ok, _ = ping_ip_with_latency(ip)
+    return ok
+
+
+def ping_ip_with_latency(ip):
+    try:
+        res = subprocess.run(['ping', '-c', '1', '-W', '1', ip], capture_output=True, text=True, timeout=3)
+        if res.returncode == 0:
+            m = re.search(r'time=([\d\.]+)\s*ms', res.stdout)
+            lat = round(float(m.group(1)), 1) if m else None
+            return True, lat
+        return False, None
+    except Exception:
+        return False, None
 
 
 def verify_ip_l2(ip, target_mac=None, iface="eth0", timeout=2):
@@ -2221,6 +2233,18 @@ def api_assign_static():
     finally:
         run_sudo(['docker', 'start', 'adguardhome'])
 
+    # Colocar la MAC recién asignada al final de la lista histórica para que sea inmediatamente la Última Fijada
+    try:
+        order_cfg = load_config()
+        som = order_cfg.get('static_order_macs', [])
+        if mac in som:
+            som.remove(mac)
+        som.append(mac)
+        order_cfg['static_order_macs'] = som
+        save_config_raw(order_cfg)
+    except Exception:
+        pass
+
     base_msg = f'IP estática {ip} guardada en AdGuard Home para {hostname} ({mac}).'
     if removed > 0:
         base_msg += f' ({removed} concesiones previas purgadas).'
@@ -2305,13 +2329,19 @@ def api_ping():
     ip = (req.get('ip') or '').strip()
     mac = (req.get('mac') or '').strip().lower()
     alive = False
+    latency = None
     if ip:
         alive, _ = verify_ip_l2(ip, mac if mac else None)
-        if not alive:
-            alive = ping_ip(ip)
+        ok_p, lat = ping_ip_with_latency(ip)
+        if ok_p:
+            alive = True
+            latency = lat
+        elif not alive and ok_p:
+            alive = True
     return jsonify({
         'status': 'success',
         'alive': alive,
+        'latency': latency,
         'message': f'¡Comprobación exitosa! {ip} responde activamente.' if alive else f'Sin respuesta en {ip} todavía.'
     })
 
