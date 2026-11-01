@@ -4285,7 +4285,7 @@ function fillForm(hostname, mac, ip) {
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
     
-    // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre
+    // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre de forma silenciosa
     const octet = parseInt((ip || '').split('.').pop() || '0', 10);
     const hint = document.getElementById('card-ip-hint');
     if (!ip || (octet >= 100 && octet <= 200)) {
@@ -4293,13 +4293,25 @@ function fillForm(hostname, mac, ip) {
         if (freeIp) {
             document.getElementById('in-ip').value = freeIp;
             if (hint) hint.textContent = `(Sugerida IP fija libre: ${freeIp} en vez de la dinámica ${ip})`;
-            showMessage(`💡 Sugerida IP fija libre: ${freeIp} (antes dinámica ${ip})`);
         }
     } else {
         if (hint) hint.textContent = '';
     }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Desplazar suavemente hasta el formulario solo si es necesario, y destacar el recuadro
+    const card = document.getElementById('in-hostname')?.closest('.card');
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        card.style.transition = 'box-shadow 0.3s ease, border-color 0.3s ease';
+        card.style.borderColor = '#38bdf8';
+        card.style.boxShadow = '0 0 18px rgba(56,189,248,0.35)';
+        setTimeout(() => {
+            card.style.borderColor = '';
+            card.style.boxShadow = '';
+        }, 1200);
+    } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 }
 
 function suggestFreeIpForCard() {
@@ -4308,7 +4320,6 @@ function suggestFreeIpForCard() {
         document.getElementById('in-ip').value = freeIp;
         const hint = document.getElementById('card-ip-hint');
         if (hint) hint.textContent = `(Sugerida libre: ${freeIp})`;
-        showMessage(`💡 Sugerida IP libre: ${freeIp}`);
     } else {
         showMessage('No se encontraron IPs libres disponibles en la subred.', 'warning');
     }
