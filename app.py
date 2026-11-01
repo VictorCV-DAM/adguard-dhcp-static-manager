@@ -2227,7 +2227,7 @@ def api_assign_static():
     if removed > 0:
         base_msg += f' ({removed} concesiones previas purgadas).'
 
-    if not force_reconnect:
+    if not force_reconnect and not force_rf:
         return jsonify({'status': 'success', 'verified': True, 'message': f'📌 {base_msg} Se aplicará automáticamente en su próxima renovación DHCP.'})
 
     # Forzar reconexión inteligente según router y broadcast DHCPNAK

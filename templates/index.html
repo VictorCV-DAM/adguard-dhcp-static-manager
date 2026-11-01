@@ -1524,15 +1524,41 @@
     <div id="view-devices">
     <div class="grid">
         <div class="card">
-            <h3>Asignar / Cambiar IP Estática</h3>
-            <div class="form-row">
-                <input type="text" id="in-hostname" placeholder="Nombre (ej. enchufe-carga-oukitel)">
-                <input type="text" id="in-mac" placeholder="MAC (ej. a8:80:55:d2:df:80)">
-                <input type="text" id="in-ip" placeholder="Nueva IP estática (ej. 192.168.1.22)">
+            <h3 style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <span>✏️ Asignar / Cambiar IP Estática</span>
+                <span id="card-ip-hint" style="font-size:0.75rem; color:#38bdf8; font-weight:normal;"></span>
+            </h3>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; margin-bottom:12px;">
+                <div>
+                    <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Nombre del dispositivo (Hostname)</label>
+                    <input type="text" id="in-hostname" placeholder="Ej. enchufe-carga-oukitel" style="width:100%;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección MAC</label>
+                    <input type="text" id="in-mac" placeholder="a8:80:55:d2:df:80" style="width:100%;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección IP (192.168.1.X)</label>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" id="in-ip" placeholder="192.168.1.X" style="flex:1; font-family:monospace; font-weight:700; color:#38bdf8;">
+                        <button type="button" class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; white-space:nowrap;" onclick="suggestFreeIpForCard()" title="Sugerir automáticamente la siguiente IP fija libre fuera del pool DHCP">🔍 Libre</button>
+                    </div>
+                </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button id="sheet-btn-assign" class="btn" onclick="assignStatic(false)">Guardar IP y Purgar Concesión</button>
-                <button id="sheet-btn-force" class="btn btn-success" onclick="assignStatic(true)" title="Purga la concesión en AdGuard y reinicia el enlace Wi-Fi del AP configurado">⚡ Guardar + Forzar Reconexión AP</button>
+            
+            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
+                <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía un paquete DHCPNAK por red local y solicita desasociación al Router o nodos Mesh si está soportado">
+                    <input type="checkbox" id="card-force-reconnect"> ⚡ Forzar por Router / Mesh (DHCPNAK)
+                </label>
+                <label style="font-size:0.79rem; color:#38bdf8; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi">
+                    <input type="checkbox" id="card-force-rf"> 📡 Expulsión Forzosa por Radiofrecuencia (RF)
+                </label>
+            </div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button id="sheet-btn-assign" class="btn btn-primary" onclick="assignStaticFromCard()" style="font-weight:600; padding:8px 16px;">
+                    📌 Guardar Nombre / Aplicar IP
+                </button>
                 <div id="sheet-standalone-warning" style="display:none; width:100%; margin-top:8px; font-size:0.78rem; color:#cbd5e1; background:rgba(30,41,59,0.85); padding:7px 12px; border-radius:6px; border:1px solid rgba(148,163,184,0.3);">
                     ⚪ <strong>Modo Autónomo:</strong> Visualización de red, fichas, notas y puertos activos. Para asignar IP fija por DHCP en el servidor se requiere AdGuard Home.
                 </div>
@@ -4258,22 +4284,77 @@ function fillForm(hostname, mac, ip) {
     document.getElementById('in-hostname').value = hostname === '(Sin nombre)' ? '' : hostname;
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
+    
+    // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre
+    const octet = parseInt((ip || '').split('.').pop() || '0', 10);
+    const hint = document.getElementById('card-ip-hint');
+    if (!ip || (octet >= 100 && octet <= 200)) {
+        const freeIp = findNextFreeIp();
+        if (freeIp) {
+            document.getElementById('in-ip').value = freeIp;
+            if (hint) hint.textContent = `(Sugerida IP fija libre: ${freeIp} en vez de la dinámica ${ip})`;
+            showMessage(`💡 Sugerida IP fija libre: ${freeIp} (antes dinámica ${ip})`);
+        }
+    } else {
+        if (hint) hint.textContent = '';
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-async function assignStatic(forceReconnect) {
+function suggestFreeIpForCard() {
+    const freeIp = findNextFreeIp();
+    if (freeIp) {
+        document.getElementById('in-ip').value = freeIp;
+        const hint = document.getElementById('card-ip-hint');
+        if (hint) hint.textContent = `(Sugerida libre: ${freeIp})`;
+        showMessage(`💡 Sugerida IP libre: ${freeIp}`);
+    } else {
+        showMessage('No se encontraron IPs libres disponibles en la subred.', 'warning');
+    }
+}
+
+async function assignStaticFromCard() {
     const hostname = document.getElementById('in-hostname').value.trim();
     const mac = document.getElementById('in-mac').value.trim();
     const ip = document.getElementById('in-ip').value.trim();
-    showMessage(forceReconnect ? 'Aplicando IP estática y reconectando AP...' : 'Aplicando IP estática...');
-    const res = await fetch('/api/assign-static', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ hostname, mac, ip, force_reconnect: forceReconnect })
-    });
-    const data = await res.json();
-    showMessage(data.message || 'Guardado');
-    loadState();
+    const force_reconnect = document.getElementById('card-force-reconnect') ? document.getElementById('card-force-reconnect').checked : false;
+    const force_rf = document.getElementById('card-force-rf') ? document.getElementById('card-force-rf').checked : false;
+
+    if (!hostname || !mac || !ip) {
+        showMessage('Por favor completa Nombre, MAC e IP.', 'error');
+        return;
+    }
+
+    let msg = 'Guardando IP estática en AdGuard...';
+    if (force_reconnect && force_rf) {
+        msg = 'Guardando IP y expulsando (Router/DHCPNAK + Radiofrecuencia RF)...';
+    } else if (force_reconnect) {
+        msg = 'Guardando IP y forzando por Router / Mesh (DHCPNAK)...';
+    } else if (force_rf) {
+        msg = 'Guardando IP y emitiendo expulsión por Radiofrecuencia (RF)...';
+    }
+    showMessage(msg);
+
+    try {
+        const res = await fetch('/api/assign-static', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ hostname, mac, ip, force_reconnect, force_rf })
+        });
+        const data = await res.json();
+        showMessage(data.message || 'Guardado correctamente');
+        loadState();
+    } catch(e) {
+        showMessage('Error al guardar IP: ' + e.message, 'error');
+    }
+}
+
+async function assignStatic(forceReconnect) {
+    if (document.getElementById('card-force-reconnect')) {
+        document.getElementById('card-force-reconnect').checked = !!forceReconnect;
+    }
+    await assignStaticFromCard();
 }
 
 async function pingDevice(ip) {
@@ -8801,21 +8882,32 @@ async function saveDeviceMeta() {
     loadState();
 }
 
-function suggestFreeIpForSheet() {
+function findNextFreeIp() {
     const used = new Set();
-    allDevices.forEach(d => {
-        if (d.ip) used.add(d.ip.trim());
-        (d.live_ips || []).forEach(lip => used.add(lip.trim()));
-    });
-    // Buscar primero en el rango habitual de IPs estáticas (20..99 y 201..248)
+    if (typeof allDevices !== 'undefined' && Array.isArray(allDevices)) {
+        allDevices.forEach(d => {
+            if (d.ip) used.add(d.ip.trim());
+            (d.live_ips || []).forEach(lip => used.add(lip.trim()));
+        });
+    }
+    // Buscar primero en el rango habitual de IPs estáticas (20..99 y 201..248), luego dinámicas (100..200)
     const candidates = [];
     for (let i = 20; i <= 99; i++) candidates.push(`192.168.1.${i}`);
     for (let i = 201; i <= 248; i++) candidates.push(`192.168.1.${i}`);
     for (let i = 100; i <= 200; i++) candidates.push(`192.168.1.${i}`);
-    const freeIp = candidates.find(ip => !used.has(ip));
+    return candidates.find(ip => !used.has(ip));
+}
+
+function suggestFreeIpForSheet() {
+    const freeIp = findNextFreeIp();
     if (freeIp) {
         const ipInp = document.getElementById('ds-edit-ip');
-        if (ipInp) ipInp.value = freeIp;
+        if (ipInp) {
+            ipInp.value = freeIp;
+            showMessage(`💡 Sugerida IP libre: ${freeIp}`);
+        }
+    } else {
+        showMessage('No se encontraron IPs libres disponibles en la subred.', 'warning');
     }
 }
 
