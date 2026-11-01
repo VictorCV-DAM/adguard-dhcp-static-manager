@@ -737,6 +737,11 @@ def enrich_state(state):
         d['os_guess'] = os_guess(ttl, d.get('dev_class'))
         d['random_mac'] = bool(is_lam(mac))
         d['blocked'] = d.get('ip') in blocked
+        last_ip = row.get('last_ip')
+        if d.get('mismatch_ip'):
+            d['pending_migration_ip'] = d['mismatch_ip']
+        elif last_ip and last_ip != d.get('ip'):
+            d['pending_migration_ip'] = last_ip
         for l in d.get('web_links') or []:
             detected_urls.add(l['url'])
             sr = svc_rows.get(l['url']) or {}

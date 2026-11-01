@@ -1564,7 +1564,7 @@
                 <div>
                     <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección IP (192.168.1.X)</label>
                     <div style="display:flex; gap:6px;">
-                        <input type="text" id="in-ip" placeholder="192.168.1.X" style="flex:1; font-family:monospace; font-weight:700; color:#38bdf8;">
+                        <input type="text" id="in-ip" placeholder="192.168.1.X" oninput="syncCardMode()" style="flex:1; font-family:monospace; font-weight:700; color:#38bdf8;">
                         <button type="button" class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; white-space:nowrap;" onclick="suggestFreeIpForCard()" title="Sugerir automáticamente la siguiente IP fija libre fuera del pool DHCP">🔍 Libre</button>
                     </div>
                 </div>
@@ -2963,6 +2963,7 @@ function clearWifiTerminal() {
 }
 
 function updateWifiTabVisibility(enabled) {
+    if (typeof wifiPluginState !== 'undefined' && wifiPluginState) wifiPluginState.enabled = !!enabled;
     const btn = document.getElementById('tab-btn-wifirf');
     if (btn) btn.style.display = enabled ? 'inline-block' : 'none';
     const chk = document.getElementById('cfg-wifi-plugin-enabled');
@@ -2976,10 +2977,12 @@ function updateWifiTabVisibility(enabled) {
         }
     }
     const dsRfWrap = document.getElementById('ds-rf-reconnect-wrap');
-    if (dsRfWrap && !enabled) {
-        dsRfWrap.style.display = 'none';
-        const dsRfChk = document.getElementById('ds-rf-reconnect');
-        if (dsRfChk) dsRfChk.checked = false;
+    if (dsRfWrap) {
+        dsRfWrap.style.display = enabled ? 'flex' : 'none';
+        if (!enabled) {
+            const dsRfChk = document.getElementById('ds-rf-reconnect');
+            if (dsRfChk) { dsRfChk.checked = false; dsRfChk.disabled = true; }
+        }
     }
 }
 
@@ -4167,9 +4170,51 @@ function renderTable() {
     for (const d of filtered) {
         const tr = document.createElement('tr');
 
-        let arpHtml = (d.live_ips && d.live_ips.length) ? `<code>${d.live_ips.join(', ')}</code>` : `<span style="color:var(--muted)">Inactivo</span>`;
+        let ipCellHtml = `<code>${d.ip}</code>`;
         if (d.mismatch_ip) {
-            arpHtml += ` <span class="badge badge-warn" title="Sigue usando su IP anterior hasta que se reconecte">En ${d.mismatch_ip}</span>`;
+            ipCellHtml = `
+                <div style="line-height:1.35;">
+                    <code>${d.ip}</code>
+                    <div style="font-size:0.71rem; color:#fde047; font-weight:700; margin-top:2px;" title="Reserva fija en AdGuard Home, pero el dispositivo sigue respondiendo en su IP anterior">
+                        ↪ Activa: <strong style="font-family:monospace;">${d.mismatch_ip}</strong>
+                    </div>
+                </div>
+            `;
+        } else if (d.pending_migration_ip && (!d.live_ips || !d.live_ips.length)) {
+            ipCellHtml = `
+                <div style="line-height:1.35;">
+                    <code>${d.ip}</code>
+                    <div style="font-size:0.71rem; color:#fcd34d; opacity:0.85; margin-top:2px;" title="Pendiente de renovación DHCP tras asignar nueva IP fija">
+                        ⏳ Previa: <span style="font-family:monospace;">${d.pending_migration_ip}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        let arpHtml = '';
+        if (d.mismatch_ip) {
+            arpHtml = `
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <code style="color:#fde047; font-weight:700;">${d.mismatch_ip}</code>
+                        <span class="badge badge-warn" style="font-size:0.67rem; padding:1px 5px;" title="El dispositivo todavía no ha renovado su IP y responde en esta dirección antigua">Antigua</span>
+                    </div>
+                    <span style="font-size:0.68rem; color:var(--muted);">Esperando DHCP a ${d.ip}</span>
+                </div>
+            `;
+        } else if (d.live_ips && d.live_ips.length) {
+            arpHtml = `<code style="color:#86efac; font-weight:700;">${d.live_ips.join(', ')}</code>`;
+        } else if (d.pending_migration_ip) {
+            arpHtml = `
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <code style="color:#fde047; opacity:0.85;">${d.pending_migration_ip}</code>
+                        <span class="badge" style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); color:#fcd34d; font-size:0.67rem; padding:1px 5px;">Pendiente</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            arpHtml = `<span style="color:var(--muted)">Inactivo</span>`;
         }
 
         let routerBadgeClass = 'badge-offline';
@@ -4287,7 +4332,7 @@ function renderTable() {
             prediction: predHtml,
             medium: mediumHtml,
             mac: macHtml,
-            ip: `<code>${d.ip}</code>`,
+            ip: ipCellHtml,
             arp: arpHtml,
             router: routerHtml,
             latency: latHtml,
@@ -4299,7 +4344,7 @@ function renderTable() {
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ficha completa: notas, DNS, historial, WoL, cortar Internet y puertos">🧾 Ficha</button>
                     <button class="btn btn-outline" style="padding:4px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar y centrar este dispositivo en la topología de red">🌐 Mapa</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${(d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Editar / Fijar</button>
-                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.ip}')" title="Hacer Ping a ${d.ip}">⚡ Ping</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.mismatch_ip || d.ip}')" title="Hacer Ping a ${d.mismatch_ip || d.ip}${d.mismatch_ip ? ' (IP Activa Antigua)' : ''}">⚡ Ping</button>
                     <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Borrar</button>
                 </div>
             `
@@ -4320,28 +4365,29 @@ function renderTable() {
     }
 }
 
-function fillForm(hostname, mac, ip) {
-    document.getElementById('in-hostname').value = hostname === '(Sin nombre)' ? '' : hostname;
-    document.getElementById('in-mac').value = mac;
-    document.getElementById('in-ip').value = ip;
+function syncCardMode() {
+    const mac = (document.getElementById('in-mac')?.value || '').trim().toLowerCase();
+    const currentIp = (document.getElementById('in-ip')?.value || '').trim();
     const forceChk = document.getElementById('card-force-reconnect');
-
-    // Adaptar casilla RF según si el plugin está activo y el medio de conexión (cable vs wifi)
-    const dev = (typeof allDevices !== 'undefined' && Array.isArray(allDevices))
-        ? allDevices.find(d => (d.mac || '').toLowerCase() === (mac || '').toLowerCase())
-        : null;
-    const isAlreadyStaticDev = !!(dev && dev.static && dev.ip === ip);
-    if (forceChk) forceChk.checked = !isAlreadyStaticDev;
-    const isCable = dev && (dev.conn_medium === 'cable');
-    const rfEnabled = !!(wifiPluginState && wifiPluginState.enabled);
     const cardRfWrap = document.getElementById('card-rf-reconnect-wrap');
     const cardRfChk = document.getElementById('card-force-rf');
     const cardRfHint = document.getElementById('card-rf-status-hint');
+    const assignBtn = document.getElementById('sheet-btn-assign');
+    const hint = document.getElementById('card-ip-hint');
 
+    const dev = (typeof allDevices !== 'undefined' && Array.isArray(allDevices))
+        ? allDevices.find(d => (d.mac || '').toLowerCase() === mac)
+        : null;
+
+    const isCable = dev && (dev.conn_medium === 'cable');
+    const rfEnabled = !!(typeof wifiPluginState !== 'undefined' && wifiPluginState && wifiPluginState.enabled);
+
+    // 1. Visibilidad y estado del checkbox de Expulsión RF
     if (cardRfWrap && cardRfChk) {
         if (!rfEnabled) {
             cardRfWrap.style.display = 'none';
             cardRfChk.checked = false;
+            cardRfChk.disabled = true;
         } else if (isCable) {
             cardRfWrap.style.display = 'flex';
             cardRfChk.checked = false;
@@ -4349,18 +4395,41 @@ function fillForm(hostname, mac, ip) {
             cardRfWrap.style.opacity = '0.55';
             cardRfWrap.style.cursor = 'not-allowed';
             if (cardRfHint) cardRfHint.textContent = '(🚫 Cable Ethernet)';
-            cardRfWrap.title = '🚫 Conectado por Cable Ethernet (Expulsión RF no aplicable)';
         } else {
             cardRfWrap.style.display = 'flex';
             cardRfChk.disabled = false;
-            cardRfChk.checked = true;
             cardRfWrap.style.opacity = '1';
             cardRfWrap.style.cursor = 'pointer';
             if (cardRfHint) cardRfHint.textContent = '';
-            cardRfWrap.title = 'Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi';
         }
     }
-    
+
+    // 2. ¿Es SOLO cambio de nombre (misma IP que ya tiene el dispositivo)?
+    const isSameIp = dev && (dev.ip === currentIp || (dev.live_ips && dev.live_ips.includes(currentIp)));
+    if (dev && isSameIp) {
+        if (forceChk) forceChk.checked = false;
+        if (cardRfChk) cardRfChk.checked = false;
+        if (assignBtn) {
+            assignBtn.innerHTML = '💾 Guardar Nombre (Sin Desconexión)';
+            assignBtn.style.background = '#0284c7';
+        }
+        if (hint) hint.innerHTML = '<span style="color:#86efac; font-size:0.75rem;">(✏️ Modo solo renombrar: al mantenerse la IP fija, no se expulsará ni desconectará el dispositivo)</span>';
+    } else {
+        if (forceChk) forceChk.checked = true;
+        if (cardRfChk && !cardRfChk.disabled && rfEnabled) cardRfChk.checked = true;
+        if (assignBtn) {
+            assignBtn.innerHTML = '📌 Guardar Nombre / Aplicar IP';
+            assignBtn.style.background = '';
+        }
+        if (hint && !hint.textContent.includes('Sugerida')) hint.textContent = '';
+    }
+}
+
+function fillForm(hostname, mac, ip) {
+    document.getElementById('in-hostname').value = hostname === '(Sin nombre)' ? '' : hostname;
+    document.getElementById('in-mac').value = mac;
+    document.getElementById('in-ip').value = ip;
+
     // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre de forma silenciosa
     const octet = parseInt((ip || '').split('.').pop() || '0', 10);
     const hint = document.getElementById('card-ip-hint');
@@ -4370,17 +4439,9 @@ function fillForm(hostname, mac, ip) {
             document.getElementById('in-ip').value = freeIp;
             if (hint) hint.textContent = `(Sugerida IP fija libre: ${freeIp} en vez de la dinámica ${ip})`;
         }
-    } else {
-        const isAlreadyStatic = dev && dev.static;
-        const isSameIp = dev && (dev.ip === ip || (dev.live_ips && dev.live_ips.includes(ip)));
-        if (isAlreadyStatic && isSameIp) {
-            if (forceChk) forceChk.checked = false;
-            if (cardRfChk && !cardRfChk.disabled) cardRfChk.checked = false;
-            if (hint) hint.innerHTML = '<span style="color:#86efac; font-size:0.75rem;">(✏️ Modo renombrar: la IP se mantiene, no requiere reconexión de red)</span>';
-        } else {
-            if (hint) hint.textContent = '';
-        }
     }
+
+    syncCardMode();
 
     // Desplazar suavemente hasta el formulario solo si es necesario, y destacar el recuadro
     const card = document.getElementById('in-hostname')?.closest('.card');
@@ -4438,11 +4499,15 @@ async function assignStaticFromCard() {
             body: JSON.stringify({ hostname, mac, ip, force_reconnect, force_rf })
         });
         const data = await res.json();
+        if (data.status === 'error' || !res.ok) {
+            showMessage(data.message || 'Error al guardar IP', 'error');
+            return;
+        }
         showMessage(data.message || 'Guardado correctamente');
 
         // Forzar refresco inmediato de toda la lista y vista previa
         isRefreshing = false;
-        await loadState(true, false);
+        await loadState(true, true);
 
         // Limpiar el formulario y los hints de la tarjeta
         document.getElementById('in-hostname').value = '';
@@ -4452,6 +4517,7 @@ async function assignStaticFromCard() {
         if (hint) hint.textContent = '';
         const rfHint = document.getElementById('card-rf-status-hint');
         if (rfHint) rfHint.textContent = '';
+        syncCardMode();
     } catch(e) {
         showMessage('Error al guardar IP: ' + e.message, 'error');
     }
@@ -8596,9 +8662,13 @@ async function openDeviceSheet(mac, ipHint = '') {
     renderDeviceSheetPhoto(dev.photo || '', dev.dev_icon || '📱');
 
     document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Dispositivo sin nombre)'}`;
+    const activeIpBadge = dev.mismatch_ip
+        ? ` · IP Activa: <code class="clickable-copy-pill" style="color:#fde047; font-weight:700;" onclick="copyToClipboard('${dev.mismatch_ip}', 'IP Activa', this)" title="Responde actualmente en esta IP anterior">${dev.mismatch_ip} (Antigua) 📋</code>`
+        : '';
     document.getElementById('ds-subtitle').innerHTML = `
         MAC: <code class="clickable-copy-pill" onclick="copyToClipboard('${mac}', 'MAC', this)" title="Haz clic para copiar la MAC al portapapeles">${mac} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code> · 
-        IP: <code class="clickable-copy-pill" onclick="copyToClipboard('${currentSheetIp || ''}', 'IP', this)" title="Haz clic para copiar la IP al portapapeles">${currentSheetIp || '—'} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code> · 
+        IP Asignada: <code class="clickable-copy-pill" onclick="copyToClipboard('${dev.ip || currentSheetIp || ''}', 'IP Asignada', this)" title="IP guardada en AdGuard Home">${dev.ip || currentSheetIp || '—'} <span style="font-size:0.7rem; opacity:0.8;">📋</span></code>
+        ${activeIpBadge} · 
         Fabricante: <strong>${escapeHtml(dev.dev_vendor || 'Desconocido')}</strong>
     `;
     const hostInp = document.getElementById('ds-edit-hostname');
@@ -8648,6 +8718,23 @@ async function openDeviceSheet(mac, ipHint = '') {
             rfChk.checked = false;
             rfHint.innerHTML = '<span style="color:#fcd34d;">(⚠️ No detectado en escaneo RF previo · verificar alcance)</span>';
         }
+
+        const dsBtn = document.getElementById('ds-btn-apply-dhcp');
+        const updateSheetMode = () => {
+            const currentEditIp = (ipInp?.value || '').trim();
+            const isSameIp = !!(dev.static && dev.ip === currentEditIp);
+            if (isSameIp) {
+                if (forceChk) forceChk.checked = false;
+                if (rfChk && !rfChk.disabled) rfChk.checked = false;
+                if (dsBtn) dsBtn.innerHTML = '💾 Guardar Nombre (Sin Desconexión)';
+            } else {
+                if (forceChk) forceChk.checked = true;
+                if (rfChk && !rfChk.disabled && rfEnabled && !isCable) rfChk.checked = true;
+                if (dsBtn) dsBtn.innerHTML = '📌 Guardar Nombre / Aplicar IP';
+            }
+        };
+        if (ipInp) ipInp.oninput = updateSheetMode;
+        updateSheetMode();
     }
     if (dhcpBadge) {
         if (dev.manual_static) {
@@ -9212,7 +9299,8 @@ async function applyDhcpFromSheet() {
         }
         if (ok || isWarn) {
             refreshOpenDeviceSheetUi(currentSheetMac, ip, hostname);
-            await loadState(false);
+            isRefreshing = false;
+            await loadState(true, false);
             refreshOpenDeviceSheetUi(currentSheetMac, ip, hostname);
         }
     } catch (e) {
