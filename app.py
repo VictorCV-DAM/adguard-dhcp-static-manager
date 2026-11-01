@@ -42,6 +42,8 @@ DEFAULT_CONFIG = {
     "adguard_user": "victorlike",
     "adguard_pass": "",
     "custom_service_names": {},
+    "ha_plugin_enabled": False,
+    "home_assistant_instances": [],
     "routers": [
         {
             "id": "tplink-wr841n",
@@ -898,10 +900,19 @@ def save_config(new_cfg):
         cfg['alerts'] = new_cfg['alerts']
     if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
         cfg['routers'] = new_cfg['routers']
+    if 'ha_plugin_enabled' in new_cfg:
+        cfg['ha_plugin_enabled'] = bool(new_cfg['ha_plugin_enabled'])
+    if 'home_assistant_instances' in new_cfg and isinstance(new_cfg['home_assistant_instances'], list):
+        cfg['home_assistant_instances'] = new_cfg['home_assistant_instances']
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, indent=2)
-    # Invalidar caché de Mercusys por si cambiaron credenciales o IPs
+    # Invalidar caché de Mercusys y HA
     _HALO_CACHE["timestamp"] = 0.0
+    try:
+        import ha_plugin
+        ha_plugin._HA_CACHE["timestamp"] = 0.0
+    except Exception:
+        pass
     return cfg
 
 
@@ -1659,6 +1670,103 @@ def api_discover_routers():
     })
 
 
+# ---------------------------------------------------------------------------
+# API: Plugin Home Assistant (Multi-Instancia) y Cazador de MACs
+# ---------------------------------------------------------------------------
+@app.route('/api/ha/status', methods=['GET'])
+def api_ha_status():
+    cfg = load_config()
+    return jsonify({
+        'status': 'success',
+        'enabled': cfg.get('ha_plugin_enabled', False),
+        'instances': cfg.get('home_assistant_instances', [])
+    })
+
+
+@app.route('/api/ha/toggle', methods=['POST'])
+def api_ha_toggle():
+    cfg = load_config()
+    data = request.json or {}
+    val = bool(data.get('enabled'))
+    cfg['ha_plugin_enabled'] = val
+    save_config_raw(cfg)
+    try:
+        import ha_plugin
+        ha_plugin._HA_CACHE["timestamp"] = 0.0
+    except Exception:
+        pass
+    return jsonify({
+        'status': 'success',
+        'enabled': val,
+        'message': f"Plugin de Home Assistant {'activado' if val else 'desactivado'}."
+    })
+
+
+@app.route('/api/ha/save_instances', methods=['POST'])
+def api_ha_save_instances():
+    cfg = load_config()
+    data = request.json or {}
+    instances = data.get('instances', [])
+    if not isinstance(instances, list):
+        instances = []
+    cfg['home_assistant_instances'] = instances
+    save_config_raw(cfg)
+    try:
+        import ha_plugin
+        ha_plugin._HA_CACHE["timestamp"] = 0.0
+    except Exception:
+        pass
+    return jsonify({
+        'status': 'success',
+        'message': f"{len(instances)} instancias de Home Assistant guardadas.",
+        'instances': instances
+    })
+
+
+@app.route('/api/ha/test_instance', methods=['POST'])
+def api_ha_test_instance():
+    data = request.json or {}
+    url = data.get('url', '')
+    token = data.get('token', '')
+    try:
+        import ha_plugin
+        res = ha_plugin.test_ha_instance(url, token)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f"Error interno: {e}"})
+
+
+@app.route('/api/ha/discover', methods=['GET'])
+def api_ha_discover():
+    try:
+        import ha_plugin
+        found = ha_plugin.discover_ha_instances()
+        return jsonify({'status': 'success', 'instances': found})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e), 'instances': []})
+
+
+@app.route('/api/hunt_mac', methods=['GET', 'POST'])
+def api_hunt_mac():
+    if request.method == 'POST':
+        data = request.json or {}
+        mac = data.get('mac', '')
+    else:
+        mac = request.args.get('mac', '')
+    if not mac:
+        return jsonify({'success': False, 'error': 'Parámetro mac requerido (ej. AA:BB:CC:DD:EE:FF)'}), 400
+
+    cfg = load_config()
+    state = build_state()
+    try:
+        import ha_plugin
+        forensics = ha_plugin.hunt_mac_forensics(mac, cfg, state)
+        return jsonify(forensics)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f"Error en investigación forense: {e}"}), 500
+
+
+
 def build_state(force_refresh=False):
     """Construye el estado completo de la red (dispositivos, servicios, enlaces)."""
     cfg = load_config()
@@ -2146,6 +2254,14 @@ def build_state(force_refresh=False):
     except Exception:
         rf_cache = {}
 
+    ha_map = {}
+    if cfg.get('ha_plugin_enabled', False):
+        try:
+            import ha_plugin
+            ha_map = ha_plugin.get_ha_mac_map(cfg)
+        except Exception:
+            ha_map = {}
+
     for d in devices:
         if d.get('static'):
             d['static_order_idx'] = mac_to_order.get(d['mac'])
@@ -2162,6 +2278,11 @@ def build_state(force_refresh=False):
         else:
             d['rf_detected'] = False
             d['rf_channel'] = None
+
+        if m_low in ha_map:
+            d['ha_info'] = ha_map[m_low]
+        else:
+            d['ha_info'] = None
 
     ordered_statics_list = []
     for m in updated_order:
@@ -2211,7 +2332,9 @@ def build_state(force_refresh=False):
         'devices': devices,
         'network_links': global_network_links,
         'custom_service_names': custom_names,
-        'static_order_summary': static_order_summary
+        'static_order_summary': static_order_summary,
+        'ha_plugin_enabled': cfg.get('ha_plugin_enabled', False),
+        'home_assistant_instances': cfg.get('home_assistant_instances', [])
     }
 
 
