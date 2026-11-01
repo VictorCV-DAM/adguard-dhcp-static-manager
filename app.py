@@ -2415,13 +2415,14 @@ def api_ping():
     alive = False
     latency = None
     if ip:
-        alive, _ = verify_ip_l2(ip, mac if mac else None)
+        # 1. Comprobación ultra-rápida ICMP ping (milisegundos)
         ok_p, lat = ping_ip_with_latency(ip)
         if ok_p:
             alive = True
             latency = lat
-        elif not alive and ok_p:
-            alive = True
+        else:
+            # 2. Fallback L2 rápido (1s) para dispositivos que bloquean ICMP
+            alive, _ = verify_ip_l2(ip, mac if mac else None, timeout=1)
     return jsonify({
         'status': 'success',
         'alive': alive,

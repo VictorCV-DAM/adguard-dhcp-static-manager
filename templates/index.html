@@ -4556,7 +4556,6 @@ async function quickPing(btn, ip) {
             btn.style.borderColor = 'rgba(239,68,68,0.7)';
             btn.style.background = 'rgba(239,68,68,0.18)';
         }
-        loadState(false);
     } catch(e) {
         btn.innerHTML = '⚠️ Err';
     } finally {
@@ -9827,7 +9826,9 @@ function updateStaticOrderWidgets(summary) {
     }
 
     const modal = document.getElementById('modal-static-order');
-    if (modal && modal.style.display !== 'none') {
+    const container = document.getElementById('so-table-container');
+    // Solo renderizar si el contenedor aún no tiene contenido cargado para evitar destruir botones en uso
+    if (modal && modal.style.display !== 'none' && (!container || !container.children.length)) {
         renderStaticOrderList();
     }
 }
