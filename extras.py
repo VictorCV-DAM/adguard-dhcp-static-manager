@@ -752,6 +752,13 @@ def enrich_state(state):
             l['history'] = (hist.get(l['url']) or [])[-40:]
             l['first_seen'] = iso(sr.get('first_seen'))
 
+    # Enriquecer lista de fijadas con fecha y hora si falta
+    so = state.get('static_order_summary') or {}
+    for it in so.get('list', []):
+        if not it.get('assigned_at') or it.get('assigned_at') == '':
+            row = devs.get(norm_mac(it.get('mac'))) or {}
+            it['assigned_at'] = iso(row.get('first_seen')) or iso(now_ts())
+
     # Dispositivos recordados en panel.db que estén desconectados (sin lease activo ni ARP)
     existing_macs = {norm_mac(d.get('mac')) for d in state.get('devices', []) if d.get('mac')}
     predict_fn = D.get('predict_device_info') or (lambda h, m, x: ('Dispositivo', 'Desconocido', '📱', 'other'))

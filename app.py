@@ -2087,6 +2087,10 @@ def build_state(force_refresh=False):
     if not isinstance(static_order_macs, list):
         static_order_macs = []
 
+    static_assigned_at = cfg.get('static_assigned_at')
+    if not isinstance(static_assigned_at, dict):
+        static_assigned_at = {}
+
     current_static_macs = []
     for l in leases:
         if bool(l.get('static')):
@@ -2095,12 +2099,24 @@ def build_state(force_refresh=False):
                 current_static_macs.append(m_l)
 
     updated_order = [m for m in static_order_macs if m in current_static_macs]
+    cfg_changed = False
     for m in current_static_macs:
         if m not in updated_order:
             updated_order.append(m)
+            cfg_changed = True
+            if m not in static_assigned_at:
+                static_assigned_at[m] = now_iso
 
-    if updated_order != static_order_macs:
+    # Purgar MACs que ya no son estáticas
+    stale_assigned = [k for k in static_assigned_at if k not in current_static_macs]
+    if stale_assigned:
+        for k in stale_assigned:
+            static_assigned_at.pop(k, None)
+        cfg_changed = True
+
+    if updated_order != static_order_macs or cfg_changed:
         cfg['static_order_macs'] = updated_order
+        cfg['static_assigned_at'] = static_assigned_at
         save_config_raw(cfg)
 
     mac_to_order = {m: idx + 1 for idx, m in enumerate(updated_order)}
@@ -2132,6 +2148,8 @@ def build_state(force_refresh=False):
     for m in updated_order:
         dev_match = next((d for d in devices if d['mac'] == m), None)
         if dev_match:
+            assigned_at_iso = static_assigned_at.get(m) or dev_match.get('first_seen') or now_iso
+            dev_match['static_order_assigned_at'] = assigned_at_iso
             ordered_statics_list.append({
                 'order': mac_to_order[m],
                 'mac': m,
@@ -2139,7 +2157,8 @@ def build_state(force_refresh=False):
                 'hostname': dev_match.get('hostname', '(Sin nombre)'),
                 'dev_icon': dev_match.get('dev_icon', '📱'),
                 'dev_vendor': dev_match.get('dev_vendor', ''),
-                'router_node': dev_match.get('router_node', '')
+                'router_node': dev_match.get('router_node', ''),
+                'assigned_at': assigned_at_iso
             })
 
     manual_statics_list = []
@@ -2320,6 +2339,11 @@ def api_assign_static():
                 som.remove(mac)
             som.append(mac)
             order_cfg['static_order_macs'] = som
+            assigned_map = order_cfg.get('static_assigned_at', {})
+            if not isinstance(assigned_map, dict):
+                assigned_map = {}
+            assigned_map[mac] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            order_cfg['static_assigned_at'] = assigned_map
             save_config_raw(order_cfg)
         except Exception:
             pass

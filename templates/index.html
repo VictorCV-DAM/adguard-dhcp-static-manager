@@ -4705,6 +4705,20 @@ async function setDuration(seconds) {
 // TOPOLOGÍA, LÍNEA TEMPORAL, DIAGNÓSTICO, FICHA DISPOSITIVO, ALERTAS, BACKUP
 // =========================================================================
 
+function fmtDateTime(ts) {
+    if (!ts) return '—';
+    try {
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return String(ts);
+        return d.toLocaleString('es-ES', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    } catch (e) {
+        return String(ts);
+    }
+}
+
 function fmtRelTime(ts) {
     if (!ts) return '—';
     const sec = typeof ts === 'number' ? ts : Math.floor(new Date(ts).getTime() / 1000);
@@ -9860,22 +9874,24 @@ function renderStaticOrderList() {
     
     if (firstBox) {
         firstBox.innerHTML = summary.first 
-            ? `<div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            ? `<div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:6px;">
                 <div>
                     <span style="color:#86efac; font-weight:800;">#1</span> <strong>${escapeHtml(summary.first.hostname)}</strong> · <code style="color:#38bdf8;">${summary.first.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.first.mac})</span>
+                    ${summary.first.assigned_at ? `<span style="font-size:0.73rem; color:#86efac; margin-left:8px; font-weight:600;" title="Fecha de fijación">📅 ${fmtDateTime(summary.first.assigned_at)}</span>` : ''}
                 </div>
-                <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#86efac; border-color:rgba(34,197,94,0.4); margin-left:8px;" onclick="quickPing(this, '${summary.first.ip}')" title="Hacer Ping a ${summary.first.ip}">⚡ Ping</button>
+                <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#86efac; border-color:rgba(34,197,94,0.4);" onclick="quickPing(this, '${summary.first.ip}')" title="Hacer Ping a ${summary.first.ip}">⚡ Ping</button>
                </div>`
             : '<span style="color:var(--muted);">Sin IPs fijas registradas</span>';
     }
     
     if (lastBox) {
         lastBox.innerHTML = summary.last 
-            ? `<div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            ? `<div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:6px;">
                 <div>
                     <span style="color:#fde047; font-weight:800;">#${summary.last.order}</span> <strong>${escapeHtml(summary.last.hostname)}</strong> · <code style="color:#38bdf8;">${summary.last.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.last.mac})</span>
+                    ${summary.last.assigned_at ? `<span style="font-size:0.73rem; color:#fde047; margin-left:8px; font-weight:600;" title="Fecha de fijación">📅 ${fmtDateTime(summary.last.assigned_at)} (${fmtRelTime(summary.last.assigned_at)})</span>` : ''}
                 </div>
-                <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#fde047; border-color:rgba(234,179,8,0.4); margin-left:8px;" onclick="quickPing(this, '${summary.last.ip}')" title="Hacer Ping a ${summary.last.ip}">⚡ Ping</button>
+                <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#fde047; border-color:rgba(234,179,8,0.4);" onclick="quickPing(this, '${summary.last.ip}')" title="Hacer Ping a ${summary.last.ip}">⚡ Ping</button>
                </div>`
             : '<span style="color:var(--muted);">Sin IPs fijas registradas</span>';
     }
@@ -9888,6 +9904,7 @@ function renderStaticOrderList() {
             (item.hostname || '').toLowerCase().includes(searchVal) ||
             (item.ip || '').toLowerCase().includes(searchVal) ||
             (item.mac || '').toLowerCase().includes(searchVal) ||
+            (item.assigned_at && fmtDateTime(item.assigned_at).toLowerCase().includes(searchVal)) ||
             String(item.order).includes(searchVal)
         );
     }
@@ -9902,10 +9919,11 @@ function renderStaticOrderList() {
             <thead>
                 <tr style="border-bottom:1px solid var(--border); color:#38bdf8; background:#111827; position:sticky; top:0; z-index:2;">
                     <th style="padding:10px 10px; width:95px; min-width:95px; white-space:nowrap; overflow:visible;">Nº Orden</th>
-                    <th style="padding:10px 10px; min-width:180px;">Dispositivo Fijo</th>
-                    <th style="padding:10px 10px; width:120px; min-width:120px; white-space:nowrap;">Dirección IP</th>
-                    <th style="padding:10px 10px; width:140px; min-width:140px; white-space:nowrap;">MAC</th>
-                    <th style="padding:10px 10px; text-align:right; width:180px; min-width:180px; white-space:nowrap; overflow:visible;">Acciones</th>
+                    <th style="padding:10px 10px; min-width:170px;">Dispositivo Fijo</th>
+                    <th style="padding:10px 10px; width:115px; min-width:115px; white-space:nowrap;">Dirección IP</th>
+                    <th style="padding:10px 10px; width:135px; min-width:135px; white-space:nowrap;">MAC</th>
+                    <th style="padding:10px 10px; width:160px; min-width:160px; white-space:nowrap;">📅 Fijada (Fecha/Hora)</th>
+                    <th style="padding:10px 10px; text-align:right; width:170px; min-width:170px; white-space:nowrap; overflow:visible;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -9952,7 +9970,15 @@ function renderStaticOrderList() {
                         ${item.mac}
                     </code>
                 </td>
-                <td style="padding:8px 10px; text-align:right; white-space:nowrap; width:180px; min-width:180px; overflow:visible;">
+                <td style="padding:8px 10px; white-space:nowrap;">
+                    <div style="font-size:0.79rem; color:#f8fafc; font-weight:600;">
+                        ${fmtDateTime(item.assigned_at)}
+                    </div>
+                    <div style="font-size:0.70rem; color:var(--muted); margin-top:1px;">
+                        ${fmtRelTime(item.assigned_at)}
+                    </div>
+                </td>
+                <td style="padding:8px 10px; text-align:right; white-space:nowrap; width:170px; min-width:170px; overflow:visible;">
                     <div style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; white-space:nowrap;">
                         <button class="btn btn-outline" style="padding:3px 8px; font-size:0.73rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); flex-shrink:0; white-space:nowrap;" onclick="quickPing(this, '${item.ip}')" title="Hacer Ping a ${item.ip}">
                             ⚡ Ping
