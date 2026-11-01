@@ -600,8 +600,9 @@ def monitor_cycle():
             continue
 
         if online:
+            active_live_ip = (d.get('live_ips') or [d.get('ip')])[0]
             db_exec('UPDATE devices SET last_seen=?, last_ip=?, hostname=?, latency_ms=COALESCE(?, latency_ms), ttl=COALESCE(?, ttl) WHERE mac=?',
-                    (ts, d.get('ip'), d.get('hostname'), p.get('ms'), p.get('ttl'), mac))
+                    (ts, active_live_ip, d.get('hostname'), p.get('ms'), p.get('ttl'), mac))
             if not row['online']:
                 db_exec('UPDATE devices SET online=1 WHERE mac=?', (mac,))
                 db_exec('INSERT INTO device_events (ts, mac, ip, event) VALUES (?,?,?,?)', (ts, mac, d.get('ip'), 'online'))
@@ -715,6 +716,14 @@ def enrich_state(state):
         hist.setdefault(r['url'], []).append([r['up'], r['ms']])
     blocked = set(get_blocked_clients(silent=True))
     is_lam = D.get('is_locally_administered_mac') or (lambda m: False)
+    prev_ips_map = {}
+    try:
+        for r in db_query("SELECT mac, ip FROM device_events WHERE ip IS NOT NULL AND ip != '' ORDER BY ts ASC"):
+            m_norm = norm_mac(r['mac'])
+            if r['ip'] not in prev_ips_map.setdefault(m_norm, []):
+                prev_ips_map[m_norm].append(r['ip'])
+    except Exception:
+        pass
 
     detected_urls = set()
     for d in state.get('devices', []):
@@ -742,6 +751,19 @@ def enrich_state(state):
             d['pending_migration_ip'] = d['mismatch_ip']
         elif last_ip and last_ip != d.get('ip'):
             d['pending_migration_ip'] = last_ip
+            if not d.get('live_ips'):
+                d['mismatch_ip'] = last_ip
+                d['live_ips'] = [last_ip]
+        elif d.get('static') and (not d.get('live_ips') or d.get('ip') not in d.get('live_ips')):
+            # Buscar en el historial de eventos la última IP conocida distinta de la asignada
+            p_evs = [p for p in prev_ips_map.get(mac, []) if p and p != d.get('ip')]
+            if p_evs:
+                last_hist_ip = p_evs[-1]
+                d['pending_migration_ip'] = last_hist_ip
+                if not d.get('mismatch_ip'):
+                    d['mismatch_ip'] = last_hist_ip
+                if not d.get('live_ips'):
+                    d['live_ips'] = [last_hist_ip]
         for l in d.get('web_links') or []:
             detected_urls.add(l['url'])
             sr = svc_rows.get(l['url']) or {}

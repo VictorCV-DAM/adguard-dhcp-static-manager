@@ -1747,6 +1747,25 @@ def build_state(force_refresh=False):
             if lip != ip:
                 mismatch_ip = lip
 
+        # Gestión persistente de dispositivos en proceso de migración DHCP (IP antigua -> IP nueva)
+        pending_migrations = cfg.get('pending_migrations', {})
+        if is_static:
+            if ip in live_ips:
+                if mac in pending_migrations:
+                    pending_migrations.pop(mac, None)
+                    cfg['pending_migrations'] = pending_migrations
+                    try:
+                        save_config_raw(cfg)
+                    except Exception:
+                        pass
+            else:
+                p_ip = pending_migrations.get(mac)
+                if p_ip:
+                    if not mismatch_ip:
+                        mismatch_ip = p_ip
+                    if p_ip not in live_ips:
+                        live_ips.append(p_ip)
+
         dev_class, dev_vendor, dev_icon, dev_cat = predict_device_info(hostname, mac, halo_info)
         is_wireless = is_wireless_only_device(dev_class, dev_cat, hostname, mac)
 
@@ -2397,6 +2416,19 @@ def api_assign_static():
                 ok_rf, rf_log = wifi_plugin.send_rf_deauth_if_available(mac)
                 if ok_rf:
                     actions_taken.append("Expulsión RF (802.11 aire) emitida")
+        except Exception:
+            pass
+
+    # Registrar migración pendiente (IP previa -> IP nueva) para que la IP activa previa no se pierda de vista
+    if old_ip and old_ip != ip:
+        try:
+            cfg_pm = load_config()
+            pm_map = cfg_pm.get('pending_migrations', {})
+            if not isinstance(pm_map, dict):
+                pm_map = {}
+            pm_map[mac] = old_ip
+            cfg_pm['pending_migrations'] = pm_map
+            save_config_raw(cfg_pm)
         except Exception:
             pass
 
