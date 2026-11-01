@@ -1705,7 +1705,7 @@ def build_state(force_refresh=False):
 
         live_ips = list(arp.get(mac, []))
         halo_info = halo_client_map.get(mac)
-        if halo_info and halo_info.get("online") and ip and ip not in live_ips:
+        if not live_ips and halo_info and halo_info.get("online") and ip:
             live_ips.append(ip)
 
         mismatch_ip = None
@@ -1805,11 +1805,12 @@ def build_state(force_refresh=False):
         })
 
     seen_ips = {d['ip'] for d in devices if d.get('ip')}
+    seen_macs = {d['mac'].lower() for d in devices if d.get('mac')}
 
     # Active devices detected via ARP without an AdGuard DHCP lease (e.g. manual static IPs / infrastructure)
     for arp_mac, arp_ips in arp.items():
         m = (arp_mac or '').lower()
-        if m in ('', '00:00:00:00:00:00'):
+        if m in ('', '00:00:00:00:00:00') or m in seen_macs:
             continue
         for aip in arp_ips:
             if not aip or ':' in aip or aip in seen_ips:
