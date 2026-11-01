@@ -1550,8 +1550,8 @@
                 <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía un paquete DHCPNAK por red local y solicita desasociación al Router o nodos Mesh si está soportado">
                     <input type="checkbox" id="card-force-reconnect" checked> ⚡ Forzar por Router / Mesh (DHCPNAK)
                 </label>
-                <label style="font-size:0.79rem; color:#38bdf8; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi">
-                    <input type="checkbox" id="card-force-rf"> 📡 Expulsión Forzosa por Radiofrecuencia (RF)
+                <label id="card-rf-reconnect-wrap" style="font-size:0.79rem; color:#38bdf8; display:none; align-items:center; gap:6px; cursor:pointer;" title="Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi">
+                    <input type="checkbox" id="card-force-rf"> 📡 Expulsión Forzosa por Radiofrecuencia (RF) <span id="card-rf-status-hint" style="font-size:0.73rem; color:var(--muted); margin-left:4px;"></span>
                 </label>
             </div>
 
@@ -2943,6 +2943,14 @@ function updateWifiTabVisibility(enabled) {
     if (btn) btn.style.display = enabled ? 'inline-block' : 'none';
     const chk = document.getElementById('cfg-wifi-plugin-enabled');
     if (chk) chk.checked = enabled;
+    const cardRfWrap = document.getElementById('card-rf-reconnect-wrap');
+    if (cardRfWrap) {
+        cardRfWrap.style.display = enabled ? 'flex' : 'none';
+        if (!enabled) {
+            const rfChk = document.getElementById('card-force-rf');
+            if (rfChk) rfChk.checked = false;
+        }
+    }
 }
 
 async function toggleWifiPluginFromConfig(enabled) {
@@ -4286,6 +4294,39 @@ function fillForm(hostname, mac, ip) {
     document.getElementById('in-ip').value = ip;
     const forceChk = document.getElementById('card-force-reconnect');
     if (forceChk) forceChk.checked = true;
+
+    // Adaptar casilla RF según si el plugin está activo y el medio de conexión (cable vs wifi)
+    const dev = (typeof allDevices !== 'undefined' && Array.isArray(allDevices))
+        ? allDevices.find(d => (d.mac || '').toLowerCase() === (mac || '').toLowerCase())
+        : null;
+    const isCable = dev && (dev.conn_medium === 'cable');
+    const rfEnabled = !!(wifiPluginState && wifiPluginState.enabled);
+    const cardRfWrap = document.getElementById('card-rf-reconnect-wrap');
+    const cardRfChk = document.getElementById('card-force-rf');
+    const cardRfHint = document.getElementById('card-rf-status-hint');
+
+    if (cardRfWrap && cardRfChk) {
+        if (!rfEnabled) {
+            cardRfWrap.style.display = 'none';
+            cardRfChk.checked = false;
+        } else if (isCable) {
+            cardRfWrap.style.display = 'flex';
+            cardRfChk.checked = false;
+            cardRfChk.disabled = true;
+            cardRfWrap.style.opacity = '0.55';
+            cardRfWrap.style.cursor = 'not-allowed';
+            if (cardRfHint) cardRfHint.textContent = '(🚫 Cable Ethernet)';
+            cardRfWrap.title = '🚫 Conectado por Cable Ethernet (Expulsión RF no aplicable)';
+        } else {
+            cardRfWrap.style.display = 'flex';
+            cardRfChk.disabled = false;
+            cardRfChk.checked = true;
+            cardRfWrap.style.opacity = '1';
+            cardRfWrap.style.cursor = 'pointer';
+            if (cardRfHint) cardRfHint.textContent = '';
+            cardRfWrap.title = 'Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi';
+        }
+    }
     
     // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre de forma silenciosa
     const octet = parseInt((ip || '').split('.').pop() || '0', 10);
