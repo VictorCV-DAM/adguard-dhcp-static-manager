@@ -1548,7 +1548,7 @@
             
             <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
                 <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía un paquete DHCPNAK por red local y solicita desasociación al Router o nodos Mesh si está soportado">
-                    <input type="checkbox" id="card-force-reconnect"> ⚡ Forzar por Router / Mesh (DHCPNAK)
+                    <input type="checkbox" id="card-force-reconnect" checked> ⚡ Forzar por Router / Mesh (DHCPNAK)
                 </label>
                 <label style="font-size:0.79rem; color:#38bdf8; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi">
                     <input type="checkbox" id="card-force-rf"> 📡 Expulsión Forzosa por Radiofrecuencia (RF)
@@ -4284,6 +4284,8 @@ function fillForm(hostname, mac, ip) {
     document.getElementById('in-hostname').value = hostname === '(Sin nombre)' ? '' : hostname;
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
+    const forceChk = document.getElementById('card-force-reconnect');
+    if (forceChk) forceChk.checked = true;
     
     // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre de forma silenciosa
     const octet = parseInt((ip || '').split('.').pop() || '0', 10);
