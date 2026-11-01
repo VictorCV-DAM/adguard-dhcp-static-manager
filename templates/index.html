@@ -9574,7 +9574,7 @@ function updateStaticOrderWidgets(summary) {
     const firstEl = document.getElementById('lbl-static-first');
     if (firstEl) {
         if (summary.first) {
-            firstEl.innerHTML = `<strong>#1 ${escapeHtml(summary.first.hostname || summary.first.mac)}</strong> <code style="color:#38bdf8;">(${summary.first.ip})</code>`;
+            firstEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:6px;"><strong>#1 ${escapeHtml(summary.first.hostname || summary.first.mac)}</strong> <code style="color:#38bdf8;">(${summary.first.ip})</code> <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#86efac; border-color:rgba(34,197,94,0.4); margin-left:4px;" onclick="event.stopPropagation(); pingDevice('${summary.first.ip}')" title="Hacer Ping a la 1ª IP fija (${summary.first.ip})">⚡ Ping</button></span>`;
         } else {
             firstEl.textContent = '—';
         }
@@ -9583,10 +9583,15 @@ function updateStaticOrderWidgets(summary) {
     const lastEl = document.getElementById('lbl-static-last');
     if (lastEl) {
         if (summary.last) {
-            lastEl.innerHTML = `<strong>#${summary.last.order} ${escapeHtml(summary.last.hostname || summary.last.mac)}</strong> <code style="color:#38bdf8;">(${summary.last.ip})</code>`;
+            lastEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:6px;"><strong>#${summary.last.order} ${escapeHtml(summary.last.hostname || summary.last.mac)}</strong> <code style="color:#38bdf8;">(${summary.last.ip})</code> <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#fde047; border-color:rgba(234,179,8,0.4); margin-left:4px;" onclick="event.stopPropagation(); pingDevice('${summary.last.ip}')" title="Hacer Ping a la última IP fija (${summary.last.ip})">⚡ Ping</button></span>`;
         } else {
             lastEl.textContent = '—';
         }
+    }
+
+    const modal = document.getElementById('modal-static-order');
+    if (modal && modal.style.display !== 'none') {
+        renderStaticOrderList();
     }
 }
 
@@ -9617,13 +9622,23 @@ function renderStaticOrderList() {
     
     if (firstBox) {
         firstBox.innerHTML = summary.first 
-            ? `<span style="color:#86efac; font-weight:800;">#1</span> <strong>${escapeHtml(summary.first.hostname)}</strong> · <code style="color:#38bdf8;">${summary.first.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.first.mac})</span>`
+            ? `<div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <div>
+                    <span style="color:#86efac; font-weight:800;">#1</span> <strong>${escapeHtml(summary.first.hostname)}</strong> · <code style="color:#38bdf8;">${summary.first.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.first.mac})</span>
+                </div>
+                <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#86efac; border-color:rgba(34,197,94,0.4); margin-left:8px;" onclick="pingDevice('${summary.first.ip}')" title="Hacer Ping a ${summary.first.ip}">⚡ Ping</button>
+               </div>`
             : '<span style="color:var(--muted);">Sin IPs fijas registradas</span>';
     }
     
     if (lastBox) {
         lastBox.innerHTML = summary.last 
-            ? `<span style="color:#fde047; font-weight:800;">#${summary.last.order}</span> <strong>${escapeHtml(summary.last.hostname)}</strong> · <code style="color:#38bdf8;">${summary.last.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.last.mac})</span>`
+            ? `<div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <div>
+                    <span style="color:#fde047; font-weight:800;">#${summary.last.order}</span> <strong>${escapeHtml(summary.last.hostname)}</strong> · <code style="color:#38bdf8;">${summary.last.ip}</code> <span style="font-size:0.75rem; color:var(--muted); font-family:monospace;">(${summary.last.mac})</span>
+                </div>
+                <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#fde047; border-color:rgba(234,179,8,0.4); margin-left:8px;" onclick="pingDevice('${summary.last.ip}')" title="Hacer Ping a ${summary.last.ip}">⚡ Ping</button>
+               </div>`
             : '<span style="color:var(--muted);">Sin IPs fijas registradas</span>';
     }
     
@@ -9699,7 +9714,10 @@ function renderStaticOrderList() {
                         ${item.mac}
                     </code>
                 </td>
-                <td style="padding:9px 12px; text-align:right;">
+                <td style="padding:9px 12px; text-align:right; white-space:nowrap;">
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); margin-right:4px;" onclick="pingDevice('${item.ip}')" title="Hacer Ping a ${item.ip}">
+                        ⚡ Ping
+                    </button>
                     <button class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem;" onclick="closeStaticOrderModal(); openDeviceSheet('${item.mac}', '${item.ip}')">
                         👁️ Ver Ficha
                     </button>
@@ -9745,7 +9763,10 @@ function renderStaticOrderList() {
                     <td style="padding:6px 8px; font-family:monospace; color:var(--muted); font-size:0.74rem;">
                         ${mItem.mac}
                     </td>
-                    <td style="padding:6px 8px; text-align:right;">
+                    <td style="padding:6px 8px; text-align:right; white-space:nowrap;">
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); margin-right:4px;" onclick="pingDevice('${mItem.ip}')" title="Hacer Ping a ${mItem.ip}">
+                            ⚡ Ping
+                        </button>
                         <button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem;" onclick="closeStaticOrderModal(); openDeviceSheet('${mItem.mac}', '${mItem.ip}')" title="Crear reserva fija oficial en AdGuard para que tenga orden #">
                             📌 Fijar en AdGuard
                         </button>
