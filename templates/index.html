@@ -6464,7 +6464,7 @@ function smartAutoOrganizeTopology() {
     // 1. Guardar el estado actual en el historial de deshacer (Ctrl+Z)
     pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions || {})));
 
-    _autoOrganizeCounter = (_autoOrganizeCounter + 1) % 24;
+    _autoOrganizeCounter = (_autoOrganizeCounter + 1) % 3;
     try {
         localStorage.setItem('ag_topo_organize_seed', String(_autoOrganizeCounter));
     } catch (e) {}
@@ -6472,81 +6472,66 @@ function smartAutoOrganizeTopology() {
     const hubNodes = topoState.nodes.filter(n => n.type === 'hub');
     if (hubNodes.length === 0) return;
 
-    // 2. Análisis jerárquico 100% dinámico y natural del grafo de red
-    const directHubs = [];
-    const satelliteHubs = {}; // parentId -> [childHubs]
+    // Preservar la arquitectura lógica y coherente de la red doméstica:
+    // - Router Principal / Pasarela en la base central
+    // - Ala izquierda: TP-Link WR841N (inferior) y Halo 2 Estudio (superior)
+    // - Ala derecha: Halo 1 Mi habitación (inferior) y Halo 3 Pasillo (superior)
+    // - Eje central: Servidores LAN (HA-VM, Pi-Server) y archivo Desconectado
+    const newPositions = {};
+
+    const varIndex = _autoOrganizeCounter; // 0, 1, 2
+    const varNames = [
+        'Constelación Expansiva Panorámica',
+        'Árbol Arquitectónico Balanceado',
+        'Flujo Orgánico Celestial'
+    ];
+
+    // Variaciones coherentes de espaciado y elevación por clic:
+    // Variación 0: Alas amplias horizontales, máxima separación central
+    // Variación 1: Elevación simétrica vertical, equilibrio de alturas
+    // Variación 2: Flujo orgánico con ligera respiración lateral
+    const wingX = varIndex === 0 ? 460 : (varIndex === 1 ? 400 : 430);
+    const upperY = varIndex === 0 ? -110 : (varIndex === 1 ? -150 : -80);
+    const lowerY = varIndex === 0 ? 190 : (varIndex === 1 ? 160 : 210);
+    const coreY = varIndex === 1 ? 330 : 360;
+
+    newPositions['__core__'] = { x: 0, y: coreY };
 
     hubNodes.forEach(h => {
-        const parentId = h.parentId || '__core__';
-        if (parentId === '__core__' || !hubNodes.some(p => p.id === parentId)) {
-            directHubs.push(h);
+        const labelLow = (h.label || '').toLowerCase();
+        const idLow = (h.id || '').toLowerCase();
+
+        if (labelLow.includes('lan') || labelLow.includes('router principal') || idLow === 'hub:lan') {
+            newPositions[h.id] = { x: 0, y: coreY - 110 };
+        } else if (labelLow.includes('wr841n') || labelLow.includes('tp-link') || labelLow.includes('taller')) {
+            // Ala izquierda inferior
+            newPositions[h.id] = { x: -wingX + 40, y: lowerY };
+        } else if (labelLow.includes('halo 2') || labelLow.includes('estudio')) {
+            // Ala izquierda superior
+            newPositions[h.id] = { x: -wingX, y: upperY };
+        } else if (labelLow.includes('halo 3') || labelLow.includes('pasillo')) {
+            // Ala derecha superior
+            newPositions[h.id] = { x: wingX, y: upperY };
+        } else if (labelLow.includes('halo 1') || labelLow.includes('habitaci')) {
+            // Ala derecha inferior
+            newPositions[h.id] = { x: wingX - 40, y: lowerY };
+        } else if (labelLow.includes('desconectado') || labelLow.includes('offline')) {
+            // Zona superior central
+            newPositions[h.id] = { x: 0, y: -240 };
+        } else if (labelLow.includes('wifi') || idLow === 'hub:wifi') {
+            newPositions[h.id] = { x: -180, y: coreY - 90 };
         } else {
-            if (!satelliteHubs[parentId]) satelliteHubs[parentId] = [];
-            satelliteHubs[parentId].push(h);
+            // Cualquier otro nodo descubierto: asignar a la banda que corresponda
+            const isLeft = (h.baseX < 0);
+            newPositions[h.id] = {
+                x: isLeft ? -wingX - 60 : wingX + 60,
+                y: Math.round(upperY + (varIndex === 0 ? 80 : -60))
+            };
         }
     });
 
-    // Calcular el volumen de dispositivos de cada subárbol (clientes directos + clientes de satélites)
-    function getSubtreeWeight(hub) {
-        const directDevs = hub.totalCount || hub.onlineCount || 1;
-        const children = satelliteHubs[hub.id] || [];
-        const childDevs = children.reduce((acc, c) => acc + (c.totalCount || c.onlineCount || 1), 0);
-        return directDevs + childDevs;
-    }
-
-    // Variación angular dinámica en cada pulsación para generar alternativas frescas
-    // Cada clic rota el sistema ~35° a 45° con respiración y alternancia de cuadrantes
-    const baseRotation = (_autoOrganizeCounter * 0.628) + (Math.sin(_autoOrganizeCounter * 1.5) * 0.18);
-
-    // Rotar cíclicamente el orden de ramas directas según el contador para explorar múltiples orientaciones
-    const orderedDirect = [...directHubs];
-    if (orderedDirect.length > 1) {
-        const shift = _autoOrganizeCounter % orderedDirect.length;
-        const rotated = orderedDirect.slice(shift).concat(orderedDirect.slice(0, shift));
-        orderedDirect.length = 0;
-        orderedDirect.push(...rotated);
-    }
-
-    const newPositions = {};
-    newPositions['__core__'] = { x: 0, y: 0 };
-
-    const directCount = orderedDirect.length;
-    const stepAngle = (Math.PI * 2) / Math.max(1, directCount);
-
-    orderedDirect.forEach((hub, idx) => {
-        const weight = getSubtreeWeight(hub);
-        const centerAngle = baseRotation + idx * stepAngle;
-
-        // Radio dinámico según volumen de dispositivos + respiración orgánica por clic
-        const clientBonus = Math.min(180, weight * 7);
-        const organicJitter = Math.round(Math.sin(_autoOrganizeCounter * 2.7 + idx * 2.1) * 28);
-        const radius = Math.round(330 + clientBonus + organicJitter);
-
-        const hubX = Math.round(Math.cos(centerAngle) * radius);
-        const hubY = Math.round(Math.sin(centerAngle) * radius);
-        newPositions[hub.id] = { x: hubX, y: hubY };
-
-        // Ramificar satélites (nodos mesh hijos u otros repetidores encadenados)
-        const children = satelliteHubs[hub.id] || [];
-        if (children.length > 0) {
-            const outwardRadial = Math.atan2(hubY, hubX);
-            const satCount = children.length;
-            const satFanSpan = satCount === 1 ? 0 : Math.min(Math.PI * 0.9, 0.55 + (satCount - 1) * 0.38);
-            const satStartAngle = outwardRadial - (satFanSpan / 2);
-
-            children.forEach((sat, sIdx) => {
-                const satAngle = satCount === 1 ? outwardRadial : (satStartAngle + (sIdx / (satCount - 1)) * satFanSpan);
-                const satWeight = sat.totalCount || sat.onlineCount || 1;
-                const satRadius = Math.round(330 + Math.min(130, satWeight * 7) + (Math.cos(_autoOrganizeCounter + sIdx * 1.8) * 22));
-
-                const satX = Math.round(hubX + Math.cos(satAngle) * satRadius);
-                const satY = Math.round(hubY + Math.sin(satAngle) * satRadius);
-                newPositions[sat.id] = { x: satX, y: satY };
-            });
-        }
-    });
-
-    // 3. Asignar las nuevas posiciones a los hubs y proyectar clientes en abanicos despejados hacia el exterior
+    // 3. Aplicar las nuevas posiciones a los hubs y purgar las posiciones cliente
+    // para que buildTopoGraph proyecte los clientes en sus nuevas constelaciones exteriores protegidas
     topoState.customPositions = newPositions;
     buildTopoGraph(false);
 
@@ -6559,7 +6544,7 @@ function smartAutoOrganizeTopology() {
     fitTopoToScreen(true);
     triggerNeuralCascade();
     updateTopoUndoBtn();
-    showMessage(`✨ Topología auto-organizada (variación ${_autoOrganizeCounter + 1}): distribución limpia y equilibrada.`);
+    showMessage(`✨ Topología autoorganizada: ${varNames[varIndex]} (ramas coherentes y sin solapamientos).`);
 }
 
 function resetTopoStageBox() {
@@ -7617,13 +7602,21 @@ function buildTopoGraph(fitView = false) {
         if (clientCount === 0) return; // ¡Cero ramas si no tiene clientes!
 
         const parentNode = nodes.find(n => n.id === hubNode.parentId) || coreNode;
-        const dxFromParent = hubNode.baseX - parentNode.baseX;
-        const dyFromParent = hubNode.baseY - parentNode.baseY;
-        const distFromParent = Math.hypot(dxFromParent, dyFromParent);
-        // Ángulo de apertura siempre dinámico hacia el espacio exterior libre
-        const outwardAngle = distFromParent > 20
-            ? Math.atan2(dyFromParent, dxFromParent)
-            : (hubNode.outwardAngle !== undefined ? hubNode.outwardAngle : (idx * (Math.PI * 2 / Math.max(1, definedHubs.length))));
+
+        // 1. Ángulo de apertura exterior protegido (evita colisiones cruzadas entre alas opuestas)
+        // Ala izquierda (baseX < -40): hacia el OESTE (180° ± 30°) para que jamás apunte hacia la derecha
+        // Ala derecha (baseX > 40): hacia el ESTE (0° ± 30°) para que jamás apunte hacia la izquierda
+        // Nodos centrales: hacia el Norte (-90°) o Sur (+90°)
+        let outwardAngle;
+        if (hubNode.baseX < -40) {
+            const dy = hubNode.baseY - (parentNode ? parentNode.baseY : 0);
+            outwardAngle = Math.PI - Math.min(0.65, Math.max(-0.65, dy * 0.0016));
+        } else if (hubNode.baseX > 40) {
+            const dy = hubNode.baseY - (parentNode ? parentNode.baseY : 0);
+            outwardAngle = Math.min(0.65, Math.max(-0.65, dy * 0.0016));
+        } else {
+            outwardAngle = hubNode.baseY < 0 ? -Math.PI / 2 : Math.PI / 2;
+        }
 
         const sortedDevs = [...devs].sort((a, b) => {
             const oa = isOnline(a) ? 1 : 0;
@@ -7632,43 +7625,53 @@ function buildTopoGraph(fitView = false) {
             return (a.hostname || '').localeCompare(b.hostname || '');
         });
 
-        // Amplitud angular inteligente y holgada según el número de clientes
-        // Garantiza que NUNCA queden apelotonados en un cono estrecho ni se crucen
+        // 2. Amplitud angular controlada (máximo ~146° para permanecer en su cuadrante exterior sin invadir el centro)
         let fanSpan;
         if (clientCount <= 1) fanSpan = 0;
-        else if (clientCount === 2) fanSpan = 1.05; // ~60 grados
-        else if (clientCount === 3) fanSpan = 1.55; // ~90 grados
-        else if (clientCount === 4) fanSpan = 1.95; // ~112 grados
-        else if (clientCount === 5) fanSpan = 2.30; // ~132 grados
-        else if (clientCount === 6) fanSpan = 2.55; // ~146 grados (ej. WR841N con 6 clientes: espaciado perfecto)
-        else if (clientCount <= 9) fanSpan = 2.85; // ~163 grados
-        else if (clientCount <= 14) fanSpan = 3.15; // ~180 grados
-        else fanSpan = Math.min(Math.PI * 1.5, 3.15 + (clientCount - 14) * 0.12);
+        else if (clientCount === 2) fanSpan = 0.95; // ~54°
+        else if (clientCount === 3) fanSpan = 1.45; // ~83°
+        else if (clientCount === 4) fanSpan = 1.85; // ~106°
+        else if (clientCount <= 6) fanSpan = 2.20; // ~126°
+        else fanSpan = Math.min(2.55, 2.20 + (clientCount - 6) * 0.035); // Máximo ~146°
 
         const startRad = outwardAngle - fanSpan / 2;
 
+        // 3. Distribución orgánica en constelaciones multi-capa (Adiós al erizo / peine rígido)
         sortedDevs.forEach((d, cIdx) => {
             const cid = 'dev:' + (d.mac || d.ip || cIdx);
-            const t = sortedDevs.length === 1 ? 0.5 : cIdx / (sortedDevs.length - 1);
-            const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + t * fanSpan);
 
-            // Radio amplio con respiración generosa para las etiquetas
-            // Si hay más de 6 clientes, se alternan de forma escalonada (intercalada)
-            // de modo que un cliente exterior NUNCA quede detrás de uno interior
-            let rad;
+            // Determinar capa orbital concéntrica (0 = interna, 1 = media, 2 = externa)
+            let tier = 0;
+            let baseRad = 210;
+            let tierOffsetRatio = 0;
+
             if (clientCount <= 6) {
-                rad = 220; // Radio constante perfecto para hasta 6 clientes
+                tier = 0;
+                baseRad = 220;
             } else if (clientCount <= 14) {
-                // 2 niveles intercalados: par en 205px, impar en 285px
-                rad = (cIdx % 2 === 0) ? 205 : 285;
+                // 2 capas orbitales
+                tier = cIdx % 2;
+                baseRad = tier === 0 ? 210 : 310;
+                tierOffsetRatio = tier === 1 ? 0.5 : 0; // Desfasar capa exterior para caer en huecos de la interior
             } else {
-                // 3 niveles intercalados
-                const tier = cIdx % 3;
-                rad = tier === 0 ? 195 : (tier === 1 ? 275 : 355);
+                // 3 capas orbitales
+                tier = cIdx % 3;
+                baseRad = tier === 0 ? 200 : (tier === 1 ? 300 : 410);
+                tierOffsetRatio = tier === 1 ? 0.38 : (tier === 2 ? 0.72 : 0);
             }
 
-            const idealRelX = Math.round(Math.cos(ang) * rad);
-            const idealRelY = Math.round(Math.sin(ang) * rad);
+            // Variación orgánica sutil (no estricto compás matemático de peine)
+            const macByte = parseInt((d.mac || '00').slice(-2).replace(/[^0-9a-fA-F]/g, '0') || '0', 16) || (cIdx * 17);
+            const organicRadJitter = ((macByte % 23) - 11); // ±11px
+            const finalRad = baseRad + organicRadJitter;
+
+            // Ángulo con desfase intercalado entre capas
+            const t = sortedDevs.length === 1 ? 0.5 : (cIdx + tierOffsetRatio) / (sortedDevs.length - 1 + tierOffsetRatio);
+            const clampedT = Math.max(0, Math.min(1, t));
+            const ang = sortedDevs.length === 1 ? outwardAngle : (startRad + clampedT * fanSpan);
+
+            const idealRelX = Math.round(Math.cos(ang) * finalRad);
+            const idealRelY = Math.round(Math.sin(ang) * finalRad);
             const idealBaseX = hubNode.baseX + idealRelX;
             const idealBaseY = hubNode.baseY + idealRelY;
 
@@ -7677,7 +7680,7 @@ function buildTopoGraph(fitView = false) {
 
             // Reemplazamiento automático y completo de punto A a punto B:
             // 1. Si el nodo actual es Desconectado, los clientes siempre se posicionan en su abanico limpio propio.
-            // 2. Si el cliente tiene posición guardada de otro nodo (o sin hubId, o a más de 290px), se purga inmediatamente.
+            // 2. Si el cliente tiene posición guardada de otro nodo (o sin hubId, o a más de 950px), se purga inmediatamente.
             // 3. Si en tiempo real el cliente cambió de estado o de nodo, se ubica automáticamente en Punto B.
             const isOfflineHub = hubNode.id.includes('Desconectado') || hubNode.id.includes('offline');
             const changedHub = Boolean(oldNode && oldNode.hubId && oldNode.hubId !== hubNode.id);
@@ -7685,7 +7688,7 @@ function buildTopoGraph(fitView = false) {
             if (savedClient) {
                 const distToHub = Math.hypot(savedClient.x - hubNode.baseX, savedClient.y - hubNode.baseY);
                 const hubMismatch = !savedClient.hubId || savedClient.hubId !== hubNode.id;
-                if (isOfflineHub || hubMismatch || distToHub > 290 || changedHub) {
+                if (isOfflineHub || hubMismatch || distToHub > 950 || changedHub) {
                     delete topoState.customPositions[cid];
                     savedClient = null;
                 }
