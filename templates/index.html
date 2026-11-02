@@ -1816,7 +1816,7 @@
 
     <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
-            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();">
+            <input type="text" id="search" class="search-bar" style="flex:1; min-width:280px;" data-i18n-placeholder="search_placeholder" placeholder="Buscar por nombre, IP, puerto (ej: 8086, :80, 8123), servicio, MAC..." oninput="saveTableFilterState(); const hasS = Boolean(this.value.trim()); const isF = hasS || (tableFilters.status !== 'all' || tableFilters.medium !== 'all' || tableFilters.type !== 'all' || tableFilters.services !== 'all'); const rb = document.getElementById('btn-reset-filters'); if (rb) rb.style.display = isF ? 'inline-flex' : 'none'; renderTable();">
             <div style="display:inline-flex; align-items:center; gap:8px;">
                 <button id="btn-toggle-table-width" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="toggleTableFullWidth()" title="Ampliar la caja de la tabla horizontalmente a pantalla ancha o restaurar (↔)">
                     <span id="icon-table-width">↔</span>
@@ -1835,9 +1835,9 @@
             <div style="display:inline-flex; align-items:center; gap:5px;">
                 <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Estado:</span>
                 <div class="filter-group">
-                    <button class="pill-btn active" data-group="status" data-val="all" onclick="setFilter('status', 'all')">Todos <span class="pill-count" id="count-status-all">0</span></button>
-                    <button class="pill-btn" data-group="status" data-val="online" onclick="setFilter('status', 'online')">🟢 Activos <span class="pill-count" id="count-status-online">0</span></button>
-                    <button class="pill-btn" data-group="status" data-val="offline" onclick="setFilter('status', 'offline')">⚪ Inactivos <span class="pill-count" id="count-status-offline">0</span></button>
+                    <button class="pill-btn active" data-group="status" data-val="all" data-i18n="filter_status_all" onclick="setFilter('status', 'all')">Todos <span class="pill-count" id="count-status-all">0</span></button>
+                    <button class="pill-btn" data-group="status" data-val="online" data-i18n="filter_status_online" onclick="setFilter('status', 'online')">🟢 Activos <span class="pill-count" id="count-status-online">0</span></button>
+                    <button class="pill-btn" data-group="status" data-val="offline" data-i18n="filter_status_offline" onclick="setFilter('status', 'offline')">⚪ Inactivos <span class="pill-count" id="count-status-offline">0</span></button>
                 </div>
             </div>
 
@@ -1845,9 +1845,9 @@
             <div style="display:inline-flex; align-items:center; gap:5px;">
                 <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Medio:</span>
                 <div class="filter-group">
-                    <button class="pill-btn active" data-group="medium" data-val="all" onclick="setFilter('medium', 'all')">Todos <span class="pill-count" id="count-medium-all">0</span></button>
-                    <button class="pill-btn" data-group="medium" data-val="wifi" onclick="setFilter('medium', 'wifi')">📶 Wi-Fi <span class="pill-count" id="count-medium-wifi">0</span></button>
-                    <button class="pill-btn" data-group="medium" data-val="cable" onclick="setFilter('medium', 'cable')">🔌 Cable <span class="pill-count" id="count-medium-cable">0</span></button>
+                    <button class="pill-btn active" data-group="medium" data-val="all" data-i18n="filter_medium_all" onclick="setFilter('medium', 'all')">Todos <span class="pill-count" id="count-medium-all">0</span></button>
+                    <button class="pill-btn" data-group="medium" data-val="wifi" data-i18n="filter_medium_wifi" onclick="setFilter('medium', 'wifi')">📶 Wi-Fi <span class="pill-count" id="count-medium-wifi">0</span></button>
+                    <button class="pill-btn" data-group="medium" data-val="cable" data-i18n="filter_medium_cable" onclick="setFilter('medium', 'cable')">🔌 Cable <span class="pill-count" id="count-medium-cable">0</span></button>
                 </div>
             </div>
 
@@ -1855,8 +1855,8 @@
             <div style="display:inline-flex; align-items:center; gap:5px;">
                 <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Tipo IP:</span>
                 <div class="filter-group">
-                    <button class="pill-btn active" data-group="type" data-val="all" onclick="setFilter('type', 'all')">Todos <span class="pill-count" id="count-type-all">0</span></button>
-                    <button class="pill-btn" data-group="type" data-val="static" onclick="setFilter('type', 'static')">📌 Fijas <span class="pill-count" id="count-type-static">0</span></button>
+                    <button class="pill-btn active" data-group="type" data-val="all" data-i18n="filter_type_all" onclick="setFilter('type', 'all')">Todos <span class="pill-count" id="count-type-all">0</span></button>
+                    <button class="pill-btn" data-group="type" data-val="static" data-i18n="filter_type_static" onclick="setFilter('type', 'static')">📌 Fijas <span class="pill-count" id="count-type-static">0</span></button>
                     <button class="pill-btn" data-group="type" data-val="dynamic" onclick="setFilter('type', 'dynamic')">⚡ Dinámicas <span class="pill-count" id="count-type-dynamic">0</span></button>
                 </div>
                 <button id="btn-sort-static-order" class="btn btn-outline" style="padding:4px 9px; font-size:0.75rem; border-radius:999px; margin-left:4px; color:#38bdf8; border-color:rgba(56,189,248,0.4);" onclick="sortByStaticOrder()" title="Ordenar la tabla por orden cronológico de fijación (#1 primera fijada, #N última)">
@@ -1868,8 +1868,8 @@
             <div style="display:inline-flex; align-items:center; gap:5px;">
                 <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Servicios:</span>
                 <div class="filter-group">
-                    <button class="pill-btn active" data-group="services" data-val="all" onclick="setFilter('services', 'all')">Todos <span class="pill-count" id="count-services-all">0</span></button>
-                    <button class="pill-btn" data-group="services" data-val="has_services" onclick="setFilter('services', 'has_services')">🌐 Con Servicios Activos <span class="pill-count" id="count-services-active">0</span></button>
+                    <button class="pill-btn active" data-group="services" data-val="all" data-i18n="filter_services_all" onclick="setFilter('services', 'all')">Todos <span class="pill-count" id="count-services-all">0</span></button>
+                    <button class="pill-btn" data-group="services" data-val="has_services" data-i18n="filter_services_active" onclick="setFilter('services', 'has_services')">🌐 Con Servicios Activos <span class="pill-count" id="count-services-active">0</span></button>
                 </div>
             </div>
         </div>
@@ -1895,11 +1895,11 @@
         <!-- SELECTOR DE SUB-VISTAS: SERVICIOS DE RED vs SERVICIOS LOCALES -->
         <div class="services-subtabs-nav" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:12px; flex-wrap:wrap; gap:10px;">
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button id="btn-subtab-svc-lan" class="btn btn-primary" onclick="switchServicesSubTab('lan')" style="font-weight:700; padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:8px;">
+                <button id="btn-subtab-svc-lan" class="btn btn-primary" data-i18n="svc_subtab_lan" onclick="switchServicesSubTab('lan')" style="font-weight:700; padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:8px;">
                     <span>🌐 Servicios de Red (LAN)</span>
                     <span id="badge-svc-lan-count" class="badge" style="background:rgba(0,0,0,0.35); color:#fff; font-size:0.75rem; padding:2px 7px; border-radius:999px;">0</span>
                 </button>
-                <button id="btn-subtab-svc-localhost" class="btn btn-outline" onclick="switchServicesSubTab('localhost')" style="display:none; font-weight:700; padding:8px 16px; border-radius:8px; border-color:#a855f7; color:#d8b4fe; align-items:center; gap:8px;">
+                <button id="btn-subtab-svc-localhost" class="btn btn-outline" data-i18n="svc_subtab_localhost" onclick="switchServicesSubTab('localhost')" style="display:none; font-weight:700; padding:8px 16px; border-radius:8px; border-color:#a855f7; color:#d8b4fe; align-items:center; gap:8px;">
                     <span>💻 Servicios Locales (Host)</span>
                     <span id="badge-svc-localhost-count" class="badge" style="background:rgba(168,85,247,0.25); color:#d8b4fe; font-size:0.75rem; padding:2px 7px; border-radius:999px;">0</span>
                 </button>
@@ -2001,8 +2001,8 @@
             <div class="topo-overlay-top">
                 <div class="topo-search-box">
                     <span style="color:#94a3b8; font-size:0.85rem;">🔍</span>
-                    <input type="text" id="topo-search" placeholder="Buscar nodo, host, IP o MAC..." oninput="onTopoSearchInput()" onkeydown="onTopoSearchKeyDown(event)">
-                    <button id="topo-search-exact-btn" onclick="toggleTopoExactSearch()" class="topo-search-exact-btn" title="Alternar coincidencia exacta de IP / Host / MAC">🎯 Exacto</button>
+                    <input type="text" id="topo-search" data-i18n-placeholder="topo_search_ph" placeholder="Buscar nodo, host, IP o MAC..." oninput="onTopoSearchInput()" onkeydown="onTopoSearchKeyDown(event)">
+                    <button id="topo-search-exact-btn" data-i18n="topo_btn_exact" data-i18n-title="topo_btn_exact_title" onclick="toggleTopoExactSearch()" class="topo-search-exact-btn" title="Alternar coincidencia exacta de IP / Host / MAC">🎯 Exacto</button>
                     <button id="topo-search-clear" onclick="clearTopoSearch()" style="display:none; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem; padding:0;">✕</button>
                     <button id="topo-mobile-toggle-btn" onclick="toggleMobileTopoControls()" class="topo-mobile-toggle-btn" title="Mostrar/Ocultar controles">🎛️ Opciones</button>
                 </div>
@@ -2016,11 +2016,11 @@
                             <button onclick="clearTopoPin()" style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.5); color:#fca5a5; cursor:pointer; font-size:0.68rem; padding:0 4px; border-radius:8px; font-weight:bold; height:18px; line-height:16px;" title="Quitar enfoque">✕</button>
                         </div>
 
-                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.18);" title="Auto-organizar topología equilibradamente">
+                        <button class="topo-ctrl-btn" onclick="smartAutoOrganizeTopology()" style="border-color:#a855f7; color:#e9d5ff; background:rgba(168,85,247,0.18);" data-i18n-title="topo_btn_autoorganize_title" title="Auto-organizar topología equilibradamente">
                             🪄 Auto-Organizar
                         </button>
 
-                        <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.14);" title="Disparar onda de sinapsis neuronal">
+                        <button class="topo-ctrl-btn" onclick="triggerNeuralCascade()" style="border-color:#00e5ff; color:#7dd3fc; background:rgba(0,229,255,0.14);" data-i18n-title="topo_btn_cascade_title" title="Disparar onda de sinapsis neuronal">
                             ⚡ Impulso
                         </button>
 
@@ -2070,23 +2070,23 @@
                         <button id="topo-btn-label" class="topo-ctrl-btn" onclick="cycleTopoLabelMode()" title="Texto mostrado en los nodos">
                             🏷️ <span id="topo-lbl-mode-txt">Nombre</span>
                         </button>
-                        <button class="topo-ctrl-btn" onclick="fitTopoToScreen(true)" title="Centrar y encuadrar mapa">
+                        <button class="topo-ctrl-btn" onclick="fitTopoToScreen(true)" data-i18n-title="topo_fit_title" title="Centrar y encuadrar mapa">
                             🎯 Centrar
                         </button>
-                        <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" title="Mostrar/ocultar listado de tarjetas">
+                        <button id="topo-btn-cards" class="topo-ctrl-btn" onclick="toggleTopoCards()" data-i18n-title="topo_cards_title" title="Mostrar/ocultar listado de tarjetas">
                             🗂️ Tarjetas
                         </button>
-                        <button class="topo-ctrl-btn" onclick="exportTopoPositionsJson()" title="Descargar posiciones JSON">
+                        <button class="topo-ctrl-btn" onclick="exportTopoPositionsJson()" data-i18n-title="topo_export_title" title="Descargar posiciones JSON">
                             💾 Exportar
                         </button>
-                        <button class="topo-ctrl-btn" onclick="document.getElementById('topo-import-file').click()" title="Restaurar posiciones JSON">
+                        <button class="topo-ctrl-btn" onclick="document.getElementById('topo-import-file').click()" data-i18n-title="topo_import_title" title="Restaurar posiciones JSON">
                             📂 Importar
                         </button>
                         <input type="file" id="topo-import-file" accept=".json" style="display:none;" onchange="importTopoPositionsJson(event)">
                         <button class="topo-ctrl-btn" onclick="manualRefresh()" title="Refrescar estado de red">
                             🔄
                         </button>
-                        <button id="topo-btn-reset-box" class="topo-ctrl-btn" onclick="resetTopoStageBox()" title="Restablecer la caja al ancho y centrado original">
+                        <button id="topo-btn-reset-box" class="topo-ctrl-btn" onclick="resetTopoStageBox()" data-i18n-title="topo_reset_box_title" title="Restablecer la caja al ancho y centrado original">
                             ⇤⇥ Ancho
                         </button>
                         <button class="topo-ctrl-btn" onclick="toggleTopoFullscreen()" title="Pantalla completa (⛶)">
@@ -2135,11 +2135,11 @@
                     <p style="margin:4px 0 0; font-size:0.82rem; color:var(--muted);">Tramos en verde = conectado. Ideal para detectar desconexiones nocturnas o microcortes en dispositivos IoT. <span id="tl-since" style="color:#38bdf8;"></span></p>
                 </div>
                 <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="text" id="tl-search" placeholder="Filtrar dispositivo..." oninput="renderTimelineRows()" style="padding:6px 10px; font-size:0.82rem; background:#0f172a; border:1px solid var(--border); border-radius:8px; color:#f8fafc;">
-                    <button class="btn btn-outline" onclick="loadTimeline(6)">6h</button>
-                    <button class="btn btn-outline" onclick="loadTimeline(24)">24h</button>
-                    <button class="btn btn-outline" onclick="loadTimeline(72)">3 días</button>
-                    <button class="btn btn-outline" onclick="loadTimeline(168)">7 días</button>
+                    <input type="text" id="tl-search" data-i18n-placeholder="timeline_search_ph" placeholder="Filtrar dispositivo..." oninput="renderTimelineRows()" style="padding:6px 10px; font-size:0.82rem; background:#0f172a; border:1px solid var(--border); border-radius:8px; color:#f8fafc;">
+                    <button class="btn btn-outline" data-i18n="timeline_btn_6h" onclick="loadTimeline(6)">6h</button>
+                    <button class="btn btn-outline" data-i18n="timeline_btn_24h" onclick="loadTimeline(24)">24h</button>
+                    <button class="btn btn-outline" data-i18n="timeline_btn_72h" onclick="loadTimeline(72)">3 días</button>
+                    <button class="btn btn-outline" data-i18n="timeline_btn_168h" onclick="loadTimeline(168)">7 días</button>
                 </div>
             </div>
             <div id="timeline-container"></div>
@@ -2335,15 +2335,15 @@
                 </button>
                 
                 <!-- Opción 2: Selector del Sistema / Google Fotos / Archivos -->
-                <button type="button" class="btn" style="background:#475569; color:#f8fafc; padding:12px 14px; border-radius:10px; font-weight:600; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:10px; border:1px solid rgba(255,255,255,0.18); cursor:pointer;" onclick="triggerPhotoApps()" title="Muestra el menú del smartphone con todas las aplicaciones disponibles (Google Fotos, Archivos, Galería, Drive...)">
+                <button type="button" class="btn" style="background:#475569; color:#f8fafc; padding:12px 14px; border-radius:10px; font-weight:600; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:10px; border:1px solid rgba(255,255,255,0.18); cursor:pointer;" data-i18n-title="photo_btn_apps_title" onclick="triggerPhotoApps()" title="Muestra el menú del smartphone con todas las aplicaciones disponibles (Google Fotos, Archivos, Galería, Drive...)">
                     <span style="font-size:1.3rem;">📂</span>
-                    <span>Elegir App (Google Fotos, Archivos, Drive...)</span>
+                    <span data-i18n="photo_btn_apps">Elegir App (Google Fotos, Archivos, Drive...)</span>
                 </button>
 
                 <!-- Opción 3: Galería del Teléfono -->
                 <button type="button" class="btn" style="background:#334155; color:#cbd5e1; padding:11px 14px; border-radius:10px; font-weight:600; font-size:0.88rem; display:flex; align-items:center; justify-content:center; gap:10px; border:1px solid rgba(255,255,255,0.1); cursor:pointer;" onclick="triggerPhotoGallery()">
                     <span style="font-size:1.2rem;">🖼️</span>
-                    <span>Galería Multimedia del Smartphone</span>
+                    <span data-i18n="photo_btn_gallery">Galería Multimedia del Smartphone</span>
                 </button>
 
                 <!-- Opción 4: Eliminar Foto actual si existe -->
@@ -2374,7 +2374,7 @@
                         <h3 id="ds-title" style="margin:0; font-size:1.2rem; color:#f8fafc; display:flex; align-items:center; gap:8px;">🧾 Ficha de Dispositivo</h3>
                         <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
                         <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
-                            <button id="ds-bell-btn" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; display:inline-flex; align-items:center; gap:4px;" onclick="toggleDeviceWatch(currentSheetMac, event)" title="Recibir un correo electrónico cuando este dispositivo se conecte a la red">🔔 Aviso Conexión</button>
+                            <button id="ds-bell-btn" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; display:inline-flex; align-items:center; gap:4px;" data-i18n="ds_btn_watch" data-i18n-title="ds_btn_watch_title" onclick="toggleDeviceWatch(currentSheetMac, event)" title="Recibir un correo electrónico cuando este dispositivo se conecte a la red">🔔 Aviso Conexión</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); background:rgba(56,189,248,0.06); display:inline-flex; align-items:center; gap:4px; font-weight:600;" onclick="openMacHunterModal(currentSheetMac)" title="Investigación y análisis forense completo del dispositivo (Cazador de MAC)">🔍 Análisis Forense</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar archivo comprimido (.zip) con ficha técnica y carpeta de imágenes">📥 Exportar Ficha (.zip)</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#34d399; border-color:rgba(52,211,153,0.4);" onclick="document.getElementById('ds-import-file').click()" title="Restaurar o importar ficha técnica con imágenes (.zip o .json)">📤 Importar Ficha</button>
@@ -4950,9 +4950,10 @@ function renderTable() {
             sortIndicator = sortState.asc ? '▲' : '▼';
         }
 
+        const colLabel = (typeof window.t === 'function') ? window.t('col_' + col.id, col.label) : col.label;
         th.innerHTML = `
             <div class="th-content" onclick="onHeaderClick('${col.id}', event)">
-                <span>${col.label}</span>
+                <span>${colLabel}</span>
                 <span class="sort-ind">${sortIndicator}</span>
             </div>
             <div class="col-resizer" onmousedown="initResize(event, '${col.id}')"></div>
@@ -5259,12 +5260,12 @@ function renderTable() {
         const isWatched = Boolean(d.watched);
         const hostHtml = `
             <div style="display:flex; align-items:center; gap:8px;">
-                ${d.photo ? `<img src="${d.photo}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(56,189,248,0.5); cursor:pointer; flex-shrink:0;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ver foto y ficha de ${escapeHtml(d.hostname)}" />` : ''}
-                <div style="min-width:0; flex:1;">
-                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                        <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
-                        <button class="btn btn-outline" style="padding:1px 6px; font-size:0.68rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); background:rgba(56,189,248,0.08); border-radius:4px; line-height:1.2; flex-shrink:0; display:inline-flex; align-items:center; gap:3px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar ${escapeHtml(d.hostname)} en la topología de red">🌐 Mapa</button>
-                        <button class="btn-bell-toggle ${isWatched ? 'active' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)" title="${isWatched ? '🔔 Notificación de conexión por correo ACTIVADA\nRecibirás un email en cuanto este dispositivo se conecte a la red.\nHaz clic para desactivar.' : '🔕 Notificación de conexión por correo DESACTIVADA\nHaz clic para activar y recibir un email cuando se conecte a la red.'}">
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ficha">${(typeof window.t === 'function') ? window.t('btn_device_sheet', '📄 Ficha') : '📄 Ficha'}</button>
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Mapa">${(typeof window.t === 'function') ? window.t('btn_locate_topo', '🗺️ Mapa') : '🗺️ Mapa'}</button>
+                    <button class="btn btn-outline ${d.watched ? 'btn-bell-active' : ''}" style="padding:4px 8px;font-size:0.76rem; ${d.watched ? 'border-color:#f59e0b; color:#fcd34d; background:rgba(245,158,11,0.14); font-weight:700;' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)">${(typeof window.t === 'function') ? window.t('btn_watch_alert', '🔔 Avisar') : '🔔 Avisar'}</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${((d.ha_info && d.ha_info.name) || d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">${(typeof window.t === 'function') ? window.t('btn_edit_fix', 'Editar / Fijar') : 'Editar / Fijar'}</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.ip}')">${(typeof window.t === 'function') ? window.t('btn_ping', '⚡ Ping') : '⚡ Ping'}</button>
+                    <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">${(typeof window.t === 'function') ? window.t('btn_delete_lease', 'Borrar') : 'Borrar'}</button>
                             ${isWatched ? '🔔' : '🔕'}
                         </button>
                     </div>
@@ -10354,13 +10355,13 @@ async function openDeviceSheet(mac, ipHint = '') {
         const acts = document.getElementById('ds-actions');
         if (!acts) return;
         acts.innerHTML = `
-            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.1); font-weight:700;" onclick="openMacHunterModal('${mac}')" title="Investigación forense completa de la MAC, Home Assistant, chip OUI e inteligencia web">🔍 Análisis Forense</button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.1); font-weight:700;" onclick="openMacHunterModal('${mac}')">${(typeof window.t === 'function') ? window.t('ds_act_forensic', '🔍 Análisis Forense') : '🔍 Análisis Forense'}</button>
             <button class="btn ${dBlocked ? 'btn-success' : 'btn-danger'}" style="padding:6px 12px; font-size:0.8rem;" onclick="toggleBlockDevice('${mac}', ${!dBlocked})">
-                ${dBlocked ? '✅ Desbloquear Internet (DNS)' : '⛔ Cortar Internet (Bloquear DNS)'}
+                ${dBlocked ? ((typeof window.t === 'function') ? window.t('ds_act_unblock_dns', '🟢 Desbloquear Internet (DNS)') : '🟢 Desbloquear Internet (DNS)') : ((typeof window.t === 'function') ? window.t('ds_act_block_dns', '🔴 Cortar Internet (Bloquear DNS)') : '🔴 Cortar Internet (Bloquear DNS)')}
             </button>
-            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">⚡ Wake-on-LAN (Encender)</button>
-            ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="quickPing(this, '${currentSheetIp}')" title="Hacer Ping a ${currentSheetIp}">⚡ Hacer Ping</button>` : ''}
-            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\\'")}', '${mac}', '${dev.ip || currentSheetIp}')">✏️ Editar Concesión DHCP</button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">${(typeof window.t === 'function') ? window.t('ds_act_wol', '⚡ Wake-on-LAN (Encender)') : '⚡ Wake-on-LAN (Encender)'}</button>
+            ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="quickPing(this, '${currentSheetIp}')">${(typeof window.t === 'function') ? window.t('ds_act_ping', '📶 Hacer Ping') : '📶 Hacer Ping'}</button>` : ''}
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\\'")}', '${mac}', '${dev.ip || currentSheetIp}')">${(typeof window.t === 'function') ? window.t('ds_act_edit_dhcp', '✏️ Editar Concesión DHCP') : '✏️ Editar Concesión DHCP'}</button>
         `;
     };
     renderSheetActions(!!dev.blocked);
