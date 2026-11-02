@@ -6455,87 +6455,101 @@ window.addEventListener('keydown', function(e) {
     }
 });
 
-let _autoOrganizeCounter = 0;
+let _autoOrganizeCounter = (function() {
+    return parseInt(localStorage.getItem('ag_topo_organize_seed') || '0', 10);
+})();
+
 function smartAutoOrganizeTopology() {
     // 1. Guardar el estado actual en el historial de deshacer (Ctrl+Z)
-    pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions)));
+    pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions || {})));
+
+    _autoOrganizeCounter = (_autoOrganizeCounter + 1) % 24;
+    try {
+        localStorage.setItem('ag_topo_organize_seed', String(_autoOrganizeCounter));
+    } catch (e) {}
 
     const hubNodes = topoState.nodes.filter(n => n.type === 'hub');
     if (hubNodes.length === 0) return;
 
-    // Identificar nodos clave de infraestructura de la red
-    const masterHub = hubNodes.find(h => h.isMesh && (h.parentId === '__core__' || h.id.includes('halo1'))) || hubNodes.find(h => h.isMesh) || null;
-    const meshSatellites = hubNodes.filter(h => h.isMesh && h !== masterHub);
-    const wr841n = hubNodes.find(h => h.id.includes('wr841n') || h.label.toLowerCase().includes('wr841n')) || null;
-    const lanHub = hubNodes.find(h => h.id.includes('lan')) || null;
-    const wifiHub = hubNodes.find(h => h.id.includes('wifi')) || null;
-    const otherHubs = hubNodes.filter(h => h !== masterHub && !meshSatellites.includes(h) && h !== wr841n && h !== lanHub && h !== wifiHub);
+    // 2. Análisis jerárquico 100% dinámico y natural del grafo de red
+    const directHubs = [];
+    const satelliteHubs = {}; // parentId -> [childHubs]
+
+    hubNodes.forEach(h => {
+        const parentId = h.parentId || '__core__';
+        if (parentId === '__core__' || !hubNodes.some(p => p.id === parentId)) {
+            directHubs.push(h);
+        } else {
+            if (!satelliteHubs[parentId]) satelliteHubs[parentId] = [];
+            satelliteHubs[parentId].push(h);
+        }
+    });
+
+    // Calcular el volumen de dispositivos de cada subárbol (clientes directos + clientes de satélites)
+    function getSubtreeWeight(hub) {
+        const directDevs = hub.totalCount || hub.onlineCount || 1;
+        const children = satelliteHubs[hub.id] || [];
+        const childDevs = children.reduce((acc, c) => acc + (c.totalCount || c.onlineCount || 1), 0);
+        return directDevs + childDevs;
+    }
+
+    // Variación angular dinámica en cada pulsación para generar alternativas frescas
+    // Cada clic rota el sistema ~35° a 45° con respiración y alternancia de cuadrantes
+    const baseRotation = (_autoOrganizeCounter * 0.628) + (Math.sin(_autoOrganizeCounter * 1.5) * 0.18);
+
+    // Rotar cíclicamente el orden de ramas directas según el contador para explorar múltiples orientaciones
+    const orderedDirect = [...directHubs];
+    if (orderedDirect.length > 1) {
+        const shift = _autoOrganizeCounter % orderedDirect.length;
+        const rotated = orderedDirect.slice(shift).concat(orderedDirect.slice(0, shift));
+        orderedDirect.length = 0;
+        orderedDirect.push(...rotated);
+    }
 
     const newPositions = {};
-
-    // 1. Core en el centro absoluto
     newPositions['__core__'] = { x: 0, y: 0 };
 
-    // 2. Sistema Mesh en el cuadrante superior derecho (amplio y expansivo)
-    if (masterHub) {
-        newPositions[masterHub.id] = { x: 300, y: -260 };
-    }
-    // Satélites Mesh ramificándose ordenadamente hacia el exterior de Halo 1
-    if (meshSatellites.length > 0) {
-        meshSatellites.forEach((sat, idx) => {
-            if (sat.id.includes('halo2') || idx === 0) {
-                // Halo 2 hacia la derecha
-                newPositions[sat.id] = { x: 690, y: -310 };
-            } else if (sat.id.includes('halo3') || idx === 1) {
-                // Halo 3 hacia arriba
-                newPositions[sat.id] = { x: 230, y: -650 };
-            } else {
-                // Satélites adicionales
-                const ang = -0.5 + idx * 0.55;
-                newPositions[sat.id] = {
-                    x: Math.round(300 + Math.cos(ang) * 420),
-                    y: Math.round(-260 + Math.sin(ang) * 420)
-                };
-            }
-        });
-    }
+    const directCount = orderedDirect.length;
+    const stepAngle = (Math.PI * 2) / Math.max(1, directCount);
 
-    // 3. Router Secundario / AP (TP-Link WR841N) en el cuadrante inferior derecho
-    // Con amplio espacio libre hacia abajo y a la derecha para sus clientes
-    if (wr841n) {
-        newPositions[wr841n.id] = { x: 390, y: 270 };
-    }
+    orderedDirect.forEach((hub, idx) => {
+        const weight = getSubtreeWeight(hub);
+        const centerAngle = baseRotation + idx * stepAngle;
 
-    // 4. Router Principal / LAN en el cuadrante inferior izquierdo
-    if (lanHub) {
-        newPositions[lanHub.id] = { x: -300, y: 270 };
-    }
+        // Radio dinámico según volumen de dispositivos + respiración orgánica por clic
+        const clientBonus = Math.min(180, weight * 7);
+        const organicJitter = Math.round(Math.sin(_autoOrganizeCounter * 2.7 + idx * 2.1) * 28);
+        const radius = Math.round(330 + clientBonus + organicJitter);
 
-    // 5. Router Principal / Wi-Fi en el sector izquierdo / superior izquierdo
-    if (wifiHub) {
-        newPositions[wifiHub.id] = { x: -400, y: -70 };
-    }
+        const hubX = Math.round(Math.cos(centerAngle) * radius);
+        const hubY = Math.round(Math.sin(centerAngle) * radius);
+        newPositions[hub.id] = { x: hubX, y: hubY };
 
-    // 6. Nodos de red adicionales distribuidos uniformemente
-    if (otherHubs.length > 0) {
-        const step = (Math.PI * 2) / Math.max(1, otherHubs.length);
-        otherHubs.forEach((h, idx) => {
-            const ang = 1.8 + idx * step;
-            newPositions[h.id] = {
-                x: Math.round(Math.cos(ang) * 450),
-                y: Math.round(Math.sin(ang) * 450)
-            };
-        });
-    }
+        // Ramificar satélites (nodos mesh hijos u otros repetidores encadenados)
+        const children = satelliteHubs[hub.id] || [];
+        if (children.length > 0) {
+            const outwardRadial = Math.atan2(hubY, hubX);
+            const satCount = children.length;
+            const satFanSpan = satCount === 1 ? 0 : Math.min(Math.PI * 0.9, 0.55 + (satCount - 1) * 0.38);
+            const satStartAngle = outwardRadial - (satFanSpan / 2);
 
-    // Asignar nuevas posiciones de los hubs y limpiar las posiciones fijadas de clientes
-    // para que se recalculen automáticamente según el abanico radial matemático perfecto
+            children.forEach((sat, sIdx) => {
+                const satAngle = satCount === 1 ? outwardRadial : (satStartAngle + (sIdx / (satCount - 1)) * satFanSpan);
+                const satWeight = sat.totalCount || sat.onlineCount || 1;
+                const satRadius = Math.round(330 + Math.min(130, satWeight * 7) + (Math.cos(_autoOrganizeCounter + sIdx * 1.8) * 22));
+
+                const satX = Math.round(hubX + Math.cos(satAngle) * satRadius);
+                const satY = Math.round(hubY + Math.sin(satAngle) * satRadius);
+                newPositions[sat.id] = { x: satX, y: satY };
+            });
+        }
+    });
+
+    // 3. Asignar las nuevas posiciones a los hubs y proyectar clientes en abanicos despejados hacia el exterior
     topoState.customPositions = newPositions;
-
-    // Reconstruir el grafo: todos los clientes se proyectan hacia el exterior en abanicos despejados
     buildTopoGraph(false);
 
-    // Fijar y persistir las nuevas posiciones limpias
+    // 4. Fijar y persistir las nuevas posiciones limpias
     topoState.nodes.forEach(n => {
         topoState.customPositions[n.id] = { x: n.baseX, y: n.baseY, hubId: n.hubId || n.id };
     });
@@ -6544,7 +6558,7 @@ function smartAutoOrganizeTopology() {
     fitTopoToScreen(true);
     triggerNeuralCascade();
     updateTopoUndoBtn();
-    showMessage('✨ Topología auto-organizada: distribución inteligente, despejada y equilibrada.');
+    showMessage(`✨ Topología auto-organizada (variación ${_autoOrganizeCounter + 1}): distribución limpia y equilibrada.`);
 }
 
 function resetTopoStageBox() {
