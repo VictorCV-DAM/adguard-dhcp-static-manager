@@ -25,31 +25,35 @@ Write-Host ""
 $pyExe = $null
 
 function Update-PthFile($dir) {
-    $pthFile = Get-ChildItem -Path $dir -Filter "*._pth" | Select-Object -First 1
-    if ($pthFile) {
-        $rawPth = [System.IO.File]::ReadAllText($pthFile.FullName)
+    $pthFiles = Get-ChildItem -Path $dir -Filter "*._pth"
+    foreach ($pth in $pthFiles) {
+        $rawPth = [System.IO.File]::ReadAllText($pth.FullName)
+        $rawPth = $rawPth -replace '#\s*import\s+site', 'import site'
         if ($rawPth -notmatch 'import\s+site') {
-            $rawPth = $rawPth -replace '#\s*import\s+site', 'import site'
+            $rawPth += "`r`nimport site"
         }
         if ($rawPth -notmatch 'Lib\\site-packages') {
             $rawPth += "`r`nLib\site-packages"
+        }
+        if ($rawPth -notmatch 'site-packages') {
+            $rawPth += "`r`nsite-packages"
         }
         if ($rawPth -notmatch '(?m)^\.\.$') {
             $rawPth += "`r`n..`r`n."
         }
         $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-        [System.IO.File]::WriteAllText($pthFile.FullName, $rawPth, $utf8NoBom)
+        [System.IO.File]::WriteAllText($pth.FullName, $rawPth, $utf8NoBom)
     }
 }
 
 # 1. Comprobar si ya existe una instancia previa en python_portable
-if (Test-Path (Join-Path $TargetDir "python.exe")) {
+if (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
+    $pyExe = Join-Path $TargetDir "Scripts\python.exe"
+    Write-Host "[OK] Detectada instancia virtual/portable en python_portable\Scripts\python.exe" -ForegroundColor Green
+} elseif (Test-Path (Join-Path $TargetDir "python.exe")) {
     $pyExe = Join-Path $TargetDir "python.exe"
     Update-PthFile $TargetDir
     Write-Host "[OK] Detectada instancia portable existente en python_portable\python.exe" -ForegroundColor Green
-} elseif (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
-    $pyExe = Join-Path $TargetDir "Scripts\python.exe"
-    Write-Host "[OK] Detectada instancia virtual/portable en python_portable\Scripts\python.exe" -ForegroundColor Green
 } else {
     # 1.1 Intentar crear entorno aislado ultra-rápido en 2 segundos si el sistema tiene python
     $sysPython = (Get-Command py, python, python3 -ErrorAction SilentlyContinue | Select-Object -First 1).Source
@@ -111,6 +115,22 @@ if (-not $pyExe -or -not (Test-Path $pyExe)) {
     exit 1
 }
 
+# 1.3 Asegurar pip en python_portable si se usa python.exe embeddable
+Update-PthFile $TargetDir
+$hasPip = & $pyExe -m pip --version 2>$null
+if (-not $hasPip) {
+    Write-Host "      Configurando pip en python_portable..." -ForegroundColor Yellow
+    $pipUrl = "https://bootstrap.pypa.io/get-pip.py"
+    $pipPath = Join-Path $TargetDir "get-pip.py"
+    try {
+        Invoke-WebRequest -Uri $pipUrl -OutFile $pipPath -UseBasicParsing -TimeoutSec 45
+        & $pyExe $pipPath --no-warn-script-location
+        Remove-Item $pipPath -Force -ErrorAction SilentlyContinue
+    } catch {
+        Write-Host "      [!] Advertencia con get-pip.py: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 Write-Host ""
 Write-Host "[2/3] Instalando dependencias en la instancia portable..." -ForegroundColor Yellow
 Write-Host "      (Tu instalación principal de Python NO será tocada ni alterada)" -ForegroundColor Cyan
@@ -125,6 +145,14 @@ if (Test-Path $ReqFile) {
 } else {
     Write-Host "[!] No se encontró requirements.txt. Instalando flask y cryptography directamente..." -ForegroundColor Yellow
     & $pyExe -m pip install flask cryptography --no-warn-script-location --prefer-binary --disable-pip-version-check
+}
+
+# Verificación de Flask
+Update-PthFile $TargetDir
+$verifyFlask = & $pyExe -c "import flask; print('FLASK_OK')" 2>$null
+if ($verifyFlask -notmatch 'FLASK_OK') {
+    Write-Host "      Asegurando instalacion de Flask en site-packages..." -ForegroundColor Yellow
+    & $pyExe -m pip install flask cryptography --prefer-binary --no-warn-script-location --force-reinstall
 }
 
 # 3. Comprobar o generar config.json
@@ -149,8 +177,8 @@ if (-not (Test-Path $ConfigFile)) {
     Write-Host "[OK] config.json ya existe." -ForegroundColor Green
 }
 
-# 4. Crear lanzadores .bat
-$launcherContent = @"
+# 4. Crear lanzadores .bat auto-reparables
+$launcherContent = @'
 @echo off
 chcp 65001 >nul
 title AdGuard DHCP Panel (Portable)
@@ -161,25 +189,67 @@ set "PYTHONPATH=%~dp0;%PYTHONPATH%"
 echo ==================================================================
 echo   Iniciando AdGuard DHCP Panel Privado (Instancia Portable)
 echo ==================================================================
+echo.
 
-if exist "python_portable\python.exe" (
-    "python_portable\python.exe" app.py
-) else if exist "python_portable\Scripts\python.exe" (
-    "python_portable\Scripts\python.exe" app.py
+set "PY_EXE="
+if exist "python_portable\Scripts\python.exe" (
+    set "PY_EXE=python_portable\Scripts\python.exe"
+) else if exist "python_portable\python.exe" (
+    set "PY_EXE=python_portable\python.exe"
+)
+
+set "NEED_INSTALL=0"
+if "%PY_EXE%"=="" (
+    set "NEED_INSTALL=1"
 ) else (
-    echo [ERROR] No se encontro la instancia portable de Python.
-    echo Ejecuta primero instalar_windows.bat
+    "%PY_EXE%" -c "import flask, cryptography" >nul 2>&1
+    if errorlevel 1 (
+        set "NEED_INSTALL=1"
+    )
+)
+
+if "%NEED_INSTALL%"=="1" (
+    echo [INFO] Configurando dependencias portables (Flask, etc.)...
+    echo Esto solo tardara unos segundos.
+    echo.
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install_windows.ps1"
+    echo.
+    if exist "python_portable\Scripts\python.exe" (
+        set "PY_EXE=python_portable\Scripts\python.exe"
+    ) else if exist "python_portable\python.exe" (
+        set "PY_EXE=python_portable\python.exe"
+    )
+)
+
+if "%PY_EXE%"=="" (
+    echo.
+    echo [ERROR] No se pudo configurar la instancia portable de Python.
+    echo Ejecuta instalar_windows.bat para revisar los detalles.
+    echo.
     pause
     exit /b 1
 )
 
-pause
-"@
+rem Comprobacion de Flask antes de lanzar
+"%PY_EXE%" -c "import flask" >nul 2>&1
+if errorlevel 1 (
+    echo [AVISO] Instalando Flask directamente en la instancia portable...
+    "%PY_EXE%" -m pip install flask cryptography --prefer-binary --no-warn-script-location
+)
+
+"%PY_EXE%" app.py
+
+if errorlevel 1 (
+    echo.
+    echo [ERROR] La aplicacion se ha cerrado con error.
+    pause
+)
+'@
 
 $launcherPath1 = Join-Path $ScriptDir "iniciar_windows.bat"
 $launcherPath2 = Join-Path $ScriptDir "start_windows.bat"
-$launcherContent | Set-Content -Path $launcherPath1 -Encoding ASCII
-$launcherContent | Set-Content -Path $launcherPath2 -Encoding ASCII
+$launcherContent | Set-Content -Path $launcherPath1 -Encoding UTF8
+$launcherContent | Set-Content -Path $launcherPath2 -Encoding UTF8
 
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Green
