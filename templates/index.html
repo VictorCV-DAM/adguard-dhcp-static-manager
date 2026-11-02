@@ -179,16 +179,53 @@
             font-weight: 600;
             position: relative;
             user-select: none;
-            cursor: pointer;
+            cursor: grab;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        th:active {
+            cursor: grabbing;
         }
         th:hover { color: var(--text); background: #162036; }
-        th.dragging { opacity: 0.45; }
+        th.dragging {
+            opacity: 0.45;
+            background: rgba(56, 189, 248, 0.12) !important;
+            outline: 1px dashed #38bdf8;
+        }
+        th.col-drag-left::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #38bdf8;
+            border-radius: 2px;
+            box-shadow: 0 0 8px #38bdf8;
+            z-index: 20;
+            pointer-events: none;
+        }
+        th.col-drag-right::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #38bdf8;
+            border-radius: 2px;
+            box-shadow: 0 0 8px #38bdf8;
+            z-index: 20;
+            pointer-events: none;
+        }
         .th-content {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 6px;
             padding-right: 8px;
+        }
+        .th-content * {
+            pointer-events: none;
         }
         .sort-ind { color: var(--accent); font-size: 0.75rem; }
         .col-resizer {
@@ -4622,7 +4659,10 @@ function getSortValue(d, colId) {
     }
 }
 
+let colIsDragging = false;
+
 function onHeaderClick(colId, ev) {
+    if (colIsDragging) return;
     if (ev.target.classList.contains('col-resizer') || colId === 'actions') return;
     if (sortState.colId === colId) {
         sortState.asc = !sortState.asc;
@@ -4728,18 +4768,70 @@ function renderTable() {
         th.addEventListener('dragstart', e => {
             if (e.target.classList.contains('col-resizer')) { e.preventDefault(); return; }
             dragSrcColId = col.id;
+            colIsDragging = true;
             th.classList.add('dragging');
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', col.id);
+            }
         });
-        th.addEventListener('dragend', () => th.classList.remove('dragging'));
-        th.addEventListener('dragover', e => e.preventDefault());
-        th.addEventListener('drop', e => {
+
+        th.addEventListener('dragend', () => {
+            th.classList.remove('dragging');
+            document.querySelectorAll('#main-table th').forEach(h => {
+                h.classList.remove('col-drag-left', 'col-drag-right');
+            });
+            setTimeout(() => { colIsDragging = false; }, 100);
+        });
+
+        th.addEventListener('dragover', e => {
             e.preventDefault();
             if (!dragSrcColId || dragSrcColId === col.id) return;
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+            const rect = th.getBoundingClientRect();
+            const midpoint = rect.left + rect.width / 2;
+            const isLeft = e.clientX < midpoint;
+
+            document.querySelectorAll('#main-table th').forEach(h => {
+                h.classList.remove('col-drag-left', 'col-drag-right');
+            });
+
+            if (isLeft) {
+                th.classList.add('col-drag-left');
+            } else {
+                th.classList.add('col-drag-right');
+            }
+        });
+
+        th.addEventListener('dragleave', e => {
+            if (!th.contains(e.relatedTarget)) {
+                th.classList.remove('col-drag-left', 'col-drag-right');
+            }
+        });
+
+        th.addEventListener('drop', e => {
+            e.preventDefault();
+            document.querySelectorAll('#main-table th').forEach(h => {
+                h.classList.remove('col-drag-left', 'col-drag-right');
+            });
+
+            if (!dragSrcColId || dragSrcColId === col.id) return;
+
             const fromIdx = columnsConfig.findIndex(c => c.id === dragSrcColId);
             const toIdx = columnsConfig.findIndex(c => c.id === col.id);
             if (fromIdx >= 0 && toIdx >= 0) {
+                const rect = th.getBoundingClientRect();
+                const midpoint = rect.left + rect.width / 2;
+                const isLeft = e.clientX < midpoint;
+
                 const [moved] = columnsConfig.splice(fromIdx, 1);
-                columnsConfig.splice(toIdx, 0, moved);
+                let insertIdx = columnsConfig.findIndex(c => c.id === col.id);
+                if (!isLeft) {
+                    insertIdx++;
+                }
+                columnsConfig.splice(insertIdx, 0, moved);
+
                 saveColumnsConfig();
                 renderColumnManager();
                 renderTable();
