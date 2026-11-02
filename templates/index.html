@@ -7413,13 +7413,12 @@ function buildTopoGraph(fitView = false) {
         }
     ];
 
-    // Detección dinámica y automática de nuevos nodos Mesh o APs descubiertos
-    const masterMeshHub = definedHubs.find(h => h.isMesh && h.parent === '__core__') || definedHubs[0];
-
+    // Detección dinámica y automática de nuevos nodos Mesh o APs descubiertos (todos cuelgan de Router Principal / LAN)
     // 1. Descubrir equipos físicos de infraestructura adicionales (incluso si tienen 0 clientes conectados)
     allDevices.filter(isInfraDev).forEach(d => {
         if (d.ip === gwIp) return;
         const normName = normalizeHubKey(d);
+        if (normName === 'Router Principal / LAN' || normName === 'Router Principal / Wi-Fi') return;
         if (!definedHubs.some(h => h.label === normName || h.id === 'hub:' + normName || (h.ip && h.ip === d.ip))) {
             const hLow = (d.hostname || '').toLowerCase();
             const isMesh = hLow.includes('halo') || hLow.includes('mesh') || hLow.includes('deco') || d.router_type === 'halo';
@@ -7428,7 +7427,7 @@ function buildTopoGraph(fitView = false) {
                 id: 'hub:' + normName,
                 label: normName,
                 ip: d.ip || '',
-                parent: isMesh ? masterMeshHub.id : '__core__',
+                parent: 'hub:lan',
                 isMesh: isMesh,
                 isCable: isCable,
                 color: isCable ? '#10b981' : '#00e5ff',
@@ -7439,6 +7438,7 @@ function buildTopoGraph(fitView = false) {
 
     // 2. Añadir cualquier grupo con clientes activos que no esté ya registrado
     Object.keys(groups).forEach(gKey => {
+        if (gKey === 'Router Principal / LAN' || gKey === 'Router Principal / Wi-Fi') return;
         if (!definedHubs.some(h => h.label === gKey || h.id === 'hub:' + gKey)) {
             const kLow = gKey.toLowerCase();
             const isCable = kLow.includes('cable') || kLow.includes('lan');
@@ -7448,7 +7448,7 @@ function buildTopoGraph(fitView = false) {
                 id: 'hub:' + gKey,
                 label: gKey,
                 ip: '',
-                parent: isMesh ? masterMeshHub.id : '__core__',
+                parent: 'hub:lan',
                 isMesh: isMesh,
                 isCable: isCable,
                 color: isOffline ? '#475569' : (isCable ? '#10b981' : '#00e5ff'),

@@ -2395,19 +2395,19 @@ def build_state(force_refresh=False):
 
         if ip in halo_node_info:
             raw_lbl = halo_node_info[ip].get("node_short") or halo_node_info[ip]["label"]
-            router_node = re.sub(r'\s*·.*$', '', raw_lbl).strip()
+            router_node = fallback_lan_name
             router_tooltip = halo_node_info[ip]["tooltip"]
-            router_type = 'infra'
+            router_type = 'halo'
             conn_medium = 'cable'
             conn_medium_label = 'Cable Ethernet'
         elif (gateway_ip and ip == gateway_ip) or 'router-principal' in hostname.lower() or 'gateway' in hostname.lower():
-            router_node = 'Router Principal / LAN'
+            router_node = fallback_lan_name
             router_tooltip = f'Equipo Central / Pasarela ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
             conn_medium_label = 'Cable Ethernet'
         elif is_infra_node:
-            router_node = hostname or 'Punto de Acceso / Router'
+            router_node = fallback_lan_name
             router_tooltip = f'Equipo de infraestructura de red ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
