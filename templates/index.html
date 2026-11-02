@@ -5902,11 +5902,13 @@ try {
 let topoState = {
     initialized: false,
     rotatingHub: null,
-    rotatingSpoke: null,
+    rotatingLink: null,
+    rotatingTrunk: null,
     rotatingClients: null,
+    targetClientIdx: -1,
     rotateStartAngle: 0,
     rotateStartDist: 1,
-    hoverSpoke: null,
+    hoverLink: null,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
         meshOpacity: (function() {
@@ -8036,12 +8038,12 @@ function initTopoCanvas() {
             return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
         };
 
-        const findSpokeAt = (wx, wy) => {
+        const findLinkAt = (wx, wy) => {
             const hitTolerance = Math.max(9, 15 / topoState.scale);
             const usePlexus = (topoState.visualStyle === 'plexus');
             for (let i = (topoState.links || []).length - 1; i >= 0; i--) {
                 const lk = topoState.links[i];
-                if (lk.type !== 'spoke' || !lk.from || !lk.to) continue;
+                if (!lk.from || !lk.to) continue;
                 const pts = (usePlexus && lk.joints && lk.joints.length)
                     ? [lk.from, ...lk.joints, lk.to]
                     : [lk.from, lk.to];
@@ -8061,6 +8063,37 @@ function initTopoCanvas() {
             e.preventDefault();
             topoState.smoothCamera = false;
             const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
+
+            // Ajuste instantáneo de apertura/cierre de abanico si estamos arrastrando o pulsando Alt sobre una línea
+            if (topoState.rotatingHub || (e.altKey && topoState.hoverLink && topoState.hoverLink.type === 'spoke')) {
+                const hub = topoState.rotatingHub || topoState.hoverLink.from;
+                const clients = topoState.nodes.filter(c => c.hubId === hub.id);
+                if (clients.length >= 2) {
+                    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+                    const sinSum = clients.reduce((s, c) => s + Math.sin(Math.atan2(c.baseY - hub.baseY, c.baseX - hub.baseX)), 0);
+                    const cosSum = clients.reduce((s, c) => s + Math.cos(Math.atan2(c.baseY - hub.baseY, c.baseX - hub.baseX)), 0);
+                    const meanAngle = Math.atan2(sinSum, cosSum);
+
+                    clients.forEach(c => {
+                        const curA = Math.atan2(c.baseY - hub.baseY, c.baseX - hub.baseX);
+                        const r = Math.hypot(c.baseX - hub.baseX, c.baseY - hub.baseY);
+                        let diff = curA - meanAngle;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        const newDiff = diff * factor;
+                        const newA = meanAngle + newDiff;
+                        c.baseX = Math.round(hub.baseX + Math.cos(newA) * r);
+                        c.baseY = Math.round(hub.baseY + Math.sin(newA) * r);
+                        c.x = c.baseX; c.y = c.baseY;
+                        c.relX = c.baseX - hub.baseX;
+                        c.relY = c.baseY - hub.baseY;
+                        topoState.customPositions[c.id] = { x: c.baseX, y: c.baseY, hubId: hub.id };
+                    });
+                    saveCustomPositionsToStorage();
+                    return;
+                }
+            }
+
             const factor = e.deltaY < 0 ? 1.14 : 0.88;
             const nextScale = Math.max(0.11, Math.min(3.8, topoState.scale * factor));
             topoState.panX = topoState.targetPanX = sx - wx * nextScale;
@@ -8188,21 +8221,58 @@ function initTopoCanvas() {
                 topoState.dragNode = hit;
                 topoState.dragPreSnapshot = JSON.parse(JSON.stringify(topoState.customPositions));
             } else {
-                const hitSpoke = findSpokeAt(wx, wy);
-                if (hitSpoke && hitSpoke.from) {
-                    const hub = hitSpoke.from;
-                    const clients = topoState.nodes.filter(c => c.hubId === hub.id);
-                    if (clients.length > 0) {
-                        topoState.rotatingHub = hub;
-                        topoState.rotatingSpoke = hitSpoke;
+                const hitLink = findLinkAt(wx, wy);
+                if (hitLink && hitLink.from && hitLink.to) {
+                    if (hitLink.type === 'spoke') {
+                        const hub = hitLink.from;
+                        const clients = topoState.nodes.filter(c => c.hubId === hub.id);
+                        if (clients.length > 0) {
+                            topoState.rotatingLink = hitLink;
+                            topoState.rotatingHub = hub;
+                            topoState.dragPreSnapshot = JSON.parse(JSON.stringify(topoState.customPositions));
+                            topoState.rotateStartAngle = Math.atan2(wy - hub.baseY, wx - hub.baseX);
+                            topoState.rotateStartDist = Math.hypot(wx - hub.baseX, wy - hub.baseY) || 1;
+
+                            const targetClient = hitLink.to;
+                            const sortedClients = [...clients].sort((a, b) => {
+                                const aA = Math.atan2(a.baseY - hub.baseY, a.baseX - hub.baseX);
+                                const bA = Math.atan2(b.baseY - hub.baseY, b.baseX - hub.baseX);
+                                return aA - bA;
+                            });
+                            const targetIdx = sortedClients.findIndex(c => c.id === targetClient.id);
+
+                            topoState.rotatingClients = sortedClients.map((c, idx) => ({
+                                node: c,
+                                idx: idx,
+                                isTarget: (c.id === targetClient.id),
+                                initAngle: Math.atan2(c.baseY - hub.baseY, c.baseX - hub.baseX),
+                                initDist: Math.hypot(c.baseX - hub.baseX, c.baseY - hub.baseY)
+                            }));
+                            topoState.targetClientIdx = targetIdx;
+                            canvas.style.cursor = 'grabbing';
+                            return;
+                        }
+                    } else if (hitLink.type === 'trunk') {
+                        const parentNode = hitLink.from;
+                        const childHub = hitLink.to;
+                        const subClients = topoState.nodes.filter(c => c.hubId === childHub.id);
+
+                        topoState.rotatingLink = hitLink;
+                        topoState.rotatingTrunk = {
+                            parent: parentNode,
+                            childHub: childHub,
+                            subClients: subClients,
+                            childInitAngle: Math.atan2(childHub.baseY - parentNode.baseY, childHub.baseX - parentNode.baseX),
+                            childInitDist: Math.hypot(childHub.baseX - parentNode.baseX, childHub.baseY - parentNode.baseY),
+                            clientOffsets: subClients.map(c => ({
+                                node: c,
+                                relX: c.baseX - childHub.baseX,
+                                relY: c.baseY - childHub.baseY
+                            }))
+                        };
                         topoState.dragPreSnapshot = JSON.parse(JSON.stringify(topoState.customPositions));
-                        topoState.rotateStartAngle = Math.atan2(wy - hub.baseY, wx - hub.baseX);
-                        topoState.rotateStartDist = Math.hypot(wx - hub.baseX, wy - hub.baseY) || 1;
-                        topoState.rotatingClients = clients.map(c => ({
-                            node: c,
-                            initAngle: Math.atan2(c.baseY - hub.baseY, c.baseX - hub.baseX),
-                            initDist: Math.hypot(c.baseX - hub.baseX, c.baseY - hub.baseY)
-                        }));
+                        topoState.rotateStartAngle = Math.atan2(wy - parentNode.baseY, wx - parentNode.baseX);
+                        topoState.rotateStartDist = Math.hypot(wx - parentNode.baseX, wy - parentNode.baseY) || 1;
                         canvas.style.cursor = 'grabbing';
                         return;
                     }
@@ -8215,6 +8285,43 @@ function initTopoCanvas() {
             if (currentMainTab !== 'topology') return;
             const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
 
+            // 1. Arrastre de enlace troncal: rotar router secundario y toda su constelación
+            if (topoState.rotatingTrunk) {
+                if (Math.hypot(sx - topoState.dragStartX, sy - topoState.dragStartY) > 3) {
+                    topoState.movedDuringDrag = true;
+                }
+                const tr = topoState.rotatingTrunk;
+                const curAngle = Math.atan2(wy - tr.parent.baseY, wx - tr.parent.baseX);
+                const deltaAngle = curAngle - topoState.rotateStartAngle;
+                const curDist = Math.hypot(wx - tr.parent.baseX, wy - tr.parent.baseY) || 1;
+                const distRatio = e.shiftKey ? 1.0 : Math.max(0.35, Math.min(3.0, curDist / (topoState.rotateStartDist || 1)));
+
+                const newChildAngle = tr.childInitAngle + deltaAngle;
+                const newChildDist = tr.childInitDist * distRatio;
+                const newChildX = Math.round(tr.parent.baseX + Math.cos(newChildAngle) * newChildDist);
+                const newChildY = Math.round(tr.parent.baseY + Math.sin(newChildAngle) * newChildDist);
+
+                const dx = newChildX - tr.childHub.baseX;
+                const dy = newChildY - tr.childHub.baseY;
+
+                tr.childHub.baseX = newChildX; tr.childHub.baseY = newChildY;
+                tr.childHub.x = newChildX; tr.childHub.y = newChildY;
+                topoState.customPositions[tr.childHub.id] = { x: newChildX, y: newChildY };
+
+                tr.clientOffsets.forEach(co => {
+                    co.node.baseX = newChildX + co.relX;
+                    co.node.baseY = newChildY + co.relY;
+                    co.node.x = co.node.baseX;
+                    co.node.y = co.node.baseY;
+                    topoState.customPositions[co.node.id] = { x: co.node.baseX, y: co.node.baseY, hubId: tr.childHub.id };
+                });
+
+                canvas.style.cursor = 'grabbing';
+                saveCustomPositionsToStorage();
+                return;
+            }
+
+            // 2. Arrastre de conector de clientes: rotación polar libre, deformación elástica o apertura
             if (topoState.rotatingHub) {
                 if (Math.hypot(sx - topoState.dragStartX, sy - topoState.dragStartY) > 3) {
                     topoState.movedDuringDrag = true;
@@ -8223,12 +8330,47 @@ function initTopoCanvas() {
                 const curAngle = Math.atan2(wy - hub.baseY, wx - hub.baseX);
                 const deltaAngle = curAngle - topoState.rotateStartAngle;
                 const curDist = Math.hypot(wx - hub.baseX, wy - hub.baseY) || 1;
-                const distRatio = e.shiftKey ? Math.max(0.4, Math.min(2.5, curDist / topoState.rotateStartDist)) : 1.0;
+                // Radio dinámico natural libre (mantener Shift fija el radio si se desea rotación pura fija)
+                const distRatio = e.shiftKey ? 1.0 : Math.max(0.35, Math.min(3.2, curDist / (topoState.rotateStartDist || 1)));
+
+                const isElastic = Boolean(e.ctrlKey || e.metaKey || topoState.dragWithCtrl);
+                const totalClients = topoState.rotatingClients.length;
+                const targetIdx = topoState.targetClientIdx;
+
+                // Si Alt está pulsado, desplazamiento horizontal modula la apertura del abanico
+                const isFanAdjust = Boolean(e.altKey);
+                let fanFactor = 1.0;
+                let meanAngle = 0;
+                if (isFanAdjust && totalClients >= 2) {
+                    const dragDistX = (sx - topoState.dragStartX) * 0.008;
+                    fanFactor = Math.max(0.2, Math.min(3.0, 1.0 + dragDistX));
+                    const sinSum = topoState.rotatingClients.reduce((s, it) => s + Math.sin(it.initAngle), 0);
+                    const cosSum = topoState.rotatingClients.reduce((s, it) => s + Math.cos(it.initAngle), 0);
+                    meanAngle = Math.atan2(sinSum, cosSum);
+                }
 
                 topoState.rotatingClients.forEach(item => {
                     const c = item.node;
-                    const newAngle = item.initAngle + deltaAngle;
-                    const newDist = item.initDist * distRatio;
+                    let inf = 1.0;
+                    if (isElastic && totalClients > 1 && targetIdx >= 0) {
+                        let diff = Math.abs(item.idx - targetIdx);
+                        diff = Math.min(diff, totalClients - diff);
+                        inf = Math.cos(Math.min(Math.PI / 2, (diff / Math.max(1.8, totalClients * 0.45)) * (Math.PI / 2)));
+                        inf = Math.max(0.08, inf);
+                    }
+
+                    let angleToUse = item.initAngle;
+                    if (isFanAdjust && totalClients >= 2) {
+                        let diffA = item.initAngle - meanAngle;
+                        while (diffA > Math.PI) diffA -= Math.PI * 2;
+                        while (diffA < -Math.PI) diffA += Math.PI * 2;
+                        angleToUse = meanAngle + diffA * fanFactor;
+                    }
+
+                    const newAngle = angleToUse + (deltaAngle * inf);
+                    const effRatio = 1.0 + (distRatio - 1.0) * inf;
+                    const newDist = item.initDist * effRatio;
+
                     c.baseX = Math.round(hub.baseX + Math.cos(newAngle) * newDist);
                     c.baseY = Math.round(hub.baseY + Math.sin(newAngle) * newDist);
                     c.x = c.baseX;
@@ -8237,6 +8379,7 @@ function initTopoCanvas() {
                     c.relY = c.baseY - hub.baseY;
                     topoState.customPositions[c.id] = { x: c.baseX, y: c.baseY, hubId: hub.id };
                 });
+
                 canvas.style.cursor = 'grabbing';
                 saveCustomPositionsToStorage();
                 return;
@@ -8298,15 +8441,15 @@ function initTopoCanvas() {
             const hit = findNodeAt(wx, wy);
             topoState.hoverNode = hit;
             if (hit) {
-                topoState.hoverSpoke = null;
+                topoState.hoverLink = null;
                 canvas.style.cursor = 'pointer';
                 updateTopoTooltip(hit, sx, sy);
             } else {
-                const spoke = findSpokeAt(wx, wy);
-                topoState.hoverSpoke = spoke;
-                if (spoke) {
+                const lk = findLinkAt(wx, wy);
+                topoState.hoverLink = lk;
+                if (lk) {
                     canvas.style.cursor = 'grab';
-                    updateTopoSpokeTooltip(spoke, sx, sy);
+                    updateTopoLinkTooltip(lk, sx, sy);
                 } else {
                     canvas.style.cursor = 'grab';
                     updateTopoTooltip(null);
@@ -8345,13 +8488,14 @@ function initTopoCanvas() {
                     clearTopoPin();
                 }
             }
-            if (topoState.rotatingHub) {
+            if (topoState.rotatingHub || topoState.rotatingTrunk) {
                 if (topoState.movedDuringDrag && topoState.dragPreSnapshot) {
                     pushTopoUndo(topoState.dragPreSnapshot);
                     topoState.dragPreSnapshot = null;
                 }
                 topoState.rotatingHub = null;
-                topoState.rotatingSpoke = null;
+                topoState.rotatingLink = null;
+                topoState.rotatingTrunk = null;
                 topoState.rotatingClients = null;
             }
             topoState.dragNode = null;
@@ -8362,22 +8506,40 @@ function initTopoCanvas() {
     }
 }
 
-function updateTopoSpokeTooltip(spoke, sx, sy) {
+function updateTopoLinkTooltip(lk, sx, sy) {
     const tip = document.getElementById('topo-tooltip');
-    if (!tip || !spoke || !spoke.from) return;
-    const hubName = spoke.from.label || 'Nodo';
-    const clientCount = topoState.nodes.filter(n => n.hubId === spoke.from.id).length;
+    if (!tip || !lk || !lk.from || !lk.to) return;
     tip.style.display = 'block';
     tip.style.left = (sx + 14) + 'px';
     tip.style.top = (sy + 14) + 'px';
-    tip.innerHTML = `
-        <div style="font-weight:800; color:#00e5ff; font-size:0.86rem;">🔄 Rotación Orbital de Clientes</div>
-        <div style="color:#cbd5e1; font-size:0.75rem; margin-top:2px;">Conector de <strong>${escapeHtml(hubName)}</strong> (${clientCount} clientes)</div>
-        <div style="margin-top:5px; font-size:0.74rem; color:#94a3b8;">
-            ✨ <strong>Arrastra la línea</strong> para girar todos los clientes alrededor del nodo.<br>
-            <span style="color:#38bdf8;">Tip:</span> Mantén <strong>Shift</strong> para alejar o acercar el radio.
-        </div>
-    `;
+
+    if (lk.type === 'trunk') {
+        const parentName = lk.from.label || 'Router Principal';
+        const childName = lk.to.label || 'Sub-Nodo';
+        const subCount = topoState.nodes.filter(n => n.hubId === lk.to.id).length;
+        tip.innerHTML = `
+            <div style="font-weight:800; color:#10b981; font-size:0.86rem;">⚡ Troncal de Infraestructura: ${escapeHtml(childName)}</div>
+            <div style="color:#cbd5e1; font-size:0.75rem; margin-top:2px;">Enlace: <strong>${escapeHtml(parentName)}</strong> ➔ <strong>${escapeHtml(childName)}</strong> (${subCount} clientes)</div>
+            <div style="margin-top:6px; font-size:0.74rem; color:#94a3b8; line-height:1.45;">
+                ✨ <strong>Arrastra la línea:</strong> Orbita <strong>${escapeHtml(childName)}</strong> y sus ${subCount} clientes alrededor del nodo central.<br>
+                📐 <strong>Distancia libre:</strong> Se acerca/aleja con el ratón (o mantén <strong>Shift</strong> para fijar distancia).
+            </div>
+        `;
+    } else {
+        const hubName = lk.from.label || 'Nodo';
+        const clientName = (lk.to.dev && lk.to.dev.hostname) || lk.to.label || 'Cliente';
+        const clientCount = topoState.nodes.filter(n => n.hubId === lk.from.id).length;
+        tip.innerHTML = `
+            <div style="font-weight:800; color:#00e5ff; font-size:0.86rem;">🔄 Conector: ${escapeHtml(clientName)}</div>
+            <div style="color:#cbd5e1; font-size:0.75rem; margin-top:2px;">Pertenece a <strong>${escapeHtml(hubName)}</strong> (${clientCount} clientes)</div>
+            <div style="margin-top:6px; font-size:0.74rem; color:#94a3b8; line-height:1.45;">
+                ✨ <strong>Arrastra libremente:</strong> Gira la constelación y ajusta el radio.<br>
+                🧲 <strong>Ctrl + Arrastre:</strong> Deformación elástica suave de esta rama y sus vecinos.<br>
+                📐 <strong>Rueda / Alt + Arrastre:</strong> Abre o cierra el abanico angular.<br>
+                🔒 <strong>Shift:</strong> Bloquea el radio para rotación pura fija.
+            </div>
+        `;
+    }
 }
 
 function updateTopoTooltip(node, sx, sy) {
@@ -8484,7 +8646,7 @@ function drawTopoFrame(now) {
 
             // 1. Movimiento flotante lento y constante ("Constelación / Zigzag Flotante")
             topoState.nodes.forEach(n => {
-                if (n === topoState.dragNode || (topoState.rotatingHub && n.hubId === topoState.rotatingHub.id)) return;
+                if (n === topoState.dragNode || (topoState.rotatingHub && n.hubId === topoState.rotatingHub.id) || (topoState.rotatingTrunk && (n.id === topoState.rotatingTrunk.childHub.id || n.hubId === topoState.rotatingTrunk.childHub.id))) return;
                 if (!topoState.effectsOn) {
                     n.x = n.baseX;
                     n.y = n.baseY;
@@ -8552,8 +8714,12 @@ function drawTopoFrame(now) {
             }
 
             const isLinkHighlighted = lk => {
+                if (topoState.rotatingTrunk && (lk === topoState.rotatingLink || (lk.from && lk.from.id === topoState.rotatingTrunk.childHub.id))) return true;
                 if (topoState.rotatingHub && lk.from && lk.from.id === topoState.rotatingHub.id) return true;
-                if (topoState.hoverSpoke && lk.from && lk.from.id === topoState.hoverSpoke.from.id) return true;
+                if (topoState.hoverLink) {
+                    if (topoState.hoverLink.type === 'trunk' && lk === topoState.hoverLink) return true;
+                    if (topoState.hoverLink.type === 'spoke' && lk.from && lk.from.id === topoState.hoverLink.from.id) return true;
+                }
                 if (!hov) return false;
                 if (hov.type === 'core') return lk.type === 'trunk';
                 if (hov.type === 'hub') return lk.from.id === hov.id || lk.to.id === hov.id;
@@ -8931,8 +9097,21 @@ function drawTopoFrame(now) {
                         ctx.stroke();
                     }
                 });
-            }            // Guía visual orbital al rotar clientes alrededor del Hub
-            if (topoState.rotatingHub) {
+            }            // Guía visual orbital al rotar enlaces troncales (Trunk) o clientes (Spoke)
+            if (topoState.rotatingTrunk) {
+                const tr = topoState.rotatingTrunk;
+                const r = Math.hypot(tr.childHub.x - tr.parent.x, tr.childHub.y - tr.parent.y);
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(tr.parent.x, tr.parent.y, r, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(16, 185, 129, 0.65)';
+                ctx.lineWidth = 2.2;
+                ctx.setLineDash([8, 6]);
+                ctx.shadowColor = '#10b981';
+                ctx.shadowBlur = 18;
+                ctx.stroke();
+                ctx.restore();
+            } else if (topoState.rotatingHub) {
                 const rh = topoState.rotatingHub;
                 const rClients = topoState.nodes.filter(c => c.hubId === rh.id);
                 if (rClients.length > 0) {
