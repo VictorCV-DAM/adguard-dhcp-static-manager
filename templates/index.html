@@ -5241,10 +5241,19 @@ function onMacInputCard(val) {
             const xClean = (x.mac || '').toLowerCase().replace(/[^0-9a-f]/g, '');
             return xClean === cleanM;
         });
-        if (dev && dev.ha_info && dev.ha_info.name) {
+        if (dev) {
             const hostInp = document.getElementById('in-hostname');
             if (hostInp && (!hostInp.value.trim() || hostInp.value.startsWith('esp-') || hostInp.value === '(Sin nombre)')) {
-                hostInp.value = dev.ha_info.name;
+                hostInp.value = (dev.ha_info && dev.ha_info.name) || dev.hostname || '';
+            }
+            const ipInp = document.getElementById('in-ip');
+            if (ipInp && !ipInp.value.trim()) {
+                if (dev.static && dev.ip) {
+                    ipInp.value = dev.ip;
+                } else {
+                    const freeIp = findNextFreeIp();
+                    if (freeIp) ipInp.value = freeIp;
+                }
             }
         }
     }
@@ -5262,14 +5271,14 @@ function fillForm(hostname, mac, ip) {
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
 
-    // Si la IP es dinámica (rango 100..200) o no tiene IP, sugerir automáticamente la siguiente IP estática libre de forma silenciosa
-    const octet = parseInt((ip || '').split('.').pop() || '0', 10);
+    // Si el dispositivo NO es una IP estática ya fijada, o no tiene IP, sugerir automáticamente la siguiente IP fija disponible
+    const isAlreadyStatic = Boolean(dev && dev.static);
     const hint = document.getElementById('card-ip-hint');
-    if (!ip || (octet >= 100 && octet <= 200)) {
+    if (!isAlreadyStatic || !ip) {
         const freeIp = findNextFreeIp();
         if (freeIp) {
             document.getElementById('in-ip').value = freeIp;
-            if (hint) hint.textContent = `(Sugerida IP fija libre: ${freeIp} en vez de la dinámica ${ip})`;
+            if (hint) hint.textContent = `(Sugerida IP fija libre: ${freeIp}${ip ? ' en vez de la dinámica ' + ip : ''})`;
         }
     }
 
@@ -9987,17 +9996,23 @@ async function saveDeviceMeta() {
 
 function findNextFreeIp() {
     const used = new Set();
+    let prefix = '192.168.1';
     if (typeof allDevices !== 'undefined' && Array.isArray(allDevices)) {
         allDevices.forEach(d => {
-            if (d.ip) used.add(d.ip.trim());
+            if (d.ip) {
+                const parts = d.ip.trim().split('.');
+                if (parts.length === 4) prefix = parts.slice(0, 3).join('.');
+                used.add(d.ip.trim());
+            }
             (d.live_ips || []).forEach(lip => used.add(lip.trim()));
         });
     }
-    // Buscar primero en el rango habitual de IPs estáticas (20..99 y 201..248), luego dinámicas (100..200)
+    // Buscar primero en el rango habitual de IPs estáticas (20..99 y 201..248), luego dinámicas (100..254)
     const candidates = [];
-    for (let i = 20; i <= 99; i++) candidates.push(`192.168.1.${i}`);
-    for (let i = 201; i <= 248; i++) candidates.push(`192.168.1.${i}`);
-    for (let i = 100; i <= 200; i++) candidates.push(`192.168.1.${i}`);
+    for (let i = 20; i <= 99; i++) candidates.push(`${prefix}.${i}`);
+    for (let i = 201; i <= 248; i++) candidates.push(`${prefix}.${i}`);
+    for (let i = 100; i <= 200; i++) candidates.push(`${prefix}.${i}`);
+    for (let i = 249; i <= 254; i++) candidates.push(`${prefix}.${i}`);
     return candidates.find(ip => !used.has(ip));
 }
 
