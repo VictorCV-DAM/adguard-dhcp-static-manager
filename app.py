@@ -2947,15 +2947,27 @@ def api_stop_localhost_service():
     err_msg = ""
     try:
         if system == 'Windows':
+            # Intento 1: taskkill con arbol de procesos (/T)
             res = subprocess.run(['taskkill', '/PID', str(target_pid), '/F', '/T'], capture_output=True, text=True, timeout=5)
-            if res.returncode == 0 or 'éxito' in res.stdout.lower() or 'success' in res.stdout.lower():
+            out = (res.stderr or res.stdout or "").strip()
+            if res.returncode == 0 or 'éxito' in out.lower() or 'success' in out.lower() or 'no se encuentra' in out.lower() or 'not found' in out.lower():
                 killed = True
             else:
-                out = (res.stderr or res.stdout or "").strip()
-                if 'no se encuentra' in out.lower() or 'not found' in out.lower():
+                # Intento 2: taskkill directo sin /T (a veces el padre es un proceso protegido o de otra consola)
+                res2 = subprocess.run(['taskkill', '/PID', str(target_pid), '/F'], capture_output=True, text=True, timeout=5)
+                out2 = (res2.stderr or res2.stdout or "").strip()
+                if res2.returncode == 0 or 'éxito' in out2.lower() or 'success' in out2.lower() or 'no se encuentra' in out2.lower() or 'not found' in out2.lower():
                     killed = True
                 else:
-                    err_msg = out
+                    # Intento 3: PowerShell Stop-Process
+                    res3 = subprocess.run(['powershell', '-NoProfile', '-Command', f'Stop-Process -Id {target_pid} -Force'], capture_output=True, text=True, timeout=5)
+                    if res3.returncode == 0:
+                        killed = True
+                    else:
+                        if 'acceso denegado' in out.lower() or 'access denied' in out.lower():
+                            err_msg = f"{out} — (El proceso está corriendo como Administrador; inicia el panel como Administrador para poder cerrarlo)"
+                        else:
+                            err_msg = out or out2
         else:
             try:
                 os.kill(target_pid, signal.SIGTERM)
