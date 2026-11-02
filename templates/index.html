@@ -11425,10 +11425,10 @@ function renderLocalhostTabServices() {
     if (elWeb) elWeb.textContent = countWeb;
     if (elLocal) elLocal.textContent = countLocal;
     if (elLan) elLan.textContent = countLan;
-    if (sumBadge) sumBadge.textContent = `${countAll} puertos (${countWeb} web HTTP)`;
+    if (sumBadge) sumBadge.textContent = `${countAll} servicios web accesibles`;
 
     const badgeSubtab = document.getElementById('badge-svc-localhost-count');
-    if (badgeSubtab) badgeSubtab.textContent = countWeb > 0 ? `${countWeb} web / ${countAll}` : countAll;
+    if (badgeSubtab) badgeSubtab.textContent = countAll;
 
     let list = [...all];
     if (_localhostTabFilter === 'web') {
@@ -11454,7 +11454,7 @@ function renderLocalhostTabServices() {
     if (list.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; padding:50px 20px; color:var(--muted); font-size:0.9rem; background:#1e293b; border-radius:10px; border:1px solid var(--border);">
-                No se encontraron servicios locales con los filtros seleccionados.
+                No se detectaron servicios web accesibles (HTTP/HTTPS) en este equipo actualmente.
             </div>
         `;
         return;

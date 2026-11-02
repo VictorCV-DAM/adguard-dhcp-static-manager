@@ -855,58 +855,68 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
     raw_ports = get_listening_ports_map()
 
     def probe_one(port, info):
-        bind_ip = info['bind']
-        pid = info['pid']
-        proc_name = info['process']
-        should_probe = probe_http and (port < 49152 or port in (49353, 50134, 5001, 8080, 8443, 3000, 8123))
+        bind_ip = info.get('bind', '127.0.0.1')
+        pid = info.get('pid', '')
+        proc_name = info.get('process', '')
         is_http = False
         url = None
         title = ''
         server_header = ''
         http_code = None
+        working_proto = 'http'
 
-        if should_probe:
+        # Probar rigurosamente si el puerto responde a peticiones HTTP o HTTPS
+        if probe_http:
             for proto in ['http', 'https']:
-                for test_host in ['127.0.0.1', 'localhost', '[::1]']:
-                    test_url = f'{proto}://{test_host}:{port}/'
+                for test_host in ['localhost', '127.0.0.1']:
+                    test_url = f'{proto}://{test_host}:{port}/' if port not in (80, 443) else f'{proto}://{test_host}/'
                     try:
-                        req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-                        with urllib.request.urlopen(req, timeout=0.35, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
-                            is_http = True
-                            http_code = resp.getcode()
-                            url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
-                            content = resp.read(2048).decode('utf-8', errors='ignore')
-                            m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                            title = m.group(1).strip() if m else ''
-                            server_header = resp.headers.get('Server', '')
-                            break
+                        req = urllib.request.Request(
+                            test_url,
+                            headers={
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                            }
+                        )
+                        ctx = SSL_UNVERIFIED_CTX if proto == 'https' else None
+                        with urllib.request.urlopen(req, timeout=0.6, context=ctx) as resp:
+                            code = resp.getcode()
+                            if code:
+                                is_http = True
+                                http_code = code
+                                working_proto = proto
+                                content = resp.read(4096).decode('utf-8', errors='ignore')
+                                m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                                title = m.group(1).strip() if m else ''
+                                server_header = resp.headers.get('Server', '')
+                                break
                     except urllib.error.HTTPError as e:
-                        if e.code in (401, 403, 301, 302, 307, 308, 404, 400, 405):
+                        # Códigos HTTP reales que demuestran la existencia de un servidor web activo
+                        if e.code in (401, 403, 301, 302, 303, 307, 308, 400, 404, 405, 500, 502, 503):
                             is_http = True
                             http_code = e.code
-                            url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
-                            content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ''
+                            working_proto = proto
+                            content = e.read(4096).decode('utf-8', errors='ignore') if e.fp else ''
                             m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                            title = m.group(1).strip() if m else f'HTTP {e.code}'
-                            server_header = e.headers.get('Server', '')
+                            title = m.group(1).strip() if m else (f'Acceso Protegido (HTTP {e.code})' if e.code in (401, 403) else f'Web (HTTP {e.code})')
+                            server_header = e.headers.get('Server', '') if e.headers else ''
                             break
                     except Exception:
                         pass
                 if is_http:
                     break
 
+        # FILTRO ESTRICTO: Si no tiene interfaz web real y accesible, NO se lista
+        if not is_http:
+            return None
+
+        final_url = f'{working_proto}://localhost:{port}' if port not in (80, 443) else f'{working_proto}://localhost'
         known = KNOWN_LOCAL_SERVICES.get(port)
-        icon = '⚙️'
-        category = 'system'
-        if is_http:
-            icon = '🌐'
-            category = 'web'
-        if port in (53, 5353):
+        icon = '🌐'
+        category = 'web'
+        if port == 5001:
             icon = '🛡️'
-            category = 'dns'
-        elif port in (3306, 5432, 27017, 6379, 1433):
-            icon = '🗄️'
-            category = 'database'
+            known = 'Panel DHCP AdGuard'
         elif port in (11434, 1234, 8000, 5000) or 'ollama' in proc_name.lower():
             icon = '🤖'
             category = 'ai'
@@ -916,14 +926,10 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
         elif port in (32400, 8096, 47989, 47990):
             icon = '🎬'
             category = 'media'
-        elif port == 5001:
-            icon = '🛡️'
-            category = 'web'
-            known = 'Panel DHCP AdGuard'
 
-        label = title or known or (f'{proc_name} (:{port})' if proc_name else f'Puerto :{port}')
+        label = title or known or (f'{proc_name} (:{port})' if proc_name else f'Servicio :{port}')
         is_loopback_only = bind_ip in ('127.0.0.1', '::1')
-        bind_label = 'Solo Local (127.0.0.1)' if is_loopback_only else f'Red Local ({bind_ip})'
+        bind_label = 'Solo Local (localhost)' if is_loopback_only else f'Red Local ({bind_ip})'
 
         return {
             'port': port,
@@ -932,9 +938,9 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
             'is_loopback_only': is_loopback_only,
             'pid': pid,
             'process': proc_name,
-            'is_http': is_http,
+            'is_http': True,
             'http_code': http_code,
-            'url': url,
+            'url': final_url,
             'label': label,
             'title': title,
             'server': server_header,
@@ -945,18 +951,19 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
 
     results = []
     if raw_ports:
-        with ThreadPoolExecutor(max_workers=min(20, len(raw_ports))) as pool:
+        with ThreadPoolExecutor(max_workers=min(25, len(raw_ports))) as pool:
             futs = [pool.submit(probe_one, p, info) for p, info in sorted(raw_ports.items())]
             for f in futs:
                 try:
-                    results.append(f.result())
+                    res = f.result()
+                    if res and res.get('is_http'):
+                        results.append(res)
                 except Exception:
                     pass
 
-    results.sort(key=lambda x: (not x['is_http'], x['port']))
+    results.sort(key=lambda x: x['port'])
     _LOCALHOST_SERVICES_CACHE = (now, results)
     return results
-
 
 def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True, custom_service_names=None):
     """Devuelve única y exclusivamente servicios web reales y accesibles verificados."""
