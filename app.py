@@ -50,6 +50,35 @@ import tempfile
 LEASES_PATH = os.environ.get('DHCP_PANEL_LEASES_PATH') or os.path.join(_CURRENT_DIR, 'leases.json')
 YAML_PATH = os.environ.get('DHCP_PANEL_YAML_PATH') or os.path.join(_CURRENT_DIR, 'AdGuardHome.yaml')
 CONFIG_PATH = os.environ.get('DHCP_PANEL_CONFIG_PATH') or os.path.join(_CURRENT_DIR, 'config.json')
+TOPO_POSITIONS_PATH = os.path.join(os.path.dirname(CONFIG_PATH), 'topology_positions.json')
+_TOPO_POS_LOCK = threading.Lock()
+_TOPO_POS_CACHE = None
+
+def load_topo_positions():
+    global _TOPO_POS_CACHE
+    if _TOPO_POS_CACHE is not None:
+        return _TOPO_POS_CACHE
+    if os.path.exists(TOPO_POSITIONS_PATH):
+        try:
+            with open(TOPO_POSITIONS_PATH, 'r', encoding='utf-8') as f:
+                _TOPO_POS_CACHE = json.load(f) or {}
+                return _TOPO_POS_CACHE
+        except Exception:
+            pass
+    _TOPO_POS_CACHE = {}
+    return _TOPO_POS_CACHE
+
+def save_topo_positions(positions):
+    global _TOPO_POS_CACHE
+    with _TOPO_POS_LOCK:
+        _TOPO_POS_CACHE = positions or {}
+        try:
+            tmp = TOPO_POSITIONS_PATH + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(_TOPO_POS_CACHE, f, indent=2)
+            os.replace(tmp, TOPO_POSITIONS_PATH)
+        except Exception:
+            pass
 
 DEFAULT_CONFIG = {
     "adguard_url": "",
@@ -923,14 +952,29 @@ def identify_local_service(port, proc_name, pid, title, server_header, content="
     return fallback, '🌐', 'web'
 
 
+_LOCALHOST_SCANNING = False
+_LOCALHOST_LOCK = threading.Lock()
+
 def scan_localhost_services(probe_http=True, force_refresh=False):
     """Detecta todos los servicios escuchando en localhost (127.0.0.1 y 0.0.0.0) en el PC del panel."""
-    global _LOCALHOST_SERVICES_CACHE
+    global _LOCALHOST_SERVICES_CACHE, _LOCALHOST_SCANNING
     now = time.time()
-    if not force_refresh and _LOCALHOST_SERVICES_CACHE[1] and (now - _LOCALHOST_SERVICES_CACHE[0]) < 20:
+    cache_age = now - _LOCALHOST_SERVICES_CACHE[0]
+
+    # Caché rápido de 180 segundos: nunca bloquea la petición HTTP
+    if not force_refresh and _LOCALHOST_SERVICES_CACHE[1] is not None and cache_age < 180:
         return _LOCALHOST_SERVICES_CACHE[1]
 
-    raw_ports = get_listening_ports_map()
+    # Si la caché está expirada o vacía, lanzar escaneo en segundo plano sin bloquear
+    if not _LOCALHOST_SCANNING:
+        _LOCALHOST_SCANNING = True
+        threading.Thread(target=_do_scan_localhost_services, args=(probe_http,), daemon=True).start()
+
+    return _LOCALHOST_SERVICES_CACHE[1] if _LOCALHOST_SERVICES_CACHE[1] is not None else []
+
+def _do_scan_localhost_services(probe_http=True):
+    global _LOCALHOST_SERVICES_CACHE, _LOCALHOST_SCANNING
+    now = time.time()
 
     def probe_one(port, info):
         bind_ip = info.get('bind', '127.0.0.1')
@@ -1048,20 +1092,25 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
         }
 
     results = []
-    if raw_ports:
-        with ThreadPoolExecutor(max_workers=min(25, len(raw_ports))) as pool:
-            futs = [pool.submit(probe_one, p, info) for p, info in sorted(raw_ports.items())]
-            for f in futs:
-                try:
-                    res = f.result()
-                    if res and res.get('is_http'):
-                        results.append(res)
-                except Exception:
-                    pass
-
-    results.sort(key=lambda x: x['port'])
-    _LOCALHOST_SERVICES_CACHE = (now, results)
-    return results
+    try:
+        raw_ports = get_listening_ports_map()
+        if raw_ports:
+            with ThreadPoolExecutor(max_workers=min(25, len(raw_ports))) as pool:
+                futs = [pool.submit(probe_one, p, info) for p, info in sorted(raw_ports.items())]
+                for f in futs:
+                    try:
+                        res = f.result()
+                        if res and res.get('is_http'):
+                            results.append(res)
+                    except Exception:
+                        pass
+        results.sort(key=lambda x: x['port'])
+        _LOCALHOST_SERVICES_CACHE = (now, results)
+        return results
+    except Exception:
+        return _LOCALHOST_SERVICES_CACHE[1] or []
+    finally:
+        _LOCALHOST_SCANNING = False
 
 def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None, halo_node_info=None, is_active=True, custom_service_names=None):
     """Devuelve única y exclusivamente servicios web reales y accesibles verificados."""
@@ -1087,13 +1136,8 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
     _, gateway_ip, _ = get_network_info()
     is_router = ((gateway_ip and ip == gateway_ip) or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
 
-    now = time.time()
     cached = _SERVICE_SCAN_CACHE.get(ip)
-    if cached and (now - cached[0]) < 180:
-        verified_services = cached[1]
-    else:
-        verified_services = scan_device_verified_services(ip)
-        _SERVICE_SCAN_CACHE[ip] = (now, verified_services)
+    verified_services = cached[1] if cached else []
 
     links = []
     seen_urls = set()
@@ -1242,8 +1286,19 @@ def run_sudo(cmd_list):
     return subprocess.run(['sudo'] + cmd_list, capture_output=True, text=True, timeout=30)
 
 
+_ADGUARD_AVAIL_CACHE = (0, None)
+
 def check_adguard_available():
     """Comprueba si AdGuard Home está configurado y accesible (vía archivo local o API)."""
+    global _ADGUARD_AVAIL_CACHE
+    now = time.time()
+    if _ADGUARD_AVAIL_CACHE[1] is not None and (now - _ADGUARD_AVAIL_CACHE[0]) < 15:
+        return _ADGUARD_AVAIL_CACHE[1]
+    res = _do_check_adguard_available()
+    _ADGUARD_AVAIL_CACHE = (now, res)
+    return res
+
+def _do_check_adguard_available():
     try:
         if os.path.exists(LEASES_PATH) or os.path.exists(YAML_PATH):
             return True
@@ -1263,7 +1318,23 @@ def check_adguard_available():
         return False
 
 
+_READ_LEASES_CACHE = [0, None]
+_READ_LEASES_LOCK = threading.Lock()
+
 def read_leases():
+    global _READ_LEASES_CACHE
+    now = time.time()
+    if _READ_LEASES_CACHE[1] and (now - _READ_LEASES_CACHE[0] < 3.0):
+        try:
+            return json.loads(json.dumps(_READ_LEASES_CACHE[1]))
+        except Exception:
+            pass
+    data = _do_read_leases()
+    with _READ_LEASES_LOCK:
+        _READ_LEASES_CACHE = [now, data]
+    return data
+
+def _do_read_leases():
     # 1. Archivo local de AdGuard Home si existe
     if os.path.exists(LEASES_PATH):
         try:
@@ -1352,8 +1423,19 @@ def set_lease_duration_yaml(seconds):
     return proc.returncode == 0
 
 
+_NETWORK_INFO_CACHE = (0, None)
+
 def get_network_info():
     """Detecta dinámicamente la IP local, la puerta de enlace (Gateway) y el prefijo de subred."""
+    global _NETWORK_INFO_CACHE
+    now = time.time()
+    if _NETWORK_INFO_CACHE[1] is not None and (now - _NETWORK_INFO_CACHE[0]) < 60:
+        return _NETWORK_INFO_CACHE[1]
+    res = _do_get_network_info()
+    _NETWORK_INFO_CACHE = (now, res)
+    return res
+
+def _do_get_network_info():
     local_ip = '127.0.0.1'
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -2266,6 +2348,26 @@ def api_hunt_mac():
 
 
 
+_DEVICE_SCAN_RUNNING = False
+_DEVICE_SCAN_LOCK = threading.Lock()
+
+def _background_scan_device_services(ips):
+    global _DEVICE_SCAN_RUNNING
+    try:
+        now = time.time()
+        with ThreadPoolExecutor(max_workers=min(20, max(1, len(ips)))) as pool:
+            futures = {pool.submit(scan_device_verified_services, a_ip): a_ip for a_ip in ips}
+            for f in futures:
+                a_ip = futures[f]
+                try:
+                    v_services = f.result()
+                    _SERVICE_SCAN_CACHE[a_ip] = (now, v_services)
+                except Exception:
+                    _SERVICE_SCAN_CACHE[a_ip] = (now, [])
+    finally:
+        with _DEVICE_SCAN_LOCK:
+            _DEVICE_SCAN_RUNNING = False
+
 def build_state(force_refresh=False):
     """Construye el estado completo de la red (dispositivos, servicios, enlaces)."""
     cfg = load_config()
@@ -2664,17 +2766,13 @@ def build_state(force_refresh=False):
     if force_refresh:
         _SERVICE_SCAN_CACHE.clear()
 
-    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (force_refresh or a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 180)]
+    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (force_refresh or a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 300)]
     if ips_to_scan:
-        with ThreadPoolExecutor(max_workers=min(25, max(1, len(ips_to_scan) * 5))) as pool:
-            futures = {pool.submit(scan_device_verified_services, a_ip): a_ip for a_ip in ips_to_scan}
-            for f in futures:
-                a_ip = futures[f]
-                try:
-                    v_services = f.result()
-                    _SERVICE_SCAN_CACHE[a_ip] = (now, v_services)
-                except Exception:
-                    _SERVICE_SCAN_CACHE[a_ip] = (now, [])
+        with _DEVICE_SCAN_LOCK:
+            global _DEVICE_SCAN_RUNNING
+            if not _DEVICE_SCAN_RUNNING:
+                _DEVICE_SCAN_RUNNING = True
+                threading.Thread(target=_background_scan_device_services, args=(ips_to_scan,), daemon=True).start()
 
     # Actualizar web_links para todos los dispositivos con los servicios recién descubiertos
     custom_names = cfg.get('custom_service_names', {})
@@ -3007,12 +3105,37 @@ def api_stop_localhost_service():
             'error': f'No se pudo detener el proceso (PID {target_pid}): {err_msg or "Permisos insuficientes o proceso protegido"}'
         }), 500
 
+_API_STATE_CACHE = [0, None, None]
+_API_STATE_LOCK = threading.Lock()
+
 @app.route('/api/state', methods=['GET'])
 def api_state():
+    global _API_STATE_CACHE
     force = bool(request.args.get('refresh') or request.args.get('force'))
+    now = time.time()
+    if not force and _API_STATE_CACHE[2] and (now - _API_STATE_CACHE[0] < 4.5):
+        return Response(_API_STATE_CACHE[2], mimetype='application/json')
+
     state = build_state(force_refresh=force)
     extras.enrich_state(state)
-    return jsonify(state)
+    state['topology_positions'] = load_topo_positions()
+    raw_json = json.dumps(state)
+    with _API_STATE_LOCK:
+        _API_STATE_CACHE = [now, state, raw_json]
+    return Response(raw_json, mimetype='application/json')
+
+@app.route('/api/topology/positions', methods=['GET', 'POST'])
+def api_topology_positions():
+    if request.method == 'POST':
+        try:
+            data = request.get_json(force=True) or {}
+            save_topo_positions(data)
+            global _API_STATE_CACHE
+            _API_STATE_CACHE = [0, None]
+            return jsonify({'status': 'success', 'count': len(data)})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+    return jsonify({'status': 'success', 'positions': load_topo_positions()})
 
 
 @app.route('/api/services/rename', methods=['POST'])

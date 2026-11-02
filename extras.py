@@ -161,6 +161,7 @@ def init_db():
                 url TEXT, ts INTEGER, up INTEGER, ms REAL
             );
             CREATE INDEX IF NOT EXISTS idx_svc_checks ON service_checks(url, ts);
+            CREATE INDEX IF NOT EXISTS idx_svc_checks_ts ON service_checks(ts);
             CREATE TABLE IF NOT EXISTS events_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts INTEGER, kind TEXT, title TEXT, message TEXT, sent INTEGER DEFAULT 0
@@ -733,15 +734,28 @@ def monitor_loop():
 # =====================================================================
 #  Enriquecer /api/state con datos persistentes
 # =====================================================================
-def enrich_state(state):
-    devs = {r['mac']: r for r in db_query('SELECT * FROM devices')}
-    svc_rows = {r['url']: r for r in db_query('SELECT * FROM services')}
-    since = now_ts() - 86400
+_SERVICES_STATS_CACHE = [0, None, None]
+
+def _get_services_upt_and_hist(services=None):
+    global _SERVICES_STATS_CACHE
+    now = now_ts()
+    if _SERVICES_STATS_CACHE[1] is not None and (now - _SERVICES_STATS_CACHE[0]) < 30:
+        return _SERVICES_STATS_CACHE[1], _SERVICES_STATS_CACHE[2]
+    since = now - 86400
     upt = {r['url']: r for r in db_query(
         'SELECT url, AVG(up) AS avg_up, COUNT(*) AS n FROM service_checks WHERE ts > ? GROUP BY url', (since,))}
     hist = {}
-    for r in db_query('SELECT url, ts, up, ms FROM service_checks WHERE ts > ? ORDER BY ts', (now_ts() - 6 * 3600,)):
-        hist.setdefault(r['url'], []).append([r['up'], r['ms']])
+    svc_list = services or [r['url'] for r in db_query('SELECT DISTINCT url FROM services')]
+    for u in svc_list:
+        rows = db_query('SELECT up, ms FROM service_checks WHERE url = ? ORDER BY ts DESC LIMIT 40', (u,))
+        hist[u] = [[r['up'], r['ms']] for r in reversed(rows)]
+    _SERVICES_STATS_CACHE = [now, upt, hist]
+    return upt, hist
+
+def enrich_state(state):
+    devs = {r['mac']: r for r in db_query('SELECT * FROM devices')}
+    svc_rows = {r['url']: r for r in db_query('SELECT * FROM services')}
+    upt, hist = _get_services_upt_and_hist(services=list(svc_rows.keys()))
     blocked = set(get_blocked_clients(silent=True))
     is_lam = D.get('is_locally_administered_mac') or (lambda m: False)
     prev_ips_map = {}

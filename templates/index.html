@@ -4246,6 +4246,27 @@ async function loadState(isManual = false, showToast = isManual) {
         if (lhEnabled && (data.localhost_info || data.localhost_services)) {
             updateLocalhostBadge(data.localhost_info, data.localhost_services);
         }
+
+        // Sincronizar posiciones guardadas en servidor (para compartir vista entre PC y smartphone)
+        if (data.topology_positions && typeof data.topology_positions === 'object' && Object.keys(data.topology_positions).length > 0) {
+            if (!topoState.draggingNode && !topoState.rotatingHub && !topoState.rotatingLink && !topoState.rotatingTrunk) {
+                const srvJson = JSON.stringify(data.topology_positions);
+                const locJson = JSON.stringify(topoState.customPositions || {});
+                if (srvJson !== locJson) {
+                    topoState.customPositions = data.topology_positions;
+                    try {
+                        localStorage.setItem('ag_topo_custom_positions_v3', srvJson);
+                    } catch (e) {}
+                    if (currentMainTab === 'topology' && topoState.canvas) {
+                        buildTopoGraph(false);
+                        if (window.innerWidth <= 768) {
+                            setTimeout(() => fitTopoToScreen(false), 50);
+                        }
+                    }
+                }
+            }
+        }
+
         if (currentMainTab === 'ipmap') loadIpMap();
         else if (currentMainTab === 'topology') renderTopology();
         else if (currentMainTab === 'timeline') loadTimeline(24);
@@ -9493,6 +9514,9 @@ initTopoStageResizer();
     if (firstRender) {
         setTimeout(() => triggerNeuralCascade(), 180);
     }
+    if (window.innerWidth <= 768) {
+        setTimeout(() => fitTopoToScreen(false), 120);
+    }
     if (!topoState.animFrame) {
         topoState.animFrame = requestAnimationFrame(drawTopoFrame);
     }
@@ -11042,7 +11066,7 @@ if (initCardsBtn) initCardsBtn.classList.toggle('active', topoState.showCards);
 const initCardsBox = document.getElementById('topology-container');
 if (initCardsBox) initCardsBox.style.display = topoState.showCards ? 'block' : 'none';
 
-// Sincronizar distribución de topología desde el servidor si es la primera vez en este navegador
+// Sincronizar distribución de topología desde el servidor
 if (Object.keys(topoState.customPositions).length === 0) {
     fetch('/api/topology/positions')
         .then(r => r.json())
@@ -11053,8 +11077,18 @@ if (Object.keys(topoState.customPositions).length === 0) {
                     localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(res.positions));
                 } catch (e) {}
                 buildTopoGraph(false);
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => fitTopoToScreen(false), 80);
+                }
             }
         }).catch(() => {});
+} else {
+    // Si ya tiene posiciones guardadas (ej. en PC), propagarlas al servidor para el smartphone
+    fetch('/api/topology/positions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(topoState.customPositions)
+    }).catch(() => {});
 }
 
 
