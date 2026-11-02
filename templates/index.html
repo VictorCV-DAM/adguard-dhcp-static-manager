@@ -11204,6 +11204,44 @@ function sortByStaticOrder(toggle = true) {
 
     <script>
     // ==================== SERVICIOS LOCALHOST DEL HOST ====================
+    async function stopLocalhostService(port, pid, label, btnEl) {
+        const pidText = pid ? ` (PID: ${pid})` : '';
+        const confirmMsg = `¿Detener el servicio "${label}" en el puerto :${port}${pidText}?\n\nEsta acción terminará el proceso en segundo plano para liberar el puerto.`;
+        if (!confirm(confirmMsg)) return;
+
+        let originalHtml = '';
+        if (btnEl) {
+            originalHtml = btnEl.innerHTML;
+            btnEl.disabled = true;
+            btnEl.innerHTML = '⏳ Deteniendo...';
+        }
+
+        try {
+            const res = await fetch('/api/localhost-services/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ port: port, pid: pid })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showMessage(data.message || `Servicio en puerto :${port} detenido.`, 'success');
+                await refreshLocalhostServices(true);
+            } else {
+                showMessage(data.error || 'No se pudo detener el servicio.', 'error');
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.innerHTML = originalHtml;
+                }
+            }
+        } catch (e) {
+            showMessage('Error de red al intentar detener el servicio: ' + e.message, 'error');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = originalHtml;
+            }
+        }
+    }
+
     function toggleLocalhostFeature(enabled) {
         const btn = document.getElementById('btn-header-localhost');
         if (btn) btn.style.display = enabled ? 'inline-flex' : 'none';
@@ -11404,6 +11442,15 @@ function sortByStaticOrder(toggle = true) {
                                 ` : `
                                     <button class="btn btn-outline" style="padding:6px 12px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('localhost:${s.port}', 'Puerto copiado')" title="Copiar dirección">
                                         📋 localhost:${s.port}
+                                    </button>
+                                `}
+                                ${(s.port === 5001 || (s.pid && _localhostInfo && String(s.pid) === String(_localhostInfo.panel_pid))) ? `
+                                    <span style="font-size:0.75rem; color:#64748b; font-weight:600; padding:5px 9px; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.08);" title="Este proceso es el propio panel DHCP en ejecución">
+                                        🛡️ Panel DHCP
+                                    </span>
+                                ` : `
+                                    <button class="btn btn-outline" style="border-color:#ef4444; color:#f87171; padding:6px 11px; font-size:0.78rem; border-radius:6px; display:inline-flex; align-items:center; gap:5px; transition:all 0.15s;" onclick="stopLocalhostService(${s.port}, '${escapeHtml(String(s.pid || ''))}', '${escapeHtml(s.label || s.process || `:${s.port}`).replace(/'/g, "\\'")}', this)" title="Terminar proceso y liberar el puerto :${s.port}">
+                                        🛑 Detener
                                     </button>
                                 `}
                             </div>

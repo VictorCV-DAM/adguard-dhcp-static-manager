@@ -12,6 +12,7 @@ import secrets
 from datetime import timedelta
 import extras
 import subprocess
+import signal
 import threading
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
@@ -764,15 +765,10 @@ KNOWN_LOCAL_SERVICES = {
 
 _LOCALHOST_SERVICES_CACHE = (0, [])  # (timestamp, [services])
 
-def scan_localhost_services(probe_http=True, force_refresh=False):
-    """Detecta todos los servicios escuchando en localhost (127.0.0.1 y 0.0.0.0) en el PC del panel."""
-    global _LOCALHOST_SERVICES_CACHE
-    now = time.time()
-    if not force_refresh and _LOCALHOST_SERVICES_CACHE[1] and (now - _LOCALHOST_SERVICES_CACHE[0]) < 20:
-        return _LOCALHOST_SERVICES_CACHE[1]
-
+def get_listening_ports_map():
+    """Obtiene el mapa de puertos locales abiertos: puerto -> {'bind': bind_ip, 'pid': pid_str, 'process': proc_name}."""
     system = platform.system()
-    raw_ports = {}  # port -> {'bind': bind_ip, 'pid': pid, 'process': proc_name}
+    raw_ports = {}
 
     if system == 'Windows':
         try:
@@ -843,6 +839,17 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
                                     raw_ports[p] = {'bind': '127.0.0.1', 'pid': '', 'process': ''}
             except Exception:
                 pass
+    return raw_ports
+
+
+def scan_localhost_services(probe_http=True, force_refresh=False):
+    """Detecta todos los servicios escuchando en localhost (127.0.0.1 y 0.0.0.0) en el PC del panel."""
+    global _LOCALHOST_SERVICES_CACHE
+    now = time.time()
+    if not force_refresh and _LOCALHOST_SERVICES_CACHE[1] and (now - _LOCALHOST_SERVICES_CACHE[0]) < 20:
+        return _LOCALHOST_SERVICES_CACHE[1]
+
+    raw_ports = get_listening_ports_map()
 
     def probe_one(port, info):
         bind_ip = info['bind']
@@ -2742,6 +2749,7 @@ def build_state(force_refresh=False):
         'localhost_services': localhost_svcs,
         'localhost_info': {
             'enabled': detect_lh,
+            'panel_pid': os.getpid(),
             'hostname': socket.gethostname(),
             'local_ip': local_ip,
             'platform': platform.system(),
@@ -2761,6 +2769,7 @@ def api_localhost_services():
     return jsonify({
         'success': True,
         'enabled': detect_lh,
+        'panel_pid': os.getpid(),
         'hostname': socket.gethostname(),
         'local_ip': local_ip,
         'platform': platform.system(),
@@ -2769,6 +2778,106 @@ def api_localhost_services():
         'services': services
     })
 
+
+
+@app.route('/api/localhost-services/stop', methods=['POST'])
+def api_stop_localhost_service():
+    cfg = load_config()
+    if not cfg.get('detect_localhost_services', False):
+        return jsonify({'success': False, 'error': 'La detección de servicios locales está desactivada en la configuración.'}), 400
+
+    data = request.json or {}
+    port = data.get('port')
+    pid_param = data.get('pid')
+
+    try:
+        port = int(port) if port is not None else None
+    except (ValueError, TypeError):
+        port = None
+
+    if port == 5001:
+        return jsonify({'success': False, 'error': 'Operación bloqueada: No se puede detener el propio panel DHCP (puerto 5001).'}), 403
+
+    current_pid = os.getpid()
+    target_pid = None
+    proc_name = ""
+
+    # 1. Localizar proceso activo en el puerto
+    if port:
+        raw_ports = get_listening_ports_map()
+        pinfo = raw_ports.get(port)
+        if pinfo:
+            proc_name = pinfo.get('process', '')
+            if pinfo.get('pid'):
+                try:
+                    target_pid = int(pinfo['pid'])
+                except (ValueError, TypeError):
+                    pass
+
+    # 2. Si no se resolvió por puerto, usar PID enviado
+    if not target_pid and pid_param:
+        try:
+            target_pid = int(pid_param)
+        except (ValueError, TypeError):
+            pass
+
+    if not target_pid:
+        return jsonify({'success': False, 'error': f'No se encontró ningún proceso activo en el puerto :{port or "N/A"}.'}), 404
+
+    # 3. Protecciones de seguridad
+    if target_pid == current_pid:
+        return jsonify({'success': False, 'error': 'Operación bloqueada: El proceso pertenece al propio servidor del panel DHCP.'}), 403
+    if target_pid <= 4:
+        return jsonify({'success': False, 'error': f'Operación bloqueada: El PID {target_pid} es un proceso protegido del sistema operativo.'}), 403
+
+    # 4. Terminar el proceso
+    system = platform.system()
+    killed = False
+    err_msg = ""
+    try:
+        if system == 'Windows':
+            res = subprocess.run(['taskkill', '/PID', str(target_pid), '/F', '/T'], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 or 'éxito' in res.stdout.lower() or 'success' in res.stdout.lower():
+                killed = True
+            else:
+                out = (res.stderr or res.stdout or "").strip()
+                if 'no se encuentra' in out.lower() or 'not found' in out.lower():
+                    killed = True
+                else:
+                    err_msg = out
+        else:
+            try:
+                os.kill(target_pid, signal.SIGTERM)
+                time.sleep(0.3)
+                try:
+                    os.kill(target_pid, 0)
+                    os.kill(target_pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                killed = True
+            except OSError as oe:
+                err_msg = str(oe)
+    except Exception as e:
+        err_msg = str(e)
+
+    # Invalidar caché local
+    global _LOCALHOST_SERVICES_CACHE
+    _LOCALHOST_SERVICES_CACHE = (0, [])
+
+    if killed:
+        print(f"[INFO] Proceso PID {target_pid} (puerto :{port}) detenido por orden del usuario.")
+        return jsonify({
+            'success': True,
+            'message': f'Servicio en puerto :{port if port else "N/A"} (PID {target_pid}) terminado correctamente.',
+            'pid': target_pid,
+            'port': port,
+            'process': proc_name
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': f'No se pudo detener el proceso (PID {target_pid}): {err_msg or "Permisos insuficientes o proceso protegido"}'
+        }), 500
 
 @app.route('/api/state', methods=['GET'])
 def api_state():
