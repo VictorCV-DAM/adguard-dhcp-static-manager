@@ -874,7 +874,8 @@
         /* Topología interactiva estilo malla Bluetooth / radial + sinapsis neuronal */
         .topo-stage {
             position: relative;
-            width: 100%;
+            width: calc(100% - 32px);
+            max-width: calc(100% - 32px);
             margin: 0 auto;
             transition: width 0.16s ease-out, margin 0.16s ease-out;
             height: 82vh;
@@ -6564,10 +6565,10 @@ function smartAutoOrganizeTopology() {
 function resetTopoStageBox() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
-    stage.style.width = '100%';
-    stage.style.maxWidth = '100%';
-    stage.style.marginLeft = '';
-    stage.style.marginRight = '';
+    stage.style.width = 'calc(100% - 32px)';
+    stage.style.maxWidth = 'calc(100% - 32px)';
+    stage.style.marginLeft = 'auto';
+    stage.style.marginRight = 'auto';
     try {
         localStorage.removeItem('ag_topo_stage_width');
         localStorage.removeItem('ag_topo_stage_margin_left');
@@ -6580,26 +6581,39 @@ function resetTopoStageBox() {
         canvas.height = stage.clientHeight * dpr;
     }
     fitTopoToScreen(true);
-    showMessage('📐 Caja de topología restablecida y perfectamente centrada al ancho de la página.');
+    showMessage('📐 Caja de topología restablecida con margen lateral elegante y centrada.');
 }
 
 function centerTopoStageBox() {
     const stage = document.getElementById('topo-stage');
     if (!stage) return;
+    if (window.innerWidth <= 768) {
+        stage.style.width = '100%';
+        stage.style.maxWidth = '100%';
+        stage.style.marginLeft = '0';
+        stage.style.marginRight = '0';
+        return;
+    }
     const container = stage.closest('.container') || stage.parentElement;
     const containerW = container ? container.clientWidth : 1380;
-    const stageW = parseFloat(stage.style.width);
-    if (stageW && stageW > containerW) {
-        stage.style.marginLeft = ((containerW - stageW) / 2) + 'px';
-        try { localStorage.setItem('ag_topo_stage_margin_left', stage.style.marginLeft); } catch(e){}
+    const savedW = localStorage.getItem('ag_topo_stage_width');
+    const stageW = parseFloat(stage.style.width) || (savedW ? parseFloat(savedW) : null);
+
+    if (stageW && stageW > 300) {
+        stage.style.width = stageW + 'px';
+        stage.style.maxWidth = 'none';
+        if (stageW > containerW) {
+            stage.style.marginLeft = Math.round((containerW - stageW) / 2) + 'px';
+            stage.style.marginRight = '';
+        } else {
+            stage.style.marginLeft = 'auto';
+            stage.style.marginRight = 'auto';
+        }
     } else {
-        stage.style.width = '100%';
-        stage.style.marginLeft = '';
-        stage.style.marginRight = '';
-        try {
-            localStorage.removeItem('ag_topo_stage_width');
-            localStorage.removeItem('ag_topo_stage_margin_left');
-        } catch(e){}
+        stage.style.width = 'calc(100% - 32px)';
+        stage.style.maxWidth = 'calc(100% - 32px)';
+        stage.style.marginLeft = 'auto';
+        stage.style.marginRight = 'auto';
     }
 }
 
@@ -6614,18 +6628,30 @@ function initTopoStageResizer() {
         return;
     }
 
-    // Por defecto, la caja de topología está totalmente centrada en la web igual que el encabezado (width: 100%, margin: 0 auto)
-    stage.style.width = '100%';
-    stage.style.maxWidth = '100%';
-    stage.style.marginLeft = '';
-    stage.style.marginRight = '';
+    // Cargar ancho y alto personalizados si el usuario los ha reajustado
     try {
-        // Purgar cualquier ancho previo anómalo o guardado para asegurar centrado perfecto por defecto
-        localStorage.removeItem('ag_topo_stage_width');
-        localStorage.removeItem('ag_topo_stage_margin_left');
+        const savedW = localStorage.getItem('ag_topo_stage_width');
         const savedH = localStorage.getItem('ag_topo_stage_height');
         if (savedH) stage.style.height = savedH;
-    } catch (e) {}
+        if (savedW && savedW !== '100%' && parseFloat(savedW) > 300) {
+            stage.style.width = savedW;
+            stage.style.maxWidth = 'none';
+            centerTopoStageBox();
+        } else {
+            stage.style.width = 'calc(100% - 32px)';
+            stage.style.maxWidth = 'calc(100% - 32px)';
+            stage.style.marginLeft = 'auto';
+            stage.style.marginRight = 'auto';
+        }
+    } catch (e) {
+        stage.style.width = 'calc(100% - 32px)';
+        stage.style.maxWidth = 'calc(100% - 32px)';
+        stage.style.marginLeft = 'auto';
+        stage.style.marginRight = 'auto';
+    }
+
+    if (stage._resizerListenersAttached) return;
+    stage._resizerListenersAttached = true;
 
     const resizerL = document.getElementById('topo-resizer-l');
     const resizerB = document.getElementById('topo-resizer-b');
@@ -6659,8 +6685,10 @@ function initTopoStageResizer() {
 
     // Resetear caja al doble clic en cualquiera de los tiradores
     function resetStageBox() {
-        stage.style.width = '100%';
-        stage.style.marginLeft = '';
+        stage.style.width = 'calc(100% - 32px)';
+        stage.style.maxWidth = 'calc(100% - 32px)';
+        stage.style.marginLeft = 'auto';
+        stage.style.marginRight = 'auto';
         try {
             localStorage.removeItem('ag_topo_stage_width');
             localStorage.removeItem('ag_topo_stage_margin_left');
@@ -6672,6 +6700,7 @@ function initTopoStageResizer() {
             canvas.height = stage.clientHeight * dpr;
         }
         fitTopoToScreen(true);
+        showMessage('📐 Caja de topología restablecida con margen lateral y centrada.');
     }
 
     [resizerL, resizerB, resizerR, resizerBL, resizerC].forEach(r => {
@@ -6697,10 +6726,13 @@ function initTopoStageResizer() {
         if (resizeMode === 'l' || resizeMode === 'bl') {
             const newW = Math.max(480, startW - dx);
             stage.style.width = newW + 'px';
+            stage.style.maxWidth = 'none';
             if (newW > containerW) {
-                stage.style.marginLeft = ((containerW - newW) / 2) + 'px';
+                stage.style.marginLeft = Math.round((containerW - newW) / 2) + 'px';
+                stage.style.marginRight = '';
             } else {
-                stage.style.marginLeft = '';
+                stage.style.marginLeft = 'auto';
+                stage.style.marginRight = 'auto';
             }
         }
 
@@ -6708,10 +6740,13 @@ function initTopoStageResizer() {
         if (resizeMode === 'r' || resizeMode === 'c') {
             const newW = Math.max(480, startW + dx);
             stage.style.width = newW + 'px';
+            stage.style.maxWidth = 'none';
             if (newW > containerW) {
-                stage.style.marginLeft = ((containerW - newW) / 2) + 'px';
+                stage.style.marginLeft = Math.round((containerW - newW) / 2) + 'px';
+                stage.style.marginRight = '';
             } else {
-                stage.style.marginLeft = '';
+                stage.style.marginLeft = 'auto';
+                stage.style.marginRight = 'auto';
             }
         }
 
@@ -6742,12 +6777,9 @@ function initTopoStageResizer() {
 
         try {
             localStorage.setItem('ag_topo_stage_height', stage.style.height);
-            if (stage.style.width && stage.style.width !== '100%') {
+            if (stage.style.width && !stage.style.width.includes('100%')) {
                 localStorage.setItem('ag_topo_stage_width', stage.style.width);
                 localStorage.setItem('ag_topo_stage_margin_left', stage.style.marginLeft);
-            } else {
-                localStorage.removeItem('ag_topo_stage_width');
-                localStorage.removeItem('ag_topo_stage_margin_left');
             }
         } catch (err) {}
 
