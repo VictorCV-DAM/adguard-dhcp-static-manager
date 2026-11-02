@@ -321,7 +321,7 @@ def send_smtp_email(host, port, user, password, to_addr, subject, body_text, bod
         return False, str(e)
 
 
-def build_device_alert_content(d, is_new=True):
+def build_device_alert_content(d, is_new=True, is_watched=False):
     """Construye el contenido en texto plano y HTML detallado para alertas de dispositivos."""
     hostname = d.get('hostname') or d.get('custom_name') or '(Sin nombre registrado)'
     ip = d.get('ip') or '(Sin IP)'
@@ -334,7 +334,12 @@ def build_device_alert_content(d, is_new=True):
     ip_type = 'Estática (Fija)' if d.get('static') else 'Dinámica (DHCP)'
     time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    title = f"🚨 Nuevo dispositivo conectado: {hostname}" if is_new else f"⚡ Dispositivo conectado: {hostname}"
+    if is_watched:
+        title = f"🔔 Dispositivo marcado conectado: {hostname}"
+    elif is_new:
+        title = f"🚨 Nuevo dispositivo conectado: {hostname}"
+    else:
+        title = f"⚡ Dispositivo conectado: {hostname}"
 
     text_body = (
         f"{title}\n"
@@ -352,8 +357,15 @@ def build_device_alert_content(d, is_new=True):
         f"Acceso al Panel: http://192.168.1.249:5001\n"
     )
 
-    hdr_bg = 'linear-gradient(135deg, #dc2626, #991b1b)' if is_new else 'linear-gradient(135deg, #0284c7, #0369a1)'
-    hdr_title = '🚨 Nuevo dispositivo conectado a la red' if is_new else '⚡ Dispositivo conectado / inicio de sesión'
+    if is_watched:
+        hdr_bg = 'linear-gradient(135deg, #d97706, #b45309)'
+        hdr_title = f'🔔 Dispositivo marcado conectado a la red'
+    elif is_new:
+        hdr_bg = 'linear-gradient(135deg, #dc2626, #991b1b)'
+        hdr_title = '🚨 Nuevo dispositivo conectado a la red'
+    else:
+        hdr_bg = 'linear-gradient(135deg, #0284c7, #0369a1)'
+        hdr_title = '⚡ Dispositivo conectado / inicio de sesión'
 
     html_body = f"""<!DOCTYPE html>
 <html>
@@ -500,15 +512,15 @@ def build_service_alert_content(url, label, ip, port, down_seconds, is_down=True
     return title, text_body, html_body
 
 
-def send_alert(title, message, kind='info', force=False, cfg_override=None, email_html=None):
+def send_alert(title, message, kind='info', force=False, cfg_override=None, email_html=None, force_email=False):
     """Registra el evento y lo envía por los canales configurados (ntfy, Telegram, webhook, email SMTP). Devuelve lista de resultados."""
     a = cfg_override or get_alerts_cfg()
     results = []
     sent = 0
-    if a.get('enabled') or force:
-        prio = {'new_device': 'high', 'service_down': 'high', 'offline': 'default'}.get(kind, 'default')
+    if a.get('enabled') or force or force_email:
+        prio = {'new_device': 'high', 'service_down': 'high', 'offline': 'default', 'watched_online': 'high'}.get(kind, 'default')
         tag = {'new_device': 'rotating_light', 'service_down': 'red_circle', 'service_up': 'green_circle',
-               'offline': 'warning', 'online': 'white_check_mark', 'test': 'bell'}.get(kind, 'bell')
+               'offline': 'warning', 'online': 'white_check_mark', 'watched_online': 'bell', 'test': 'bell'}.get(kind, 'bell')
         if a.get('ntfy_url'):
             try:
                 _http_post(a['ntfy_url'], message.encode('utf-8'),
@@ -531,10 +543,10 @@ def send_alert(title, message, kind='info', force=False, cfg_override=None, emai
                 results.append(('webhook', True, 'OK'))
             except Exception as e:
                 results.append(('webhook', False, str(e)))
-        if a.get('email_enabled') or (force and a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to')):
+        if a.get('email_enabled') or force_email or (force and a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to')):
             if a.get('smtp_user') and a.get('smtp_pass') and a.get('smtp_to'):
                 email_allowed = True
-                if not force:
+                if not force and not force_email:
                     if kind == 'new_device' and not a.get('email_notify_new_device', True):
                         email_allowed = False
                     elif kind == 'online' and not a.get('email_notify_device_connect', False):
@@ -606,11 +618,11 @@ def monitor_cycle():
             if not row['online']:
                 db_exec('UPDATE devices SET online=1 WHERE mac=?', (mac,))
                 db_exec('INSERT INTO device_events (ts, mac, ip, event) VALUES (?,?,?,?)', (ts, mac, d.get('ip'), 'online'))
-                if mac in watched and alerts.get('notify_watched_offline', True):
-                    t, b_txt, b_html = build_device_alert_content(d, is_new=False)
-                    send_alert('✅ Dispositivo vigilado conectado', b_txt, 'online', email_html=b_html)
+                if mac in watched:
+                    t, b_txt, b_html = build_device_alert_content(d, is_new=False, is_watched=True)
+                    send_alert(t, b_txt, 'watched_online', email_html=b_html, force_email=True)
                 elif alerts.get('notify_device_connect', False):
-                    t, b_txt, b_html = build_device_alert_content(d, is_new=False)
+                    t, b_txt, b_html = build_device_alert_content(d, is_new=False, is_watched=False)
                     send_alert(t, b_txt, 'online', email_html=b_html)
         else:
             last = row['last_seen'] or 0
@@ -618,8 +630,8 @@ def monitor_cycle():
                 db_exec('UPDATE devices SET online=0 WHERE mac=?', (mac,))
                 db_exec('INSERT INTO device_events (ts, mac, ip, event) VALUES (?,?,?,?)', (ts, mac, d.get('ip'), 'offline'))
                 if mac in watched and alerts.get('notify_watched_offline', True):
-                    send_alert('⚠️ Dispositivo vigilado desconectado',
-                               f"{d.get('hostname')} ({d.get('ip')}) no responde desde hace {OFFLINE_GRACE_SEC // 60} min.", 'offline')
+                    send_alert('⚠️ Dispositivo marcado desconectado',
+                               f"{d.get('hostname')} ({d.get('ip')}) no responde desde hace {OFFLINE_GRACE_SEC // 60} min.", 'offline', force_email=True)
 
     # --- Servicios: detectados ahora + recordados ---
     known = {r['url']: r for r in db_query('SELECT * FROM services')}
@@ -725,9 +737,21 @@ def enrich_state(state):
     except Exception:
         pass
 
+    alerts_cfg = get_alerts_cfg()
+    watched_set = set(norm_mac(m) for m in alerts_cfg.get('watched_macs', []))
+    state['alerts_summary'] = {
+        'enabled': bool(alerts_cfg.get('enabled')),
+        'email_enabled': bool(alerts_cfg.get('email_enabled')),
+        'smtp_configured': bool(alerts_cfg.get('smtp_user') and alerts_cfg.get('smtp_pass') and alerts_cfg.get('smtp_to')),
+        'smtp_to': alerts_cfg.get('smtp_to', ''),
+        'watched_count': len(watched_set),
+        'watched_macs': sorted(list(watched_set))
+    }
+
     detected_urls = set()
     for d in state.get('devices', []):
         mac = norm_mac(d.get('mac'))
+        d['watched'] = mac in watched_set
         row = devs.get(mac) or {}
         p = _PING.get(d.get('ip')) or {}
         ttl = p.get('ttl') or row.get('ttl')
@@ -818,6 +842,7 @@ def enrich_state(state):
             'photo': row.get('photo') or '',
             'tags': row_tags,
             'known': bool(row.get('known', 1)),
+            'watched': row_mac in watched_set,
             'latency_ms': None,
             'ttl': row.get('ttl'),
             'os_guess': os_guess(row.get('ttl'), dev_class),
@@ -1095,6 +1120,53 @@ def api_alerts_config():
     cfg['alerts'] = a
     D['save_config_raw'](cfg)
     return jsonify({'status': 'success', 'message': 'Configuración de alertas guardada.', 'alerts': a})
+
+
+@bp.route('/api/device/<path:mac>/watch', methods=['POST'])
+def api_device_watch_toggle(mac):
+    mac = norm_mac(mac)
+    if not valid_mac(mac):
+        return jsonify({'status': 'error', 'message': 'MAC no válida'}), 400
+
+    cfg = D['load_config']()
+    alerts = cfg.get('alerts') or {}
+    for k, v in DEFAULT_ALERTS.items():
+        if k not in alerts:
+            alerts[k] = v
+
+    watched = set(norm_mac(m) for m in alerts.get('watched_macs', []))
+
+    req_data = request.get_json(silent=True) or {}
+    if 'watched' in req_data:
+        should_watch = bool(req_data['watched'])
+    else:
+        should_watch = mac not in watched
+
+    if should_watch:
+        watched.add(mac)
+    else:
+        watched.discard(mac)
+
+    alerts['watched_macs'] = sorted(list(watched))
+    alerts['enabled'] = True
+    if alerts.get('smtp_user') and alerts.get('smtp_pass') and alerts.get('smtp_to'):
+        alerts['email_enabled'] = True
+
+    cfg['alerts'] = alerts
+    D['save_config_raw'](cfg)
+
+    smtp_ok = bool(alerts.get('smtp_user') and alerts.get('smtp_pass') and alerts.get('smtp_to'))
+    smtp_to = alerts.get('smtp_to', '')
+
+    return jsonify({
+        'status': 'success',
+        'mac': mac,
+        'watched': should_watch,
+        'watched_count': len(watched),
+        'smtp_configured': smtp_ok,
+        'smtp_to': smtp_to,
+        'message': f'Notificación de conexión por correo {"activada" if should_watch else "desactivada"}.'
+    })
 
 
 @bp.route('/api/alerts/test', methods=['POST'])

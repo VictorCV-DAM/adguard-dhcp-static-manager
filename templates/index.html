@@ -417,6 +417,42 @@
             color: #38bdf8 !important;
         }
 
+        /* Botón de campanita para alertas de conexión por correo */
+        .btn-bell-toggle {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 6px;
+            padding: 1px 5px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            line-height: 1.2;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            vertical-align: middle;
+            user-select: none;
+        }
+        .btn-bell-toggle:hover {
+            border-color: #f59e0b;
+            color: #fcd34d;
+            background: rgba(245, 158, 11, 0.12);
+            transform: scale(1.1);
+        }
+        .btn-bell-toggle.active {
+            background: rgba(245, 158, 11, 0.22) !important;
+            border-color: #f59e0b !important;
+            color: #fcd34d !important;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+        }
+        .btn-bell-active {
+            border-color: #f59e0b !important;
+            color: #fcd34d !important;
+            background: rgba(245, 158, 11, 0.14) !important;
+            font-weight: 700 !important;
+        }
+
         /* Pestañas principales */
         .tab-nav-btn {
             background: transparent;
@@ -2272,6 +2308,7 @@
                         <h3 id="ds-title" style="margin:0; font-size:1.2rem; color:#f8fafc; display:flex; align-items:center; gap:8px;">🧾 Ficha de Dispositivo</h3>
                         <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
                         <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+                            <button id="ds-bell-btn" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; display:inline-flex; align-items:center; gap:4px;" onclick="toggleDeviceWatch(currentSheetMac, event)" title="Recibir un correo electrónico cuando este dispositivo se conecte a la red">🔔 Aviso Conexión</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar archivo comprimido (.zip) con ficha técnica y carpeta de imágenes">📥 Exportar Ficha (.zip)</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#34d399; border-color:rgba(52,211,153,0.4);" onclick="document.getElementById('ds-import-file').click()" title="Restaurar o importar ficha técnica con imágenes (.zip o .json)">📤 Importar Ficha</button>
                             <input type="file" id="ds-import-file" accept=".zip,.json" style="display:none;" onchange="importSingleDeviceSheet(event)" />
@@ -4924,7 +4961,8 @@ function renderTable() {
         const servicesText = (d.web_links || []).map(w => `${w.label} ${w.default_label || ''} ${w.url}`).join(' ');
         const tagsText = `${d.room || ''} ${(d.tags || []).join(' ')} ${d.notes || ''} ${d.os_guess || ''}`;
         const haSearchText = d.ha_info ? `${d.ha_info.name || ''} ${d.ha_info.manufacturer || ''} ${d.ha_info.model || ''} ${d.ha_info.area || ''}` : '';
-        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${haSearchText} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText} ${tagsText}`.toLowerCase();
+        const watchSearch = d.watched ? 'campana campanita notif notificacion vigilado alert alerta' : '';
+        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${haSearchText} ${watchSearch} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText} ${tagsText}`.toLowerCase();
         return text.includes(q);
     });
 
@@ -5086,12 +5124,14 @@ function renderTable() {
         const badges = [];
         if (d.blocked) badges.push(`<span class="tag-chip" style="background:rgba(239,68,68,0.2); border-color:#ef4444; color:#fca5a5;" title="Acceso DNS bloqueado en AdGuard Home">⛔ Sin Internet</span>`);
         if (d.known === false) badges.push(`<span class="tag-chip" style="background:rgba(245,158,11,0.2); border-color:#f59e0b; color:#fcd34d;" title="Dispositivo nuevo no marcado como conocido">🆕 Nuevo</span>`);
+        if (d.watched) badges.push(`<span class="tag-chip" style="background:rgba(245,158,11,0.22); border-color:#f59e0b; color:#fcd34d; font-weight:700;" title="Notificación por correo activada al conectarse">🔔 Aviso Email</span>`);
         if (d.room) badges.push(`<span class="tag-chip" title="Habitación / Ubicación">📍 ${escapeHtml(d.room)}</span>`);
         if (d.ha_info && d.ha_info.name && d.ha_info.name.toLowerCase() !== (d.hostname || '').toLowerCase()) {
             badges.push(`<span class="tag-chip" style="background:rgba(56,189,248,0.14); border-color:rgba(56,189,248,0.35); color:#38bdf8;" title="Nombre en Home Assistant (${escapeHtml(d.ha_info.instance_name)})">🏠 ${escapeHtml(d.ha_info.name)}</span>`);
         }
         (d.tags || []).slice(0, 2).forEach(t => badges.push(`<span class="tag-chip">🏷️ ${escapeHtml(t)}</span>`));
 
+        const isWatched = Boolean(d.watched);
         const hostHtml = `
             <div style="display:flex; align-items:center; gap:8px;">
                 ${d.photo ? `<img src="${d.photo}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(56,189,248,0.5); cursor:pointer; flex-shrink:0;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ver foto y ficha de ${escapeHtml(d.hostname)}" />` : ''}
@@ -5099,6 +5139,9 @@ function renderTable() {
                     <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                         <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
                         <button class="btn btn-outline" style="padding:1px 6px; font-size:0.68rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); background:rgba(56,189,248,0.08); border-radius:4px; line-height:1.2; flex-shrink:0; display:inline-flex; align-items:center; gap:3px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar ${escapeHtml(d.hostname)} en la topología de red">🌐 Mapa</button>
+                        <button class="btn-bell-toggle ${isWatched ? 'active' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)" title="${isWatched ? '🔔 Notificación de conexión por correo ACTIVADA\nRecibirás un email en cuanto este dispositivo se conecte a la red.\nHaz clic para desactivar.' : '🔕 Notificación de conexión por correo DESACTIVADA\nHaz clic para activar y recibir un email cuando se conecte a la red.'}">
+                            ${isWatched ? '🔔' : '🔕'}
+                        </button>
                     </div>
                 ${badges.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:3px;">${badges.join('')}</div>` : ''}
                 </div>
@@ -5194,6 +5237,7 @@ function renderTable() {
                     ${webDropdownHtml}
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ficha completa: notas, DNS, historial, WoL, cortar Internet y puertos">🧾 Ficha</button>
                     <button class="btn btn-outline" style="padding:4px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar y centrar este dispositivo en la topología de red">🌐 Mapa</button>
+                    <button class="btn btn-outline ${d.watched ? 'btn-bell-active' : ''}" style="padding:4px 8px;font-size:0.76rem; ${d.watched ? 'border-color:#f59e0b; color:#fcd34d; background:rgba(245,158,11,0.14); font-weight:700;' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)" title="${d.watched ? '🔔 Aviso por correo al conectar ACTIVADO (clic para desactivar)' : '🔕 Activar aviso por correo cuando este equipo se conecte'}">${d.watched ? '🔔 Avisar' : '🔕 Avisar'}</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${((d.ha_info && d.ha_info.name) || d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Editar / Fijar</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.ip}')" title="Hacer Ping a ${d.ip}">⚡ Ping</button>
                     <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Borrar</button>
@@ -5341,6 +5385,48 @@ function fillForm(hostname, mac, ip) {
         }, 1200);
     } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+async function toggleDeviceWatch(mac, ev) {
+    if (ev) ev.stopPropagation();
+    try {
+        const res = await fetch(`/api/device/${encodeURIComponent(mac)}/watch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            const dev = (typeof allDevices !== 'undefined') ? allDevices.find(d => (d.mac || '').toLowerCase() === (mac || '').toLowerCase()) : null;
+            if (dev) {
+                dev.watched = data.watched;
+            }
+            const devName = dev ? (dev.hostname || dev.ip || mac) : mac;
+            if (data.watched) {
+                if (data.smtp_configured) {
+                    showMessage(`🔔 Notificación de conexión activada para ${devName}. Recibirás un correo en ${data.smtp_to} en cuanto se conecte.`, 'success');
+                } else {
+                    showMessage(`⚠️ Notificación activada para ${devName}, pero aún no has configurado tu correo SMTP en '🔔 Alertas' (barra superior).`, 'warning');
+                }
+            } else {
+                showMessage(`🔕 Notificación de conexión desactivada para ${devName}.`, 'info');
+            }
+            renderTable();
+            if (typeof currentSheetMac !== 'undefined' && currentSheetMac.toLowerCase() === mac.toLowerCase()) {
+                const sheetBtn = document.getElementById('ds-bell-btn');
+                if (sheetBtn) {
+                    sheetBtn.classList.toggle('active', data.watched);
+                    sheetBtn.style.borderColor = data.watched ? '#f59e0b' : '';
+                    sheetBtn.style.color = data.watched ? '#fcd34d' : '';
+                    sheetBtn.style.background = data.watched ? 'rgba(245,158,11,0.18)' : '';
+                    sheetBtn.innerHTML = data.watched ? '🔔 Aviso Conexión: Activado' : '🔕 Aviso Conexión: Desactivado';
+                }
+            }
+        } else {
+            showMessage(data.message || 'Error al actualizar alerta', 'error');
+        }
+    } catch (e) {
+        showMessage('Error de comunicación: ' + e.message, 'error');
     }
 }
 
@@ -9560,6 +9646,15 @@ async function openDeviceSheet(mac, ipHint = '') {
     renderDeviceSheetPhoto(dev.photo || '', dev.dev_icon || '📱');
 
     document.getElementById('ds-title').textContent = `🧾 ${dev.hostname || '(Dispositivo sin nombre)'}`;
+    const sheetBellBtn = document.getElementById('ds-bell-btn');
+    if (sheetBellBtn) {
+        const isW = Boolean(dev.watched);
+        sheetBellBtn.classList.toggle('active', isW);
+        sheetBellBtn.style.borderColor = isW ? '#f59e0b' : '';
+        sheetBellBtn.style.color = isW ? '#fcd34d' : '';
+        sheetBellBtn.style.background = isW ? 'rgba(245,158,11,0.18)' : '';
+        sheetBellBtn.innerHTML = isW ? '🔔 Aviso Conexión: Activado' : '🔕 Aviso Conexión: Desactivado';
+    }
     const activeIpBadge = dev.mismatch_ip
         ? ` · IP Activa: <code class="clickable-copy-pill" style="color:#fde047; font-weight:700;" onclick="copyToClipboard('${dev.mismatch_ip}', 'IP Activa', this)" title="Responde actualmente en esta IP anterior">${dev.mismatch_ip} (Antigua) 📋</code>`
         : '';
