@@ -1397,10 +1397,16 @@ def setup():
     if auth_configured():
         return redirect(url_for('login'))
     error = ''
+    local_ip, gateway_ip, prefix = get_network_info()
+
     if request.method == 'POST':
         user = (request.form.get('username') or '').strip()
         pw = request.form.get('password') or ''
         pw2 = request.form.get('password2') or ''
+        adguard_url = (request.form.get('adguard_url') or '').strip()
+        adguard_user = (request.form.get('adguard_user') or '').strip()
+        adguard_pass = (request.form.get('adguard_pass') or '').strip()
+
         if len(user) < 3:
             error = 'El usuario debe tener al menos 3 caracteres.'
         elif len(pw) < 6:
@@ -1408,13 +1414,35 @@ def setup():
         elif pw != pw2:
             error = 'Las contraseñas no coinciden.'
         else:
+            # 1. Guardar credenciales de administración
             a = load_auth()
             a['username'] = user
             a['password_hash'] = generate_password_hash(pw)
             save_auth(a)
+
+            # 2. Guardar configuración inicial de AdGuard Home si se especificó
+            cfg = load_config()
+            if adguard_url:
+                cfg['adguard_url'] = adguard_url
+                cfg['adguard_user'] = adguard_user
+                cfg['adguard_pass'] = adguard_pass
+            save_config_raw(cfg)
+
+            # 3. Lanzar primer barrido y sincronización de red alineada
+            trigger_subnet_sweep(prefix=prefix, force=True, background=True)
+
+            # 4. Iniciar sesión y entrar
             _start_session(user, request.form.get('remember') == 'on')
             return redirect(url_for('index'))
-    return render_template('login.html', mode='setup', error=error)
+
+    return render_template(
+        'login.html',
+        mode='setup',
+        error=error,
+        local_ip=local_ip,
+        gateway_ip=gateway_ip or 'No detectada',
+        prefix=prefix
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])

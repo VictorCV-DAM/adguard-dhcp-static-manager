@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ 'Initial Setup' if mode == 'setup' else 'Sign In' }} — AdGuard DHCP Manager</title>
+    <title>{{ 'Configuración inicial' if mode == 'setup' else 'Iniciar sesión' }} — Panel DHCP</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
         :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8; --danger:#ef4444; }
@@ -15,7 +15,7 @@
                         radial-gradient(circle at 85% 85%, rgba(29,78,216,0.15), transparent 45%), var(--bg);
         }
         .box {
-            width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border);
+            width: 100%; max-width: {{ '480px' if mode == 'setup' else '400px' }}; background: var(--card); border: 1px solid var(--border);
             border-radius: 16px; padding: 32px 28px; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
             animation: pop .25s ease-out;
         }
@@ -63,27 +63,66 @@
         </svg>
     </div>
     {% if mode == 'setup' %}
-        <h1>Initial Setup</h1>
-        <p class="sub">Create the administrator account that will protect this panel. You only need to do this once.</p>
+        <h1>Asistente de Configuración Inicial</h1>
+        <p class="sub">Alinea la red y crea el usuario administrador para la primera sincronización.</p>
+
+        <div style="background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font-size: 0.85rem;">
+            <div style="font-weight: 700; color: #38bdf8; margin-bottom: 6px; display:flex; align-items:center; gap:6px;">
+                <span>🌐</span> Red Local Detectada
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; color: #cbd5e1; font-size: 0.82rem;">
+                <div>Host local: <strong style="color:#fff;">{{ local_ip }}</strong></div>
+                <div>Gateway (Router): <strong style="color:#fff;">{{ gateway_ip }}</strong></div>
+                <div style="grid-column: span 2;">Subred de escaneo: <code style="color:#38bdf8; background:#0f172a; padding:2px 6px; border-radius:4px;">{{ prefix }}0/24</code></div>
+            </div>
+        </div>
+
+        <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px;">
+            <div style="font-weight: 600; color: #f8fafc; font-size: 0.86rem; margin-bottom: 6px; display:flex; justify-content:space-between; align-items:center;">
+                <span>🛡️ Servidor AdGuard Home</span>
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:normal;">Opcional</span>
+            </div>
+            <p style="font-size:0.78rem; color:var(--muted); margin:0 0 10px; line-height:1.4;">
+                Si tienes AdGuard Home en tu red o en otro equipo, introduce su URL para importar concesiones y nombres de host. Si no tienes o prefieres usar solo el escáner de red (ARP), déjalo vacío.
+            </p>
+            <div class="field" style="margin-bottom:8px;">
+                <label for="adguard_url" style="font-size:0.78rem;">URL de AdGuard Home</label>
+                <input type="text" id="adguard_url" name="adguard_url" placeholder="Ej: http://192.168.1.249:8080 o http://localhost:80" value="{{ request.form.get('adguard_url', '') }}">
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <div class="field" style="margin-bottom:0;">
+                    <label for="adguard_user" style="font-size:0.78rem;">Usuario AdGuard</label>
+                    <input type="text" id="adguard_user" name="adguard_user" placeholder="admin" value="{{ request.form.get('adguard_user', '') }}">
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                    <label for="adguard_pass" style="font-size:0.78rem;">Contraseña AdGuard</label>
+                    <input type="password" id="adguard_pass" name="adguard_pass">
+                </div>
+            </div>
+        </div>
+
+        <div style="font-size: 0.84rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px; display:flex; align-items:center; gap:6px;">
+            <span>👤</span> Usuario Administrador del Panel
+        </div>
     {% else %}
-        <h1>AdGuard Home — DHCP Panel</h1>
-        <p class="sub">Sign in to manage your local network.</p>
+        <h1>Panel DHCP — AdGuard Home</h1>
+        <p class="sub">Inicia sesión para gestionar tu red.</p>
     {% endif %}
 
     {% if error %}<div class="error">⚠️ {{ error }}</div>{% endif %}
 
     <div class="field">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" autocomplete="username" required autofocus value="{{ request.form.get('username', '') }}">
+        <label for="username">Usuario Administrador</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus value="{{ request.form.get('username', 'admin' if mode == 'setup' else '') }}">
     </div>
     <div class="field">
-        <label for="password">Password</label>
+        <label for="password">Contraseña</label>
         <input type="password" id="password" name="password" autocomplete="{{ 'new-password' if mode == 'setup' else 'current-password' }}" required>
-        <button type="button" class="toggle-pw" onclick="togglePw('password', this)" title="Show/hide">👁️</button>
+        <button type="button" class="toggle-pw" onclick="togglePw('password', this)" title="Mostrar/ocultar">👁️</button>
     </div>
     {% if mode == 'setup' %}
     <div class="field">
-        <label for="password2">Confirm Password</label>
+        <label for="password2">Repite la contraseña</label>
         <input type="password" id="password2" name="password2" autocomplete="new-password" required>
     </div>
     {% endif %}
@@ -91,13 +130,13 @@
     <label class="remember">
         <input type="checkbox" name="remember" checked>
         <div>
-            <strong>Keep me signed in on this device</strong>
-            <span>Won't ask for your password again for 1 year. Uncheck on shared computers.</span>
+            <strong>Mantener sesión iniciada en este dispositivo</strong>
+            <span>No volverá a pedirte la contraseña durante 1 año. Desmárcalo en equipos compartidos.</span>
         </div>
     </label>
 
-    <button class="submit" type="submit">{{ 'Create account & sign in' if mode == 'setup' else 'Sign In' }}</button>
-    <div class="foot">🔒 Password stored with secure hash · Rate-limited after 5 failed attempts</div>
+    <button class="submit" type="submit">{{ '🚀 Guardar y Sincronizar Red' if mode == 'setup' else 'Entrar' }}</button>
+    <div class="foot">🔒 Contraseña almacenada con hash seguro · Bloqueo tras 5 intentos fallidos</div>
 </form>
 <script>
 function togglePw(id, btn) {
