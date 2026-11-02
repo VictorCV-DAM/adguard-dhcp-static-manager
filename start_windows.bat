@@ -3,7 +3,12 @@ chcp 65001 >nul
 title AdGuard DHCP Panel (Portable)
 cd /d "%~dp0"
 
-set "PYTHONPATH=%~dp0;%PYTHONPATH%"
+set "PYTHONHOME="
+set "PYTHONPATH=%~dp0"
+
+if not exist "python_portable\Lib\site-packages" (
+    mkdir "python_portable\Lib\site-packages" >nul 2>&1
+)
 
 echo ==================================================================
 echo   Iniciando AdGuard DHCP Panel Privado (Instancia Portable)

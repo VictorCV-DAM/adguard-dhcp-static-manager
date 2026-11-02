@@ -11,9 +11,19 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
 Set-Location $ScriptDir
 
+# Aislar de variables de entorno de cualquier Python instalado en el host (ej. Python 3.14)
+$env:PYTHONHOME = $null
+$env:PYTHONPATH = $ScriptDir
+
 $TargetDir = Join-Path $ScriptDir "python_portable"
 $ReqFile = Join-Path $ScriptDir "requirements.txt"
 $ConfigFile = Join-Path $ScriptDir "config.json"
+
+# Asegurar que el directorio Lib\site-packages exista fisicamente para evitar WinError 2 en pip/pathlib
+$sitePkgDir = Join-Path $TargetDir "Lib\site-packages"
+if (-not (Test-Path $sitePkgDir)) {
+    New-Item -ItemType Directory -Path $sitePkgDir -Force | Out-Null
+}
 
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host "   Instalador Portable - AdGuard DHCP Panel Privado (Windows)" -ForegroundColor Cyan
@@ -25,6 +35,12 @@ Write-Host ""
 $pyExe = $null
 
 function Update-PthFile($dir) {
+    # Asegurar que el directorio Lib\site-packages existe físicamente antes de que pip o python intenten leerlo
+    $spDir = Join-Path $dir "Lib\site-packages"
+    if (-not (Test-Path $spDir)) {
+        New-Item -ItemType Directory -Path $spDir -Force | Out-Null
+    }
+
     $pthFiles = Get-ChildItem -Path $dir -Filter "*._pth"
     foreach ($pth in $pthFiles) {
         $rawPth = [System.IO.File]::ReadAllText($pth.FullName)
@@ -184,7 +200,12 @@ chcp 65001 >nul
 title AdGuard DHCP Panel (Portable)
 cd /d "%~dp0"
 
-set "PYTHONPATH=%~dp0;%PYTHONPATH%"
+set "PYTHONHOME="
+set "PYTHONPATH=%~dp0"
+
+if not exist "python_portable\Lib\site-packages" (
+    mkdir "python_portable\Lib\site-packages" >nul 2>&1
+)
 
 echo ==================================================================
 echo   Iniciando AdGuard DHCP Panel Privado (Instancia Portable)
