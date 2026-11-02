@@ -31,7 +31,7 @@ if "%NEED_INSTALL%"=="1" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install_windows.ps1"
     echo.
     if exist "python_portable\Scripts\python.exe" set "PY_EXE=python_portable\Scripts\python.exe"
-    if exist "python_portable\python.exe" set "PY_EXE=python_portable\python.exe"
+    if "%PY_EXE%"=="" if exist "python_portable\python.exe" set "PY_EXE=python_portable\python.exe"
 )
 
 if "%PY_EXE%"=="" (
