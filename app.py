@@ -745,6 +745,9 @@ KNOWN_LOCAL_SERVICES = {
     8086: 'InfluxDB',
     8096: 'Jellyfin Media Server',
     8123: 'Home Assistant',
+    8188: 'ComfyUI (Generador IA)',
+    8088: 'Hermes Agent / Web',
+    7861: 'Kohya_ss (SD Trainer)',
     8443: 'Servidor HTTPS Alternativo',
     8581: 'Homebridge',
     8686: 'Lidarr',
@@ -845,6 +848,81 @@ def get_listening_ports_map():
     return raw_ports
 
 
+def identify_local_service(port, proc_name, pid, title, server_header, content=""):
+    """Deduce un nombre humano y descriptivo para servicios locales (ej: ComfyUI, Hermes, Ollama, etc.)."""
+    p_lower = (proc_name or '').lower()
+    c_lower = (content or '').lower()
+    s_lower = (server_header or '').lower()
+    t_clean = (title or '').strip()
+
+    GENERIC_TITLES = {'document', 'vite app', 'react app', 'webpack app', 'index', 'home', 'app', 'untitled', 'aiohttp', '404 not found', '500 internal server error', 'aiohttp.web'}
+
+    # 1. ComfyUI (Generador IA) - Detección prioritaria por puerto estándar 8188 o firma
+    if port == 8188 or 'comfyui' in c_lower or 'comfy' in c_lower:
+        return 'ComfyUI (Generador IA)', '🎨', 'ai'
+
+    # 2. Inspección rápida de línea de comandos del proceso si es un ejecutable genérico (python, node, cmd)
+    cmdline = ""
+    if pid and p_lower in ('python.exe', 'python', 'node.exe', 'node', 'javaw.exe', 'cmd.exe', ''):
+        try:
+            if 'psutil' in sys.modules and sys.modules['psutil']:
+                cmdline = " ".join(sys.modules['psutil'].Process(int(pid)).cmdline()).lower()
+            elif platform.system() == 'Windows':
+                out = subprocess.check_output(
+                    ['powershell', '-NoProfile', '-Command', f"(Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}').CommandLine"],
+                    text=True, stderr=subprocess.DEVNULL, timeout=1.2
+                )
+                cmdline = out.strip().lower()
+        except Exception:
+            pass
+
+    if 'comfyui' in cmdline or 'comfy' in cmdline:
+        return 'ComfyUI (Generador IA)', '🎨', 'ai'
+    if 'hermes' in cmdline or 'hermes' in c_lower or 'hermes' in p_lower:
+        return 'Hermes Agent', '⚡', 'ai'
+    if port == 11434 or 'ollama' in cmdline or 'ollama' in p_lower or 'ollama' in c_lower:
+        return 'Ollama (LLM Local)', '🤖', 'ai'
+    if port == 1234 or 'lmstudio' in cmdline or 'lm studio' in cmdline:
+        return 'LM Studio (Local LLM API)', '🤖', 'ai'
+    if port == 7860 or 'stable-diffusion' in cmdline or 'automatic1111' in cmdline:
+        return 'Stable Diffusion WebUI', '🎨', 'ai'
+    if port == 7861 or 'kohya' in cmdline:
+        return 'Kohya_ss (SD Trainer)', '🎨', 'ai'
+    if port == 5050 or 'quota' in cmdline or 'antigravity-quota' in cmdline:
+        return 'Quota Monitor (Antigravity)', '⚡', 'system'
+    if port == 5001:
+        return 'Panel DHCP AdGuard', '🛡️', 'web'
+    if port in (8123, 1883) or 'homeassistant' in cmdline or 'homeassistant' in p_lower:
+        return 'Home Assistant', '🏠', 'iot'
+    if port in (32400, 32469) or 'plex' in cmdline:
+        return 'Plex Media Server', '🎬', 'media'
+    if port in (8096, 8920) or 'jellyfin' in cmdline:
+        return 'Jellyfin Media Server', '🎬', 'media'
+    if port in (5173, 5174) or 'vite' in cmdline:
+        return 'Vite Dev Server', '⚡', 'web'
+
+    # Si hay un título HTML real y descriptivo
+    if t_clean and t_clean.lower() not in GENERIC_TITLES and not t_clean.startswith('HTTP ') and not t_clean.startswith('Acceso Protegido'):
+        return t_clean, '🌐', 'web'
+
+    # Consultar diccionario de puertos conocidos
+    known = KNOWN_LOCAL_SERVICES.get(port)
+    if known:
+        return known, '🌐', 'web'
+
+    if t_clean:
+        return t_clean, '🌐', 'web'
+
+    # Si se conoce el script en la línea de comando
+    if cmdline:
+        m_py = re.search(r'([a-zA-Z0-9_\-\.]+)\.py', cmdline)
+        if m_py and m_py.group(1).lower() not in ('app', 'main', 'server', 'run'):
+            return f"Servicio Python ({m_py.group(1)})", '🐍', 'web'
+
+    fallback = f"{proc_name} (:{port})" if proc_name and p_lower not in ('python.exe', 'node.exe', 'java.exe') else f"Servicio Web (:{port})"
+    return fallback, '🌐', 'web'
+
+
 def scan_localhost_services(probe_http=True, force_refresh=False):
     """Detecta todos los servicios escuchando en localhost (127.0.0.1 y 0.0.0.0) en el PC del panel."""
     global _LOCALHOST_SERVICES_CACHE
@@ -911,23 +989,7 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
             return None
 
         final_url = f'{working_proto}://localhost:{port}' if port not in (80, 443) else f'{working_proto}://localhost'
-        known = KNOWN_LOCAL_SERVICES.get(port)
-        icon = '🌐'
-        category = 'web'
-        if port == 5001:
-            icon = '🛡️'
-            known = 'Panel DHCP AdGuard'
-        elif port in (11434, 1234, 8000, 5000) or 'ollama' in proc_name.lower():
-            icon = '🤖'
-            category = 'ai'
-        elif port in (8123, 1883) or 'homeassistant' in proc_name.lower():
-            icon = '🏠'
-            category = 'iot'
-        elif port in (32400, 8096, 47989, 47990):
-            icon = '🎬'
-            category = 'media'
-
-        label = title or known or (f'{proc_name} (:{port})' if proc_name else f'Servicio :{port}')
+        label, icon, category = identify_local_service(port, proc_name, pid, title, server_header, content)
         is_loopback_only = bind_ip in ('127.0.0.1', '::1')
         bind_label = 'Solo Local (localhost)' if is_loopback_only else f'Red Local ({bind_ip})'
 
@@ -944,7 +1006,7 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
             'label': label,
             'title': title,
             'server': server_header,
-            'known_service': known,
+            'known_service': label,
             'icon': icon,
             'category': category
         }
