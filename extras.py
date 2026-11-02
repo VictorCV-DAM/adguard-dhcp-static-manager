@@ -228,13 +228,15 @@ def get_device_photo_data_url(mac):
 # =====================================================================
 def ping_detail(ip):
     try:
-        res = subprocess.run(['ping', '-c', '1', '-W', '1', ip], capture_output=True, text=True, timeout=3)
+        import sys
+        cmd = ['ping', '-n', '1', '-w', '1000', ip] if sys.platform == 'win32' else ['ping', '-c', '1', '-W', '1', ip]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
         out = res.stdout
-        m_t = re.search(r'time[=<]([\d.]+)\s*ms', out)
+        m_t = re.search(r'(?:time|tiempo)[=<]([\d.]+)\s*ms', out, re.IGNORECASE)
         m_ttl = re.search(r'ttl=(\d+)', out, re.IGNORECASE)
-        alive = res.returncode == 0 and bool(m_t)
+        alive = res.returncode == 0
         return {'ts': now_ts(), 'alive': alive,
-                'ms': float(m_t.group(1)) if m_t else None,
+                'ms': float(m_t.group(1)) if m_t else (1.0 if alive else None),
                 'ttl': int(m_ttl.group(1)) if m_ttl else None}
     except Exception:
         return {'ts': now_ts(), 'alive': False, 'ms': None, 'ttl': None}

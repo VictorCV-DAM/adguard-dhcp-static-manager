@@ -720,15 +720,16 @@ def _get_db_history(mac: str) -> Dict[str, Any]:
 
 def _fast_ping(ip: str) -> Dict[str, Any]:
     try:
-        import subprocess
-        res = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True, text=True)
+        import subprocess, sys, re
+        cmd = ["ping", "-n", "1", "-w", "1000", ip] if sys.platform == "win32" else ["ping", "-c", "1", "-W", "1", ip]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
         alive = res.returncode == 0
         lat = None
         if alive:
-            for l in res.stdout.splitlines():
-                if "time=" in l:
-                    try: lat = float(l.split("time=")[1].split()[0])
-                    except Exception: pass
+            m = re.search(r'(?:time|tiempo)[=<]([\d.]+)\s*ms', res.stdout, re.IGNORECASE)
+            if m:
+                try: lat = float(m.group(1))
+                except Exception: pass
         return {"target_ip": ip, "alive": alive, "latency_ms": lat}
     except Exception:
         return {"target_ip": ip, "alive": False, "error": "Ping falló"}

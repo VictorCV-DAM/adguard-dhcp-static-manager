@@ -1008,17 +1008,46 @@ def set_lease_duration_yaml(seconds):
 
 
 def get_arp_table():
+    """Obtiene la tabla de vecinos ARP tanto en Linux (ip neigh) como en Windows (arp -a)."""
     arp = {}
-    res = subprocess.run(['ip', '-4', 'neigh', 'show'], capture_output=True, text=True)
-    if res.returncode == 0:
-        for line in res.stdout.splitlines():
-            parts = line.split()
-            if 'lladdr' in parts and 'FAILED' not in parts:
-                ip = parts[0]
-                idx = parts.index('lladdr')
-                if idx + 1 < len(parts):
-                    mac = parts[idx + 1].lower()
-                    arp.setdefault(mac, []).append(ip)
+    try:
+        if sys.platform == 'win32':
+            res = subprocess.run(['arp', '-a'], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    m = re.search(r'(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2})', line)
+                    if m:
+                        ip = m.group(1)
+                        mac = m.group(2).replace('-', ':').lower()
+                        if mac in ('ff:ff:ff:ff:ff:ff', '00:00:00:00:00:00') or mac.startswith('01:00:5e'):
+                            continue
+                        if ip.startswith('224.') or ip.startswith('239.') or ip.endswith('.255'):
+                            continue
+                        arp.setdefault(mac, []).append(ip)
+        else:
+            try:
+                res = subprocess.run(['ip', '-4', 'neigh', 'show'], capture_output=True, text=True, timeout=5)
+                if res.returncode == 0:
+                    for line in res.stdout.splitlines():
+                        parts = line.split()
+                        if 'lladdr' in parts and 'FAILED' not in parts:
+                            ip = parts[0]
+                            idx = parts.index('lladdr')
+                            if idx + 1 < len(parts):
+                                mac = parts[idx + 1].lower()
+                                arp.setdefault(mac, []).append(ip)
+            except Exception:
+                res = subprocess.run(['arp', '-a'], capture_output=True, text=True, timeout=5)
+                if res.returncode == 0:
+                    for line in res.stdout.splitlines():
+                        m = re.search(r'\(?(\d+\.\d+\.\d+\.\d+)\)?\s+(?:at\s+)?([0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2})', line)
+                        if m:
+                            ip = m.group(1)
+                            mac = m.group(2).replace('-', ':').lower()
+                            if mac not in ('ff:ff:ff:ff:ff:ff', '00:00:00:00:00:00'):
+                                arp.setdefault(mac, []).append(ip)
+    except Exception:
+        pass
     return arp
 
 
@@ -1120,10 +1149,11 @@ def ping_ip(ip):
 
 def ping_ip_with_latency(ip):
     try:
-        res = subprocess.run(['ping', '-c', '1', '-W', '1', ip], capture_output=True, text=True, timeout=3)
+        cmd = ['ping', '-n', '1', '-w', '1000', ip] if sys.platform == 'win32' else ['ping', '-c', '1', '-W', '1', ip]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
         if res.returncode == 0:
-            m = re.search(r'time=([\d\.]+)\s*ms', res.stdout)
-            lat = round(float(m.group(1)), 1) if m else None
+            m = re.search(r'(?:time|tiempo)[=<]([\d\.]+)\s*ms', res.stdout, re.IGNORECASE)
+            lat = round(float(m.group(1)), 1) if m else 1.0
             return True, lat
         return False, None
     except Exception:
@@ -1133,6 +1163,12 @@ def ping_ip_with_latency(ip):
 def verify_ip_l2(ip, target_mac=None, iface="eth0", timeout=2):
     """Verifica si una IP responde en Layer 2 (ARP) y si coincide con la MAC objetivo."""
     if not ip:
+        return False, None
+    if sys.platform == 'win32':
+        arp_table = get_arp_table()
+        if target_mac and target_mac.lower() in arp_table:
+            if ip in arp_table[target_mac.lower()]:
+                return True, target_mac.lower()
         return False, None
     try:
         res = subprocess.run(
