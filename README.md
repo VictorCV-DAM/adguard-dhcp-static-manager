@@ -1,67 +1,77 @@
-# 🛡️ AdGuard DHCP — Instant Static IP Manager
+# 🛡️ Panel Privado — Gestor DHCP AdGuard Home (PI-Server `192.168.1.249`)
 
-A lightweight **Flask (Python)** web dashboard for **Linux / Raspberry Pi** that allows you to assign or change static IP leases in **AdGuard Home's DHCP server** immediately—without lowering your global `lease_duration` and without waiting 12–24 hours for existing dynamic leases to expire.
-
----
-
-## 🚀 Problem Solved
-
-In home networks with **budget IoT devices** (ESP8266, ESP32, BL602, Sonoff, Tuya, etc.), keeping a long DHCP lease time (e.g., **12 hours / `43200 s`**) is recommended so lightweight `lwIP` stacks and Wi-Fi power-save modes (`DTIM`) are not overwhelmed by frequent DHCP renewals.
-
-However, long DHCP lease times cause two headaches in AdGuard Home when organizing static IPs:
-1. **Server-side lock in `leases.json`:** As long as an active dynamic lease or a ghost entry (`00:00:00:00:00:00`) exists in `leases.json`, AdGuard Home holds onto the previous assignment until it expires.
-2. **Client-side delay:** Even after updating the DHCP server, a Wi-Fi client will not request its new IP until its lease timer (`T1`) fires or its Wi-Fi link reconnects.
-
-### One-Click Solution (`⚡ Save + Force AP Reconnect`)
-1. **Instant Purge in AdGuard Home:** Briefly stops the `adguardhome` container (~1s), removes any conflicting dynamic or ghost (`00:00:00:00:00:00`) entries for that MAC or IP from `leases.json`, writes the new static lease (`"static": true`), and starts the container again.
-2. **Clean Access Point Reconnect (TP-Link TL-WR841N):** Authenticates against your Access Point's web administration API and briefly cycles the wireless interface (`LAN_WLAN`) so the client drops its old IP and immediately requests its new static IP via DHCP.
-3. **Live Verification (`Ping` + `ARP` Table):** Automatically pings the new static IP and cross-checks the host's live Linux ARP table (`ip -4 neigh show`) to highlight any device still operating on a previous IP.
+Repositorio privado con la configuración real de red doméstica (`192.168.1.0/24`), rutas de `PI-Server` (`/home/yo/dhcp-panel` y `/home/yo/servicios/...`) y copia de seguridad de las concesiones DHCP e IPs estáticas (`leases.backup.json`), **sin contraseñas almacenadas**.
 
 ---
 
-## ✨ Key Features
+## 🚀 Instalación Automática Portable (Windows y Linux)
 
-* **Instant Static IP Assignment & Editing** without waiting for dynamic leases to expire.
-* **One-Click Junk Lease Cleanup:** Purges ghost entries (`00:00:00:00:00:00`), expired leases, and duplicate dynamic records from `leases.json`.
-* **Live ARP Mismatch Detection:** Shows both the IP configured in AdGuard Home and the actual IP currently active on the LAN.
-* **Built-in Settings Panel (`config.json`):** Configure your AdGuard Home URL/credentials, paths, and router/AP credentials directly from the web UI (`config.json` is excluded via `.gitignore`).
-* **Quick `lease_duration` Switcher:** Update `lease_duration` in `AdGuardHome.yaml` whenever needed.
+El repositorio incluye auto-instaladores independientes que configuran una **instancia aislada y portable de Python (`python_portable/`)**, garantizando que **no se modifica ni se contamina el Python principal del sistema ni los paquetes globales del PC**.
 
----
+### 🪟 En Windows
+1. Haz doble clic en **`instalar_windows.bat`** (o ejecuta `install_windows.bat`).
+   * Descarga y configura automáticamente Python 3.11 Embeddable / Portable en `python_portable\`.
+   * Instala las dependencias necesarias (`Flask`, `cryptography`) dentro de esa carpeta.
+   * Genera el archivo `config.json` si no existe.
+2. Para iniciar el panel: doble clic en **`iniciar_windows.bat`** (o `start_windows.bat`).
 
-## 🛠️ Installation (Systemd Service)
-
-1. Clone the repository:
+### 🐧 En Linux / Raspberry Pi
+1. Dale permisos de ejecución y ejecuta el instalador:
    ```bash
-   git clone https://github.com/VictorCV-DAM/adguard-dhcp-static-manager.git /opt/adguard-dhcp-static-manager
-   cd /opt/adguard-dhcp-static-manager
-   pip3 install -r requirements.txt
-   cp config.example.json config.json
+   chmod +x instalar_linux.sh
+   ./instalar_linux.sh
+   ```
+   * Crea una instancia aislada y portable en `python_portable/`.
+   * Instala las dependencias exclusivamente en `python_portable/` (cumpliendo con PEP 668 en Debian Bookworm / Raspberry Pi OS sin tocar el Python del sistema).
+   * Genera `config.json` si no existe.
+   * Actualiza el servicio `dhcp-panel.service` para apuntar a la instancia portable.
+2. Para iniciar manualmente:
+   ```bash
+   ./iniciar_linux.sh
+   ```
+3. O para activarlo como servicio persistente en segundo plano (systemd):
+   ```bash
+   sudo cp dhcp-panel.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now dhcp-panel
    ```
 
-2. Create `/etc/systemd/system/dhcp-panel.service`:
-   ```ini
-   [Unit]
-   Description=AdGuard DHCP Static IP Manager Web Panel
-   After=network.target
+---
 
-   [Service]
-   User=root
-   WorkingDirectory=/opt/adguard-dhcp-static-manager
-   ExecStart=/usr/bin/python3 /opt/adguard-dhcp-static-manager/app.py
-   Restart=always
+## 📍 Datos de red y servicios en `PI-Server`
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
+* **Raspberry Pi (`PI-Server`):** `192.168.1.249` (usuario: `yo`)
+* **Panel Gestor DHCP:** `http://192.168.1.249:5001` (`/home/yo/dhcp-panel`)
+* **Panel Wi-Fi original:** `http://192.168.1.249:5000` (`/home/yo/wifi-panel`)
+* **AdGuard Home:** `http://192.168.1.249:8080` (usuario: `victorlike`)
+  * `leases.json`: `/home/yo/servicios/adguard-work/data/leases.json`
+  * `AdGuardHome.yaml`: `/home/yo/servicios/adguard-conf/AdGuardHome.yaml`
+* **Router / AP TP-Link TL-WR841N:** `http://192.168.1.10` (usuario: `admin`)
+* **Mercusys Halo H80X:** `192.168.1.11`, `192.168.1.12`, `192.168.1.13`
 
-3. Enable and start the service:
+---
+
+## 🔄 Restauración rápida en la Raspberry Pi
+
+1. Clonar en `/home/yo/dhcp-panel`:
    ```bash
+   git clone https://github.com/VictorCV-DAM/adguard-dhcp-panel-privado.git /home/yo/dhcp-panel
+   ```
+2. Ejecutar auto-instalador:
+   ```bash
+   cd /home/yo/dhcp-panel
+   ./instalar_linux.sh
+   ```
+3. Activar el servicio `systemd`:
+   ```bash
+   sudo cp /home/yo/dhcp-panel/dhcp-panel.service /etc/systemd/system/dhcp-panel.service
    sudo systemctl daemon-reload
    sudo systemctl enable --now dhcp-panel.service
    ```
-
-4. Open the dashboard in your browser:
-   ```text
-   http://<SERVER-IP>:5001
+4. Entrar en `http://192.168.1.249:5001` → **⚙️ Configuraciones** e introducir las contraseñas de AdGuard Home y de los routers.
+5. *(Opcional)* Para restaurar el backup de IPs estáticas en AdGuard Home:
+   ```bash
+   sudo docker stop adguardhome
+   sudo cp /home/yo/dhcp-panel/leases.backup.json /home/yo/servicios/adguard-work/data/leases.json
+   sudo docker start adguardhome
    ```
