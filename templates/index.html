@@ -3193,6 +3193,7 @@ function renderMacHunterResults(d) {
     const ag = d.adguard || {};
     const ping = d.active_ping;
     const diag = d.diagnosis || {};
+    const intel = d.internet_intel || {};
     
     let diagBg = 'rgba(234,179,8,0.12)';
     let diagBorder = 'rgba(234,179,8,0.35)';
@@ -3305,6 +3306,53 @@ function renderMacHunterResults(d) {
                     </div>
                 </div>
 
+            </div>
+
+            <!-- SECCIÓN: INTELIGENCIA EN INTERNET & PISTAS OSINT -->
+            <div style="background:#1e293b; border:1px solid rgba(56,189,248,0.25); border-radius:10px; padding:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
+                    <span style="font-size:0.85rem; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+                        🌐 Inteligencia en Internet & Pistas Reveladoras (OSINT)
+                    </span>
+                    ${intel.online_vendor ? `<span class="badge" style="background:rgba(56,189,248,0.15); color:#7dd3fc; font-size:0.7rem; border:1px solid rgba(56,189,248,0.3);">🏛️ IEEE: ${escapeHtml(intel.online_vendor)}</span>` : ''}
+                </div>
+
+                ${(intel.heuristic_clues && intel.heuristic_clues.length) ? `
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                        ${intel.heuristic_clues.map(c => `
+                            <div style="background:rgba(15,23,42,0.6); border-left:3px solid #38bdf8; border-radius:4px; padding:7px 10px; font-size:0.77rem; color:#e2e8f0; line-height:1.4;">
+                                <strong>${c.icon || '🔍'} ${escapeHtml(c.type)}:</strong> ${escapeHtml(c.text)}
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                ${(intel.web_snippets && intel.web_snippets.length) ? `
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:5px;">
+                            Fragmentos de búsqueda web encontrados para «${escapeHtml(intel.web_snippets[0].term)}»:
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            ${intel.web_snippets.map(s => `
+                                <div style="background:rgba(15,23,42,0.45); border:1px solid rgba(255,255,255,0.06); border-radius:6px; padding:8px 10px; font-size:0.75rem; color:#cbd5e1; line-height:1.42; font-style:italic;">
+                                    "${escapeHtml(s.snippet)}"
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- ENLACES DE INVESTIGACIÓN RÁPIDA (1-CLIC) -->
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size:0.73rem; color:var(--muted);">Indagar más en repositorios públicos:</span>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        ${(intel.search_links || []).map(l => `
+                            <a href="${l.url}" target="_blank" rel="noopener noreferrer" class="btn btn-outline" style="font-size:0.72rem; padding:4px 8px; text-decoration:none; display:inline-flex; align-items:center; gap:4px; border-color:rgba(56,189,248,0.3); color:#7dd3fc;">
+                                <span>${l.icon}</span> ${escapeHtml(l.name)}
+                            </a>
+                        `).join('')}
+                    </div>
+                </div>
             </div>
 
             <!-- BOTONES DE ACCIÓN RÁPIDA -->

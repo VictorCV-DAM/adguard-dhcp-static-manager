@@ -523,6 +523,9 @@ def hunt_mac_forensics(target_mac_raw: str, cfg: Dict[str, Any], state: Dict[str
     # 7. Diagnóstico inteligente
     diagnosis = _build_hunter_diagnosis(mac, oui_info, ha_info, mesh_info, adguard_info, history_info, active_ping)
 
+    # 8. Inteligencia en Internet & Pistas OSINT
+    internet_intel = _gather_internet_forensic_clues(mac, oui_info, ha_info, adguard_info, history_info)
+
     return {
         "success": True,
         "mac": mac.upper(),
@@ -536,8 +539,124 @@ def hunt_mac_forensics(target_mac_raw: str, cfg: Dict[str, Any], state: Dict[str
         "history": history_info,
         "adguard": adguard_info,
         "active_ping": active_ping,
-        "diagnosis": diagnosis
+        "diagnosis": diagnosis,
+        "internet_intel": internet_intel
     }
+
+def _gather_internet_forensic_clues(mac: str, oui_info: Dict[str, Any], ha_info: Optional[Dict[str, Any]], adguard_info: Dict[str, Any], history_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Recopila inteligencia en Internet, pistas heurísticas de huella y enlaces OSINT de investigación."""
+    import urllib.parse
+    intel = {
+        "online_vendor": None,
+        "heuristic_clues": [],
+        "web_snippets": [],
+        "search_links": []
+    }
+
+    hostname = adguard_info.get("hostname") or history_info.get("last_hostname") or ""
+    ha_data = ha_info.get("data") if (isinstance(ha_info, dict) and "data" in ha_info) else ha_info
+    host_lower = hostname.lower()
+
+    # 1. Consulta en línea a API oficial IEEE OUI (MacVendors)
+    try:
+        req = urllib.request.Request(f"https://api.macvendors.com/{urllib.parse.quote(mac)}", headers={"User-Agent": "DHCPPanel/2.0"})
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            ven = resp.read().decode('utf-8', errors='ignore').strip()
+            if ven and "errors" not in ven.lower() and "<html" not in ven.lower():
+                intel["online_vendor"] = ven
+    except Exception:
+        pass
+
+    # 2. Pistas Heurísticas por huellas de comportamiento y nombres de red
+    if re.match(r'^esp-[0-9a-f]{6}$', host_lower):
+        intel["heuristic_clues"].append({
+            "type": "Chipset & SDK de Fábrica",
+            "icon": "⚡",
+            "text": f"El hostname '{hostname}' es la huella de fábrica asignada por el SDK oficial de Espressif (ESP8266/ESP32). Muy común en enchufes y bombillas inteligentes Tuya Smart, Tasmota o ESPHome antes de ser personalizados."
+        })
+    elif "ck-bl602" in host_lower or (ha_data and "ck-bl602" in str(ha_data).lower()):
+        intel["heuristic_clues"].append({
+            "type": "Hardware CoolKit / Sonoff",
+            "icon": "🔌",
+            "text": "La referencia 'CK-BL602' corresponde al chipset RISC-V Bouffalo Lab BL602 utilizado por Shenzhen Sonoff / CoolKit en enchufes inteligentes eWeLink de última generación con monitorización de energía."
+        })
+    elif "tasmota" in host_lower:
+        intel["heuristic_clues"].append({
+            "type": "Firmware Open Source",
+            "icon": "🛠️",
+            "text": f"El hostname '{hostname}' indica que el dispositivo ha sido liberado con el firmware de código abierto Tasmota, permitiendo control MQTT y HTTP 100% local sin nube."
+        })
+    elif "shelly" in host_lower:
+        intel["heuristic_clues"].append({
+            "type": "Domótica Shelly",
+            "icon": "🏠",
+            "text": "Dispositivo del ecosistema Shelly (Allterco Robotics). Incluye interfaz web propia en el puerto 80 y soporte CoAP/MQTT/REST local."
+        })
+    elif "wled" in host_lower:
+        intel["heuristic_clues"].append({
+            "type": "Controlador LED WLED",
+            "icon": "🌈",
+            "text": "Controlador de tiras LED direccionables (WS2812B/SK6812) ejecutando el firmware de código abierto WLED."
+        })
+    elif host_lower.startswith(("desktop-", "laptop-")):
+        intel["heuristic_clues"].append({
+            "type": "Sistema Operativo",
+            "icon": "💻",
+            "text": f"El hostname '{hostname}' es la nomenclatura estándar asignada durante la instalación de Microsoft Windows."
+        })
+
+    if ha_data and isinstance(ha_data, dict):
+        mfg = (ha_data.get('manufacturer') or '').lower()
+        model = (ha_data.get('model') or '').lower()
+        if 'tuya' in mfg:
+            intel["heuristic_clues"].append({
+                "type": "Ecosistema Tuya / Smart Life",
+                "icon": "☁️",
+                "text": f"Dispositivo fabricado bajo la plataforma global Tuya IoT ({ha_data.get('model') or 'Smart Socket'}). Compatible con Smart Life y controlable vía protocolo local o nube Tuya."
+            })
+        elif 'kingart' in mfg or 'sonoff' in mfg or 'coolkit' in mfg:
+            intel["heuristic_clues"].append({
+                "type": "Ecosistema eWeLink / Sonoff",
+                "icon": "📶",
+                "text": f"Dispositivo basado en plataforma CoolKit/eWeLink ({ha_data.get('manufacturer')} {ha_data.get('model')}). Habitual en interruptores táctiles de pared, enchufes y relés de domótica."
+            })
+
+    # 3. Búsqueda activa de fragmentos en Internet (DuckDuckGo Search)
+    search_term = ""
+    if ha_data and isinstance(ha_data, dict) and ha_data.get('model') and ha_data.get('model') != 'smart socket':
+        search_term = f"{ha_data.get('model')} {ha_data.get('manufacturer') or ''}".strip()
+    elif hostname and not re.match(r'^esp-[0-9a-f]{6}$', host_lower) and not host_lower.startswith(("desktop-", "laptop-")):
+        search_term = hostname
+    elif ha_data and isinstance(ha_data, dict) and ha_data.get('name') and ha_data.get('manufacturer'):
+        search_term = f"{ha_data.get('manufacturer')} {ha_data.get('model') or 'smart socket'} IoT".strip()
+    elif oui_info and oui_info.get('family'):
+        search_term = f"{oui_info.get('vendor')} {oui_info.get('type')}".strip()
+
+    if search_term:
+        try:
+            url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(search_term)
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"})
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                html = resp.read().decode('utf-8', errors='ignore')
+                snips = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html, re.DOTALL)
+                for s in snips[:2]:
+                    cl = re.sub(r'<[^>]+>', '', s).strip()
+                    cl = cl.replace('&quot;', '"').replace('&#x27;', "'").replace('&amp;', '&').replace('&nbsp;', ' ')
+                    if cl and len(cl) > 20:
+                        intel["web_snippets"].append({"term": search_term, "snippet": cl})
+        except Exception:
+            pass
+
+    # 4. Enlaces directos a motores de búsqueda y repositorios de hardware (OSINT 1-Click)
+    link_query = search_term or hostname or mac
+    intel["search_links"] = [
+        {"name": "Google", "url": f"https://www.google.com/search?q={urllib.parse.quote(link_query)}", "icon": "🔍"},
+        {"name": "DuckDuckGo", "url": f"https://duckduckgo.com/?q={urllib.parse.quote(link_query)}", "icon": "🦆"},
+        {"name": "Blakadder IoT DB", "url": f"https://templates.blakadder.com/search.html?q={urllib.parse.quote(search_term or oui_info.get('vendor') or 'tuya')}", "icon": "🔌"},
+        {"name": "Wireshark OUI", "url": f"https://www.wireshark.org/tools/oui-lookup.html?search={mac[:8]}", "icon": "📑"}
+    ]
+
+    return intel
 
 def _lookup_oui(prefix: str, full_mac: str) -> Dict[str, Any]:
     """Identifica fabricante, chipsets típicos y tipo de dispositivo por prefijo OUI."""
