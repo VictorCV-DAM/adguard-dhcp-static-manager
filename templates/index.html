@@ -389,13 +389,18 @@
             font-weight: 600;
             padding: 10px 18px;
             border-radius: 8px 8px 0 0;
-            cursor: pointer;
+            cursor: grab;
+            user-select: none;
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            transition: all 0.2s ease;
+            transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
             border-bottom: 3px solid transparent;
             margin-bottom: -6px;
+            position: relative;
+        }
+        .tab-nav-btn:active {
+            cursor: grabbing;
         }
         .tab-nav-btn:hover {
             color: #f8fafc;
@@ -406,6 +411,36 @@
             border-bottom-color: #38bdf8;
             background: rgba(56, 189, 248, 0.08);
         }
+        .tab-nav-btn.tab-dragging {
+            opacity: 0.45;
+            transform: scale(0.96);
+            border: 1px dashed #38bdf8 !important;
+            background: rgba(56, 189, 248, 0.12) !important;
+        }
+        .tab-nav-btn.tab-drag-left::before {
+            content: '';
+            position: absolute;
+            left: -5px;
+            top: 4px;
+            bottom: 4px;
+            width: 3px;
+            background: #38bdf8;
+            border-radius: 2px;
+            box-shadow: 0 0 8px #38bdf8;
+            pointer-events: none;
+        }
+        .tab-nav-btn.tab-drag-right::after {
+            content: '';
+            position: absolute;
+            right: -5px;
+            top: 4px;
+            bottom: 4px;
+            width: 3px;
+            background: #38bdf8;
+            border-radius: 2px;
+            box-shadow: 0 0 8px #38bdf8;
+            pointer-events: none;
+        }
         .tab-badge {
             background: #334155;
             color: #f1f5f9;
@@ -413,11 +448,13 @@
             padding: 2px 7px;
             border-radius: 999px;
             font-weight: 700;
+            pointer-events: none;
         }
         .tab-badge-services {
             background: rgba(56, 189, 248, 0.2);
             color: #38bdf8;
             border: 1px solid rgba(56, 189, 248, 0.4);
+            pointer-events: none;
         }
 
         /* Rejilla de tarjetas de servicios */
@@ -1459,12 +1496,15 @@
 
     <!-- PANEL DE PERSONALIZACIÓN DE COLUMNAS -->
     <div id="columns-panel" class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h3 style="margin:0;">📊 Personalizar Columnas (Orden, Visibilidad y Ancho)</h3>
-            <button class="btn btn-outline" style="padding:4px 10px; font-size:0.78rem;" onclick="resetColumns()">Restablecer por defecto</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <h3 style="margin:0;">📊 Personalizar Columnas y Pestañas</h3>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-outline" style="padding:4px 10px; font-size:0.78rem;" onclick="resetMainTabsOrder()" title="Restablecer el orden original de las pestañas principales">Restablecer Pestañas</button>
+                <button class="btn btn-outline" style="padding:4px 10px; font-size:0.78rem;" onclick="resetColumns()" title="Restablecer visibilidad y orden de columnas">Restablecer Columnas</button>
+            </div>
         </div>
         <p style="font-size:0.82rem; color:var(--muted); margin-top:0;">
-            También puedes hacer clic en las cabeceras de la tabla para ordenar filas (▲/▼), arrastrar las cabeceras para mover columnas o estirar su borde derecho para redimensionarlas.
+            Puedes arrastrar las pestañas principales superiores para ordenarlas a tu gusto. En la tabla, haz clic en las cabeceras para ordenar filas (▲/▼), arrastra las cabeceras para mover columnas o estira su borde derecho para redimensionarlas.
         </p>
         <div id="col-manager-list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap:8px;"></div>
     </div>
@@ -1547,26 +1587,26 @@
     </div>
 
     <!-- BARRA DE PESTAÑAS PRINCIPALES -->
-    <div class="main-tabs-bar" style="display:flex; gap:10px; margin: 20px 0 16px 0; border-bottom: 2px solid var(--border); padding-bottom: 4px; flex-wrap:wrap;">
-        <button id="tab-btn-devices" class="tab-nav-btn active" onclick="switchMainTab('devices')">
+    <div id="main-tabs-bar" class="main-tabs-bar" style="display:flex; gap:10px; margin: 20px 0 16px 0; border-bottom: 2px solid var(--border); padding-bottom: 4px; flex-wrap:wrap;">
+        <button id="tab-btn-devices" class="tab-nav-btn active" data-tab="devices" draggable="true" onclick="onMainTabClick('devices', event)" title="Arrastra para reordenar esta pestaña">
             📋 Dispositivos de Red <span id="tab-badge-devices" class="tab-badge">0</span>
         </button>
-        <button id="tab-btn-services" class="tab-nav-btn" onclick="switchMainTab('services')">
+        <button id="tab-btn-services" class="tab-nav-btn" data-tab="services" draggable="true" onclick="onMainTabClick('services', event)" title="Arrastra para reordenar esta pestaña">
             🌐 Servicios y Aplicaciones Web <span id="tab-badge-services" class="tab-badge tab-badge-services">0</span>
         </button>
-        <button id="tab-btn-ipmap" class="tab-nav-btn" onclick="switchMainTab('ipmap')">
+        <button id="tab-btn-ipmap" class="tab-nav-btn" data-tab="ipmap" draggable="true" onclick="onMainTabClick('ipmap', event)" title="Arrastra para reordenar esta pestaña">
             🗺️ Mapa de IPs (1–254)
         </button>
-        <button id="tab-btn-topology" class="tab-nav-btn" onclick="switchMainTab('topology')">
+        <button id="tab-btn-topology" class="tab-nav-btn" data-tab="topology" draggable="true" onclick="onMainTabClick('topology', event)" title="Arrastra para reordenar esta pestaña">
             🕸️ Topología de Red
         </button>
-        <button id="tab-btn-timeline" class="tab-nav-btn" onclick="switchMainTab('timeline')">
+        <button id="tab-btn-timeline" class="tab-nav-btn" data-tab="timeline" draggable="true" onclick="onMainTabClick('timeline', event)" title="Arrastra para reordenar esta pestaña">
             📅 Línea Temporal
         </button>
-        <button id="tab-btn-wifirf" class="tab-nav-btn" onclick="switchMainTab('wifirf')" style="display:none;">
+        <button id="tab-btn-wifirf" class="tab-nav-btn" data-tab="wifirf" draggable="true" onclick="onMainTabClick('wifirf', event)" title="Arrastra para reordenar esta pestaña" style="display:none;">
             ⚡ Expulsión Forzosa Wi-Fi
         </button>
-        <button id="tab-btn-diagnostics" class="tab-nav-btn" onclick="switchMainTab('diagnostics')">
+        <button id="tab-btn-diagnostics" class="tab-nav-btn" data-tab="diagnostics" draggable="true" onclick="onMainTabClick('diagnostics', event)" title="Arrastra para reordenar esta pestaña">
             ⚠️ Diagnóstico <span id="tab-badge-diag" class="tab-badge" style="display:none; background:rgba(245,158,11,0.22); color:#fcd34d;">0</span>
         </button>
     </div>
@@ -2572,6 +2612,137 @@ function switchMainTab(tab) {
     else if (tab === 'timeline') loadTimeline(24);
     else if (tab === 'diagnostics') loadDiagnostics();
     else if (tab === 'wifirf') refreshWifiPluginUi();
+}
+
+const DEFAULT_MAIN_TABS_ORDER = ['devices', 'services', 'ipmap', 'topology', 'timeline', 'wifirf', 'diagnostics'];
+let tabDragSrc = null;
+let tabIsDragging = false;
+
+function onMainTabClick(tab, event) {
+    if (tabIsDragging) return;
+    switchMainTab(tab);
+}
+
+function applyMainTabsOrder() {
+    const container = document.getElementById('main-tabs-bar');
+    if (!container) return;
+    try {
+        const raw = localStorage.getItem('ag_main_tabs_order');
+        if (!raw) return;
+        const order = JSON.parse(raw);
+        if (!Array.isArray(order) || order.length === 0) return;
+
+        order.forEach(tabKey => {
+            const btn = container.querySelector(`[data-tab="${tabKey}"]`) || document.getElementById('tab-btn-' + tabKey);
+            if (btn && btn.parentElement === container) {
+                container.appendChild(btn);
+            }
+        });
+    } catch(e) {}
+}
+
+function saveMainTabsOrder() {
+    const container = document.getElementById('main-tabs-bar');
+    if (!container) return;
+    const order = [];
+    container.querySelectorAll('.tab-nav-btn').forEach(btn => {
+        const key = btn.dataset.tab || btn.id.replace('tab-btn-', '');
+        if (key) order.push(key);
+    });
+    try {
+        localStorage.setItem('ag_main_tabs_order', JSON.stringify(order));
+    } catch(e) {}
+}
+
+function resetMainTabsOrder() {
+    try {
+        localStorage.removeItem('ag_main_tabs_order');
+    } catch(e) {}
+    const container = document.getElementById('main-tabs-bar');
+    if (!container) return;
+    DEFAULT_MAIN_TABS_ORDER.forEach(tabKey => {
+        const btn = container.querySelector(`[data-tab="${tabKey}"]`) || document.getElementById('tab-btn-' + tabKey);
+        if (btn && btn.parentElement === container) {
+            container.appendChild(btn);
+        }
+    });
+}
+
+function initMainTabsDragAndDrop() {
+    const container = document.getElementById('main-tabs-bar');
+    if (!container) return;
+
+    applyMainTabsOrder();
+
+    const buttons = container.querySelectorAll('.tab-nav-btn');
+    buttons.forEach(btn => {
+        btn.setAttribute('draggable', 'true');
+
+        btn.addEventListener('dragstart', (e) => {
+            tabDragSrc = btn;
+            tabIsDragging = true;
+            btn.classList.add('tab-dragging');
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', btn.dataset.tab || btn.id);
+            }
+        });
+
+        btn.addEventListener('dragend', () => {
+            btn.classList.remove('tab-dragging');
+            container.querySelectorAll('.tab-nav-btn').forEach(b => {
+                b.classList.remove('tab-drag-left', 'tab-drag-right');
+            });
+            setTimeout(() => { tabIsDragging = false; }, 100);
+        });
+
+        btn.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!tabDragSrc || tabDragSrc === btn) return;
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+            const rect = btn.getBoundingClientRect();
+            const midpoint = rect.left + rect.width / 2;
+            const isLeft = e.clientX < midpoint;
+
+            container.querySelectorAll('.tab-nav-btn').forEach(b => {
+                b.classList.remove('tab-drag-left', 'tab-drag-right');
+            });
+
+            if (isLeft) {
+                btn.classList.add('tab-drag-left');
+            } else {
+                btn.classList.add('tab-drag-right');
+            }
+        });
+
+        btn.addEventListener('dragleave', (e) => {
+            if (!btn.contains(e.relatedTarget)) {
+                btn.classList.remove('tab-drag-left', 'tab-drag-right');
+            }
+        });
+
+        btn.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!tabDragSrc || tabDragSrc === btn) return;
+
+            const rect = btn.getBoundingClientRect();
+            const midpoint = rect.left + rect.width / 2;
+            const isLeft = e.clientX < midpoint;
+
+            if (isLeft) {
+                container.insertBefore(tabDragSrc, btn);
+            } else {
+                container.insertBefore(tabDragSrc, btn.nextSibling);
+            }
+
+            container.querySelectorAll('.tab-nav-btn').forEach(b => {
+                b.classList.remove('tab-drag-left', 'tab-drag-right');
+            });
+
+            saveMainTabsOrder();
+        });
+    });
 }
 
 function setServiceCategoryFilter(cat) {
@@ -10374,6 +10545,7 @@ function initTableResizers() {
 }
 
 initTableResizers();
+initMainTabsDragAndDrop();
 switchMainTab(currentMainTab);
 loadConfig();
 loadState();
