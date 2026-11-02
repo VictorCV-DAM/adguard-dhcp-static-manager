@@ -1876,33 +1876,79 @@
 
     <!-- PESTAÑA 2: VISTA DE SERVICIOS EN TARJETAS -->
     <div id="view-services" style="display:none;">
-        <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
-            <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
-                <input type="text" id="search-services" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar servicio por nombre, host, IP o puerto..." oninput="renderServicesCards()">
-                <div style="display:inline-flex; align-items:center; gap:8px;">
-                    <button class="btn btn-outline" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="manualRefresh()" title="Actualizar inmediatamente">
-                        <span class="refresh-icon-copy" style="font-size:0.95rem;">🔄</span>
-                        <span>Actualizar</span>
-                    </button>
-                    <span id="services-summary-badge" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">0 servicios activos</span>
-                </div>
-            </div>
-            <div class="filter-pills" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Categoría:</span>
-                <div class="filter-group">
-                    <button class="pill-btn active" data-svc-cat="all" onclick="setServiceCategoryFilter('all')">Todas <span id="svc-count-all" class="pill-count">0</span></button>
-                    <button class="pill-btn" data-svc-cat="favorites" onclick="setServiceCategoryFilter('favorites')">⭐ Favoritos <span id="svc-count-favorites" class="pill-count">0</span></button>
-                    <button class="pill-btn" data-svc-cat="down" onclick="setServiceCategoryFilter('down')">🔴 Caídos <span id="svc-count-down" class="pill-count">0</span></button>
-                    <button class="pill-btn" data-svc-cat="domotica" onclick="setServiceCategoryFilter('domotica')">🏠 Domótica <span id="svc-count-domotica" class="pill-count">0</span></button>
-                    <button class="pill-btn" data-svc-cat="multimedia" onclick="setServiceCategoryFilter('multimedia')">🎬 Multimedia <span id="svc-count-multimedia" class="pill-count">0</span></button>
-                    <button class="pill-btn" data-svc-cat="red" onclick="setServiceCategoryFilter('red')">🌐 Red & Routers <span id="svc-count-red" class="pill-count">0</span></button>
-                    <button class="pill-btn" data-svc-cat="infra" onclick="setServiceCategoryFilter('infra')">⚡ Servidores / Infra <span id="svc-count-infra" class="pill-count">0</span></button>
-                </div>
+        <!-- SELECTOR DE SUB-VISTAS: SERVICIOS DE RED vs SERVICIOS LOCALES -->
+        <div class="services-subtabs-nav" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:12px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="btn-subtab-svc-lan" class="btn btn-primary" onclick="switchServicesSubTab('lan')" style="font-weight:700; padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:8px;">
+                    <span>🌐 Servicios de Red (LAN)</span>
+                    <span id="badge-svc-lan-count" class="badge" style="background:rgba(0,0,0,0.35); color:#fff; font-size:0.75rem; padding:2px 7px; border-radius:999px;">0</span>
+                </button>
+                <button id="btn-subtab-svc-localhost" class="btn btn-outline" onclick="switchServicesSubTab('localhost')" style="display:none; font-weight:700; padding:8px 16px; border-radius:8px; border-color:#a855f7; color:#d8b4fe; align-items:center; gap:8px;">
+                    <span>💻 Servicios Locales (Host)</span>
+                    <span id="badge-svc-localhost-count" class="badge" style="background:rgba(168,85,247,0.25); color:#d8b4fe; font-size:0.75rem; padding:2px 7px; border-radius:999px;">0</span>
+                </button>
             </div>
         </div>
 
-        <div id="services-cards-container" class="services-cards-grid">
-            <!-- Tarjetas de servicios generadas dinámicamente -->
+        <!-- SUB-VISTA 1: SERVICIOS DE RED (LAN) -->
+        <div id="subview-services-lan">
+            <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+                <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
+                    <input type="text" id="search-services" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar servicio por nombre, host, IP o puerto..." oninput="renderServicesCards()">
+                    <div style="display:inline-flex; align-items:center; gap:8px;">
+                        <button class="btn btn-outline" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="manualRefresh()" title="Actualizar inmediatamente">
+                            <span class="refresh-icon-copy" style="font-size:0.95rem;">🔄</span>
+                            <span>Actualizar</span>
+                        </button>
+                        <span id="services-summary-badge" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">0 servicios activos</span>
+                    </div>
+                </div>
+                <div class="filter-pills" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                    <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Categoría:</span>
+                    <div class="filter-group">
+                        <button class="pill-btn active" data-svc-cat="all" onclick="setServiceCategoryFilter('all')">Todas <span id="svc-count-all" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="favorites" onclick="setServiceCategoryFilter('favorites')">⭐ Favoritos <span id="svc-count-favorites" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="down" onclick="setServiceCategoryFilter('down')">🔴 Caídos <span id="svc-count-down" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="domotica" onclick="setServiceCategoryFilter('domotica')">🏠 Domótica <span id="svc-count-domotica" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="multimedia" onclick="setServiceCategoryFilter('multimedia')">🎬 Multimedia <span id="svc-count-multimedia" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="red" onclick="setServiceCategoryFilter('red')">🌐 Red & Routers <span id="svc-count-red" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="infra" onclick="setServiceCategoryFilter('infra')">⚡ Servidores / Infra <span id="svc-count-infra" class="pill-count">0</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="services-cards-container" class="services-cards-grid">
+                <!-- Tarjetas de servicios de red generadas dinámicamente -->
+            </div>
+        </div>
+
+        <!-- SUB-VISTA 2: SERVICIOS LOCALES (HOST / LOCALHOST) -->
+        <div id="subview-services-localhost" style="display:none;">
+            <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+                <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; width:100%;">
+                    <input type="text" id="localhost-tab-search" class="search-bar" style="flex:1; min-width:280px;" placeholder="Buscar servicio local por puerto, nombre o proceso..." oninput="renderLocalhostTabServices()">
+                    <div style="display:inline-flex; align-items:center; gap:8px;">
+                        <button class="btn btn-outline" id="btn-refresh-localhost-tab" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:#a855f7; color:#d8b4fe;" onclick="refreshLocalhostServices(true)" title="Forzar re-escaneo de puertos locales">
+                            <span class="refresh-icon-copy" style="font-size:0.95rem;">🔄</span>
+                            <span>Escanear puertos</span>
+                        </button>
+                        <span id="localhost-tab-summary-badge" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">0 puertos en escucha</span>
+                    </div>
+                </div>
+                <div class="filter-pills" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                    <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Filtro:</span>
+                    <div class="filter-group">
+                        <button class="pill-btn active lh-tab-filter" data-filter="all" onclick="setLocalhostTabFilter('all', this)">Todos <span id="lh-tab-count-all" class="pill-count">0</span></button>
+                        <button class="pill-btn lh-tab-filter" data-filter="web" onclick="setLocalhostTabFilter('web', this)">🌐 Web HTTP <span id="lh-tab-count-web" class="pill-count">0</span></button>
+                        <button class="pill-btn lh-tab-filter" data-filter="local" onclick="setLocalhostTabFilter('local', this)">🔒 Solo Local (127.0.0.1) <span id="lh-tab-count-local" class="pill-count">0</span></button>
+                        <button class="pill-btn lh-tab-filter" data-filter="lan" onclick="setLocalhostTabFilter('lan', this)">📡 Red LAN (0.0.0.0) <span id="lh-tab-count-lan" class="pill-count">0</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="localhost-tab-cards-container" style="display:flex; flex-direction:column; gap:10px;">
+                <!-- Tarjetas de servicios locales -->
+            </div>
         </div>
     </div> <!-- FIN view-services -->
 
@@ -4435,6 +4481,9 @@ function renderServicesCards() {
     let items = [];
     allDevices.forEach(d => {
         if (!d.web_links || d.web_links.length === 0) return;
+        // Excluir el host para que los servicios de localhost no se mezclen con los servicios de red
+        const isHost = (d.ip === (_localhostInfo?.local_ip || '') || (d.hostname && d.hostname.includes('(Panel Host)')) || d.mac === '00:00:00:00:00:00');
+        if (isHost) return;
         d.web_links.forEach(l => {
             const meta = Object.assign({}, getServiceMeta(l.default_label || l.label, l.port, d.hostname));
             if (l.is_custom) {
@@ -4473,6 +4522,8 @@ function renderServicesCards() {
 
     // Contadores por categoría y favoritos
     const totalServices = items.length;
+    const badgeLan = document.getElementById('badge-svc-lan-count');
+    if (badgeLan) badgeLan.textContent = totalServices;
     const cntFavs = items.filter(it => favsList.includes(it.service.url)).length;
     const cntDown = items.filter(it => it.isDown).length;
     const cntDomotica = items.filter(it => it.meta.cat === 'domotica').length;
@@ -11245,6 +11296,14 @@ function sortByStaticOrder(toggle = true) {
     function toggleLocalhostFeature(enabled) {
         const btn = document.getElementById('btn-header-localhost');
         if (btn) btn.style.display = enabled ? 'inline-flex' : 'none';
+
+        const btnSubtab = document.getElementById('btn-subtab-svc-localhost');
+        if (btnSubtab) btnSubtab.style.display = enabled ? 'inline-flex' : 'none';
+
+        if (!enabled && _currentServicesSubTab === 'localhost') {
+            switchServicesSubTab('lan');
+        }
+
         if (enabled && (!_localhostServicesData || _localhostServicesData.length === 0)) {
             refreshLocalhostServices(false);
         }
@@ -11255,13 +11314,9 @@ function sortByStaticOrder(toggle = true) {
     let _localhostCurrentFilter = 'all';
 
     function openLocalhostModal() {
-        const modal = document.getElementById('modal-localhost-services');
-        if (!modal) return;
-        modal.style.display = 'flex';
-        if (_localhostServicesData && _localhostServicesData.length > 0) {
-            renderLocalhostServices(_localhostServicesData, _localhostInfo);
-            refreshLocalhostServices(false);
-        } else {
+        switchMainTab('services');
+        switchServicesSubTab('localhost');
+        if (!_localhostServicesData || _localhostServicesData.length === 0) {
             refreshLocalhostServices(false);
         }
     }
@@ -11275,15 +11330,199 @@ function sortByStaticOrder(toggle = true) {
         if (info) _localhostInfo = info;
         if (svcs && Array.isArray(svcs)) _localhostServicesData = svcs;
         const badge = document.getElementById('btn-localhost-badge');
-        if (!badge) return;
-        const total = svcs ? svcs.length : (info ? info.total_services : 0);
-        const webCount = svcs ? svcs.filter(s => s.is_http).length : (info ? info.http_count : 0);
-        badge.textContent = webCount > 0 ? `${webCount} web / ${total}` : total;
-        if (webCount > 0) {
-            badge.style.background = 'rgba(34,197,94,0.22)';
-            badge.style.color = '#86efac';
+        if (badge) {
+            const total = svcs ? svcs.length : (info ? info.total_services : 0);
+            const webCount = svcs ? svcs.filter(s => s.is_http).length : (info ? info.http_count : 0);
+            badge.textContent = webCount > 0 ? `${webCount} web / ${total}` : total;
+            if (webCount > 0) {
+                badge.style.background = 'rgba(34,197,94,0.22)';
+                badge.style.color = '#86efac';
+            }
         }
+        renderLocalhostTabServices();
     }
+
+let _currentServicesSubTab = 'lan';
+let _localhostTabFilter = 'all';
+
+function switchServicesSubTab(subtab) {
+    _currentServicesSubTab = subtab;
+    const btnLan = document.getElementById('btn-subtab-svc-lan');
+    const btnLocal = document.getElementById('btn-subtab-svc-localhost');
+    const viewLan = document.getElementById('subview-services-lan');
+    const viewLocal = document.getElementById('subview-services-localhost');
+
+    if (subtab === 'localhost') {
+        if (viewLan) viewLan.style.display = 'none';
+        if (viewLocal) viewLocal.style.display = 'block';
+        if (btnLan) {
+            btnLan.className = 'btn btn-outline';
+            btnLan.style.borderColor = 'var(--border)';
+            btnLan.style.color = 'var(--text)';
+            btnLan.style.background = 'transparent';
+        }
+        if (btnLocal) {
+            btnLocal.className = 'btn btn-primary';
+            btnLocal.style.background = '#a855f7';
+            btnLocal.style.borderColor = '#9333ea';
+            btnLocal.style.color = '#fff';
+        }
+        renderLocalhostTabServices();
+    } else {
+        if (viewLocal) viewLocal.style.display = 'none';
+        if (viewLan) viewLan.style.display = 'block';
+        if (btnLocal) {
+            btnLocal.className = 'btn btn-outline';
+            btnLocal.style.background = 'transparent';
+            btnLocal.style.borderColor = '#a855f7';
+            btnLocal.style.color = '#d8b4fe';
+        }
+        if (btnLan) {
+            btnLan.className = 'btn btn-primary';
+            btnLan.style.background = '';
+            btnLan.style.borderColor = '';
+            btnLan.style.color = '';
+        }
+        renderServicesCards();
+    }
+}
+
+function setLocalhostTabFilter(filter, btnEl) {
+    _localhostTabFilter = filter;
+    document.querySelectorAll('.lh-tab-filter').forEach(b => {
+        b.classList.remove('active');
+        b.style.borderColor = 'var(--border)';
+        b.style.color = 'var(--text)';
+    });
+    if (btnEl) {
+        btnEl.classList.add('active');
+        btnEl.style.borderColor = '#a855f7';
+        btnEl.style.color = '#d8b4fe';
+    }
+    renderLocalhostTabServices();
+}
+
+function renderLocalhostTabServices() {
+    const container = document.getElementById('localhost-tab-cards-container');
+    if (!container) return;
+
+    const searchInp = document.getElementById('localhost-tab-search');
+    const q = (searchInp ? searchInp.value : '').trim().toLowerCase();
+
+    const all = _localhostServicesData || [];
+    const countAll = all.length;
+    const countWeb = all.filter(s => s.is_http).length;
+    const countLocal = all.filter(s => s.is_loopback_only).length;
+    const countLan = all.filter(s => !s.is_loopback_only).length;
+
+    const elAll = document.getElementById('lh-tab-count-all');
+    const elWeb = document.getElementById('lh-tab-count-web');
+    const elLocal = document.getElementById('lh-tab-count-local');
+    const elLan = document.getElementById('lh-tab-count-lan');
+    const sumBadge = document.getElementById('localhost-tab-summary-badge');
+
+    if (elAll) elAll.textContent = countAll;
+    if (elWeb) elWeb.textContent = countWeb;
+    if (elLocal) elLocal.textContent = countLocal;
+    if (elLan) elLan.textContent = countLan;
+    if (sumBadge) sumBadge.textContent = `${countAll} puertos (${countWeb} web HTTP)`;
+
+    const badgeSubtab = document.getElementById('badge-svc-localhost-count');
+    if (badgeSubtab) badgeSubtab.textContent = countWeb > 0 ? `${countWeb} web / ${countAll}` : countAll;
+
+    let list = [...all];
+    if (_localhostTabFilter === 'web') {
+        list = list.filter(s => s.is_http);
+    } else if (_localhostTabFilter === 'local') {
+        list = list.filter(s => s.is_loopback_only);
+    } else if (_localhostTabFilter === 'lan') {
+        list = list.filter(s => !s.is_loopback_only);
+    }
+
+    if (q) {
+        list = list.filter(s => {
+            const pStr = String(s.port);
+            const lbl = (s.label || '').toLowerCase();
+            const proc = (s.process || '').toLowerCase();
+            const bind = (s.bind || '').toLowerCase();
+            const url = (s.url || '').toLowerCase();
+            const known = (s.known_service || '').toLowerCase();
+            return pStr.includes(q) || lbl.includes(q) || proc.includes(q) || bind.includes(q) || url.includes(q) || known.includes(q);
+        });
+    }
+
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:50px 20px; color:var(--muted); font-size:0.9rem; background:#1e293b; border-radius:10px; border:1px solid var(--border);">
+                No se encontraron servicios locales con los filtros seleccionados.
+            </div>
+        `;
+        return;
+    }
+
+    const lIp = _localhostInfo.local_ip || '';
+
+    container.innerHTML = list.map(s => {
+        const isWeb = s.is_http && s.url;
+        const portColor = isWeb ? '#4ade80' : (s.is_loopback_only ? '#c084fc' : '#38bdf8');
+        const lanUrl = (!s.is_loopback_only && lIp && isWeb) ? s.url.replace('localhost', lIp) : null;
+        const isPanel = (s.port === 5001 || (s.pid && _localhostInfo && String(s.pid) === String(_localhostInfo.panel_pid)));
+
+        return `
+            <div style="background:#1e293b; border:1px solid ${isWeb ? 'rgba(74,222,128,0.35)' : 'var(--border)'}; border-radius:10px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; transition:all 0.15s;">
+                <div style="display:flex; align-items:center; gap:12px; min-width:280px; flex:1;">
+                    <span style="font-size:1.5rem;">${s.icon || '⚙️'}</span>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-family:monospace; font-weight:800; font-size:1.05rem; color:${portColor}; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:6px; border:1px solid ${portColor}40;">
+                                :${s.port}
+                            </span>
+                            <strong style="font-size:0.95rem; color:#f8fafc;">${escapeHtml(s.label || 'Servicio')}</strong>
+                            ${isWeb ? `<span style="font-size:0.7rem; font-weight:700; background:rgba(34,197,94,0.18); color:#86efac; border:1px solid rgba(34,197,94,0.4); padding:2px 7px; border-radius:999px;">HTTP ${s.http_code || 200}</span>` : ''}
+                            <span style="font-size:0.7rem; font-weight:600; background:${s.is_loopback_only ? 'rgba(168,85,247,0.18)' : 'rgba(56,189,248,0.18)'}; color:${s.is_loopback_only ? '#d8b4fe' : '#7dd3fc'}; border:1px solid ${s.is_loopback_only ? 'rgba(168,85,247,0.35)' : 'rgba(56,189,248,0.35)'}; padding:2px 7px; border-radius:999px;">
+                                ${escapeHtml(s.bind_label || s.bind)}
+                            </span>
+                        </div>
+                        <div style="font-size:0.78rem; color:var(--muted); margin-top:4px; display:flex; gap:12px; flex-wrap:wrap;">
+                            ${s.process ? `<span>Proceso: <strong style="color:#cbd5e1;">${escapeHtml(s.process)}</strong> ${s.pid ? `<span style="color:#64748b;">(PID: ${s.pid})</span>` : ''}</span>` : ''}
+                            ${s.server ? `<span>Servidor: <strong style="color:#cbd5e1;">${escapeHtml(s.server)}</strong></span>` : ''}
+                            ${s.known_service && s.known_service !== s.label ? `<span>Tipo: <strong style="color:#94a3b8;">${escapeHtml(s.known_service)}</strong></span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    ${isWeb ? `
+                        <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" class="btn btn-primary" style="background:#22c55e; color:#0f172a; font-weight:700; padding:6px 14px; font-size:0.8rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px; border-radius:6px;" title="Abrir servicio web">
+                            Abrir localhost:${s.port} ↗
+                        </a>
+                        ${lanUrl ? `
+                            <a href="${escapeHtml(lanUrl)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:#38bdf8; color:#7dd3fc; padding:6px 10px; font-size:0.78rem; text-decoration:none; display:inline-flex; align-items:center; gap:4px; border-radius:6px;" title="Abrir vía LAN (${lIp})">
+                                LAN :${s.port} ↗
+                            </a>
+                        ` : ''}
+                        <button class="btn btn-outline" style="padding:6px 10px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(s.url)}', 'URL copiada')" title="Copiar enlace">
+                            📋 Copiar
+                        </button>
+                    ` : `
+                        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('localhost:${s.port}', 'Puerto copiado')" title="Copiar dirección">
+                            📋 localhost:${s.port}
+                        </button>
+                    `}
+                    ${isPanel ? `
+                        <span style="font-size:0.75rem; color:#64748b; font-weight:600; padding:5px 9px; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.08);" title="Este proceso es el propio panel DHCP">
+                            🛡️ Panel DHCP
+                        </span>
+                    ` : `
+                        <button class="btn btn-outline" style="border-color:#ef4444; color:#f87171; padding:6px 11px; font-size:0.78rem; border-radius:6px; display:inline-flex; align-items:center; gap:5px; transition:all 0.15s;" onclick="stopLocalhostService(${s.port}, '${escapeHtml(String(s.pid || ''))}', '${escapeHtml(s.label || s.process || `:${s.port}`).replace(/'/g, "\\'")}', this)" title="Terminar proceso y liberar el puerto :${s.port}">
+                            🛑 Detener
+                        </button>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 
     async function refreshLocalhostServices(force = false) {
         const btn = document.getElementById('btn-refresh-localhost');
