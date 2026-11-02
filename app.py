@@ -938,15 +938,23 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
         proc_name = info.get('process', '')
         is_http = False
         url = None
+        alt_url = None
         title = ''
         server_header = ''
         http_code = None
         working_proto = 'http'
+        working_host = '127.0.0.1'
 
-        # Probar rigurosamente si el puerto responde a peticiones HTTP o HTTPS
+        # Determinar orden de comprobación según el bind detectado
+        # Si está vinculado a 127.0.0.1 o 0.0.0.0, 127.0.0.1 es prioritario para evitar problemas con la resolución IPv6 de localhost
+        if bind_ip in ('127.0.0.1', '0.0.0.0'):
+            hosts_to_try = ['127.0.0.1', 'localhost']
+        else:
+            hosts_to_try = ['localhost', '127.0.0.1', '[::1]']
+
         if probe_http:
             for proto in ['http', 'https']:
-                for test_host in ['localhost', '127.0.0.1']:
+                for test_host in hosts_to_try:
                     test_url = f'{proto}://{test_host}:{port}/' if port not in (80, 443) else f'{proto}://{test_host}/'
                     try:
                         req = urllib.request.Request(
@@ -957,41 +965,67 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
                             }
                         )
                         ctx = SSL_UNVERIFIED_CTX if proto == 'https' else None
-                        with urllib.request.urlopen(req, timeout=0.6, context=ctx) as resp:
+                        with urllib.request.urlopen(req, timeout=0.65, context=ctx) as resp:
                             code = resp.getcode()
-                            if code:
-                                is_http = True
-                                http_code = code
-                                working_proto = proto
-                                content = resp.read(4096).decode('utf-8', errors='ignore')
-                                m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                                title = m.group(1).strip() if m else ''
-                                server_header = resp.headers.get('Server', '')
-                                break
+                            ctype = resp.headers.get('Content-Type', '').lower()
+                            content = resp.read(4096).decode('utf-8', errors='ignore')
+
+                            # VALIDACIÓN ESTRICTA DE PÁGINA WEB REAL:
+                            # Debe contener text/html o estructura reconocible de una aplicación web (HTML / SPA como ComfyUI)
+                            is_html = 'text/html' in ctype or any(tag in content.lower() for tag in ['<html', '<!doctype', '<head', '<title', '<body', '<div', '<script'])
+                            if not is_html:
+                                continue
+
+                            is_http = True
+                            http_code = code
+                            working_proto = proto
+                            working_host = test_host
+                            m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                            if m:
+                                title = m.group(1).strip()
+                            server_header = resp.headers.get('Server', '')
+                            break
                     except urllib.error.HTTPError as e:
-                        # Códigos HTTP reales que demuestran la existencia de un servidor web activo
-                        if e.code in (401, 403, 301, 302, 303, 307, 308, 400, 404, 405, 500, 502, 503):
+                        # Si es redirección legítima (301, 302, 303, 307, 308)
+                        if e.code in (301, 302, 303, 307, 308):
                             is_http = True
                             http_code = e.code
                             working_proto = proto
-                            content = e.read(4096).decode('utf-8', errors='ignore') if e.fp else ''
-                            m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                            title = m.group(1).strip() if m else (f'Acceso Protegido (HTTP {e.code})' if e.code in (401, 403) else f'Web (HTTP {e.code})')
+                            working_host = test_host
+                            title = f'Redirección (HTTP {e.code})'
                             server_header = e.headers.get('Server', '') if e.headers else ''
                             break
+                        # 401/403 únicamente si responde con página HTML estructurada (login o interfaz protegida)
+                        elif e.code in (401, 403):
+                            ctype = e.headers.get('Content-Type', '').lower() if e.headers else ''
+                            content = e.read(4096).decode('utf-8', errors='ignore') if e.fp else ''
+                            is_html = 'text/html' in ctype or any(tag in content.lower() for tag in ['<html', '<!doctype', '<head', '<title'])
+                            if is_html:
+                                is_http = True
+                                http_code = e.code
+                                working_proto = proto
+                                working_host = test_host
+                                m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                                title = m.group(1).strip() if m else f'Acceso Protegido (HTTP {e.code})'
+                                server_header = e.headers.get('Server', '') if e.headers else ''
+                                break
                     except Exception:
                         pass
                 if is_http:
                     break
 
-        # FILTRO ESTRICTO: Si no tiene interfaz web real y accesible, NO se lista
+        # Si NO es una web real verificada y accesible, se descarta por completo
         if not is_http:
             return None
 
-        final_url = f'{working_proto}://localhost:{port}' if port not in (80, 443) else f'{working_proto}://localhost'
+        # Construir URL con el host exacto verificado que responde (127.0.0.1 o localhost)
+        primary_url = f'{working_proto}://{working_host}:{port}' if port not in (80, 443) else f'{working_proto}://{working_host}'
+        alt_host = 'localhost' if working_host == '127.0.0.1' else '127.0.0.1'
+        alt_url = f'{working_proto}://{alt_host}:{port}' if port not in (80, 443) else f'{working_proto}://{alt_host}'
+
         label, icon, category = identify_local_service(port, proc_name, pid, title, server_header, content)
         is_loopback_only = bind_ip in ('127.0.0.1', '::1')
-        bind_label = 'Solo Local (localhost)' if is_loopback_only else f'Red Local ({bind_ip})'
+        bind_label = f'Solo Local ({working_host})' if is_loopback_only else f'Red Local ({bind_ip})'
 
         return {
             'port': port,
@@ -1002,7 +1036,9 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
             'process': proc_name,
             'is_http': True,
             'http_code': http_code,
-            'url': final_url,
+            'working_host': working_host,
+            'url': primary_url,
+            'alt_url': alt_url,
             'label': label,
             'title': title,
             'server': server_header,

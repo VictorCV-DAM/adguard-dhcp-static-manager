@@ -11465,7 +11465,9 @@ function renderLocalhostTabServices() {
     container.innerHTML = list.map(s => {
         const isWeb = s.is_http && s.url;
         const portColor = isWeb ? '#4ade80' : (s.is_loopback_only ? '#c084fc' : '#38bdf8');
-        const lanUrl = (!s.is_loopback_only && lIp && isWeb) ? s.url.replace('localhost', lIp) : null;
+        const hostLabel = s.working_host || (s.url && s.url.includes('127.0.0.1') ? '127.0.0.1' : 'localhost');
+        const altHostLabel = hostLabel === '127.0.0.1' ? 'localhost' : '127.0.0.1';
+        const lanUrl = (!s.is_loopback_only && lIp && isWeb) ? s.url.replace('localhost', lIp).replace('127.0.0.1', lIp) : null;
         const isPanel = (s.port === 5001 || (s.pid && _localhostInfo && String(s.pid) === String(_localhostInfo.panel_pid)));
 
         return `
@@ -11492,22 +11494,23 @@ function renderLocalhostTabServices() {
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     ${isWeb ? `
-                        <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" class="btn btn-primary" style="background:#22c55e; color:#0f172a; font-weight:700; padding:6px 14px; font-size:0.8rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px; border-radius:6px;" title="Abrir servicio web">
-                            Abrir localhost:${s.port} ↗
+                        <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" class="btn btn-primary" style="background:#22c55e; color:#0f172a; font-weight:700; padding:6px 13px; font-size:0.8rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px; border-radius:6px;" title="Abrir servicio verificado en ${escapeHtml(hostLabel)}:${s.port}">
+                            Abrir ${escapeHtml(hostLabel)}:${s.port} ↗
                         </a>
+                        ${s.alt_url ? `
+                            <a href="${escapeHtml(s.alt_url)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:rgba(255,255,255,0.18); color:#cbd5e1; padding:6px 9px; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center; gap:3px; border-radius:6px;" title="Alternativa en ${altHostLabel}:${s.port}">
+                                ${altHostLabel} ↗
+                            </a>
+                        ` : ''}
                         ${lanUrl ? `
-                            <a href="${escapeHtml(lanUrl)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:#38bdf8; color:#7dd3fc; padding:6px 10px; font-size:0.78rem; text-decoration:none; display:inline-flex; align-items:center; gap:4px; border-radius:6px;" title="Abrir vía LAN (${lIp})">
+                            <a href="${escapeHtml(lanUrl)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:#38bdf8; color:#7dd3fc; padding:6px 9px; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center; gap:3px; border-radius:6px;" title="Abrir vía IP LAN (${lIp})">
                                 LAN :${s.port} ↗
                             </a>
                         ` : ''}
-                        <button class="btn btn-outline" style="padding:6px 10px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(s.url)}', 'URL copiada')" title="Copiar enlace">
+                        <button class="btn btn-outline" style="padding:6px 9px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(s.url)}', 'URL copiada')" title="Copiar enlace verificado">
                             📋 Copiar
                         </button>
-                    ` : `
-                        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('localhost:${s.port}', 'Puerto copiado')" title="Copiar dirección">
-                            📋 localhost:${s.port}
-                        </button>
-                    `}
+                    ` : ''}
                     ${isPanel ? `
                         <span style="font-size:0.75rem; color:#64748b; font-weight:600; padding:5px 9px; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.08);" title="Este proceso es el propio panel DHCP">
                             🛡️ Panel DHCP
@@ -11642,7 +11645,9 @@ function renderLocalhostTabServices() {
                 ${list.map(s => {
                     const isWeb = s.is_http && s.url;
                     const portColor = isWeb ? '#4ade80' : (s.is_loopback_only ? '#c084fc' : '#38bdf8');
-                    const lanUrl = (!s.is_loopback_only && lIp && isWeb) ? s.url.replace('localhost', lIp) : null;
+                    const hostLabel = s.working_host || (s.url && s.url.includes('127.0.0.1') ? '127.0.0.1' : 'localhost');
+                    const altHostLabel = hostLabel === '127.0.0.1' ? 'localhost' : '127.0.0.1';
+                    const lanUrl = (!s.is_loopback_only && lIp && isWeb) ? s.url.replace('localhost', lIp).replace('127.0.0.1', lIp) : null;
                     return `
                         <div style="background:#1e293b; border:1px solid ${isWeb ? 'rgba(74,222,128,0.35)' : 'var(--border)'}; border-radius:10px; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; transition:border-color 0.15s, background 0.15s;">
                             <div style="display:flex; align-items:center; gap:12px; min-width:260px; flex:1;">
@@ -11667,22 +11672,23 @@ function renderLocalhostTabServices() {
                             </div>
                             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                                 ${isWeb ? `
-                                    <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" class="btn btn-primary" style="background:#22c55e; color:#0f172a; font-weight:700; padding:6px 14px; font-size:0.8rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px; border-radius:6px;" title="Abrir servicio web en navegador">
-                                        Abrir localhost:${s.port} ↗
+                                    <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" class="btn btn-primary" style="background:#22c55e; color:#0f172a; font-weight:700; padding:6px 13px; font-size:0.8rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px; border-radius:6px;" title="Abrir servicio verificado en ${escapeHtml(hostLabel)}:${s.port}">
+                                        Abrir ${escapeHtml(hostLabel)}:${s.port} ↗
                                     </a>
+                                    ${s.alt_url ? `
+                                        <a href="${escapeHtml(s.alt_url)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:rgba(255,255,255,0.18); color:#cbd5e1; padding:6px 9px; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center; gap:3px; border-radius:6px;" title="Alternativa en ${altHostLabel}:${s.port}">
+                                            ${altHostLabel} ↗
+                                        </a>
+                                    ` : ''}
                                     ${lanUrl ? `
-                                        <a href="${escapeHtml(lanUrl)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:#38bdf8; color:#7dd3fc; padding:6px 10px; font-size:0.78rem; text-decoration:none; display:inline-flex; align-items:center; gap:4px; border-radius:6px;" title="Abrir vía IP LAN (${lIp})">
+                                        <a href="${escapeHtml(lanUrl)}" target="_blank" rel="noopener" class="btn btn-outline" style="border-color:#38bdf8; color:#7dd3fc; padding:6px 9px; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center; gap:3px; border-radius:6px;" title="Abrir vía IP LAN (${lIp})">
                                             LAN :${s.port} ↗
                                         </a>
                                     ` : ''}
-                                    <button class="btn btn-outline" style="padding:6px 10px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(s.url)}', 'URL copiada')" title="Copiar enlace">
+                                    <button class="btn btn-outline" style="padding:6px 9px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(s.url)}', 'URL copiada')" title="Copiar enlace verificado">
                                         📋 Copiar
                                     </button>
-                                ` : `
-                                    <button class="btn btn-outline" style="padding:6px 12px; font-size:0.78rem; border-radius:6px;" onclick="copyToClipboard('localhost:${s.port}', 'Puerto copiado')" title="Copiar dirección">
-                                        📋 localhost:${s.port}
-                                    </button>
-                                `}
+                                ` : ''}
                                 ${(s.port === 5001 || (s.pid && _localhostInfo && String(s.pid) === String(_localhostInfo.panel_pid))) ? `
                                     <span style="font-size:0.75rem; color:#64748b; font-weight:600; padding:5px 9px; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.08);" title="Este proceso es el propio panel DHCP en ejecución">
                                         🛡️ Panel DHCP
