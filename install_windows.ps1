@@ -24,9 +24,28 @@ Write-Host ""
 
 $pyExe = $null
 
+function Update-PthFile($dir) {
+    $pthFile = Get-ChildItem -Path $dir -Filter "*._pth" | Select-Object -First 1
+    if ($pthFile) {
+        $rawPth = [System.IO.File]::ReadAllText($pthFile.FullName)
+        if ($rawPth -notmatch 'import\s+site') {
+            $rawPth = $rawPth -replace '#\s*import\s+site', 'import site'
+        }
+        if ($rawPth -notmatch 'Lib\\site-packages') {
+            $rawPth += "`r`nLib\site-packages"
+        }
+        if ($rawPth -notmatch '(?m)^\.\.$') {
+            $rawPth += "`r`n..`r`n."
+        }
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($pthFile.FullName, $rawPth, $utf8NoBom)
+    }
+}
+
 # 1. Comprobar si ya existe una instancia previa en python_portable
 if (Test-Path (Join-Path $TargetDir "python.exe")) {
     $pyExe = Join-Path $TargetDir "python.exe"
+    Update-PthFile $TargetDir
     Write-Host "[OK] Detectada instancia portable existente en python_portable\python.exe" -ForegroundColor Green
 } elseif (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
     $pyExe = Join-Path $TargetDir "Scripts\python.exe"
@@ -50,14 +69,8 @@ if (Test-Path (Join-Path $TargetDir "python.exe")) {
         Expand-Archive -Path $zipPath -DestinationPath $TargetDir -Force
         Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 
-        # Habilitar soporte de paquetes (site-packages) en el archivo ._pth
-        $pthFile = Get-ChildItem -Path $TargetDir -Filter "*._pth" | Select-Object -First 1
-        if ($pthFile) {
-            $rawPth = [System.IO.File]::ReadAllText($pthFile.FullName)
-            $rawPth = $rawPth -replace '#\s*import\s+site', "import site`r`nLib\site-packages"
-            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-            [System.IO.File]::WriteAllText($pthFile.FullName, $rawPth, $utf8NoBom)
-        }
+        # Habilitar soporte de paquetes (site-packages) y directorio de la app en ._pth
+        Update-PthFile $TargetDir
 
         # Descargar e instalar pip
         Write-Host "      Instalando gestor de paquetes pip en la instancia portable..." -ForegroundColor Gray
@@ -145,6 +158,8 @@ $launcherContent = @"
 chcp 65001 >nul
 title AdGuard DHCP Panel (Portable)
 cd /d "%~dp0"
+
+set "PYTHONPATH=%~dp0;%PYTHONPATH%"
 
 echo ==================================================================
 echo   Iniciando AdGuard DHCP Panel Privado (Instancia Portable)

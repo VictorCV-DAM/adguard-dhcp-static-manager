@@ -1,3 +1,11 @@
+import sys
+import os
+
+# Garantizar que el directorio raíz del proyecto esté en sys.path (imprescindible para Python Embeddable/Portable)
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _CURRENT_DIR not in sys.path:
+    sys.path.insert(0, _CURRENT_DIR)
+
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 import secrets
