@@ -57,7 +57,8 @@ DEFAULT_CONFIG = {
     "custom_service_names": {},
     "ha_plugin_enabled": False,
     "home_assistant_instances": [],
-    "routers": []
+    "routers": [],
+    "detect_localhost_services": False
 }
 
 # Diccionario de prefijos MAC (OUI) conocidos -> (Fabricante, Clase sugerida, Icono)
@@ -1098,6 +1099,8 @@ def save_config(new_cfg):
         cfg['ha_plugin_enabled'] = bool(new_cfg['ha_plugin_enabled'])
     if 'home_assistant_instances' in new_cfg and isinstance(new_cfg['home_assistant_instances'], list):
         cfg['home_assistant_instances'] = new_cfg['home_assistant_instances']
+    if 'detect_localhost_services' in new_cfg:
+        cfg['detect_localhost_services'] = bool(new_cfg['detect_localhost_services'])
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, indent=2)
     # Invalidar caché de Mercusys y HA
@@ -2448,24 +2451,29 @@ def build_state(force_refresh=False):
             })
             seen_ips.add(aip)
 
-    # Descubrir servicios en localhost del host local donde se ejecuta el panel
-    localhost_svcs = scan_localhost_services(probe_http=True, force_refresh=force_refresh)
+    # Descubrir servicios en localhost del host local donde se ejecuta el panel (OPCIONAL, según configuración)
+    detect_lh = bool(cfg.get('detect_localhost_services', False))
+    localhost_svcs = []
     host_web_links = []
     host_open_ports = set()
-    for s in localhost_svcs:
-        p = s.get('port')
-        if p:
-            host_open_ports.add(p)
-        if s.get('is_http') and s.get('url'):
-            lbl = s.get('label') or f"Servicio (:{p})"
-            host_web_links.append({
-                'label': lbl,
-                'url': s['url'],
-                'port': p,
-                'default_label': lbl,
-                'is_custom': False,
-                'bind': s.get('bind', '127.0.0.1')
-            })
+
+    if detect_lh:
+        localhost_svcs = scan_localhost_services(probe_http=True, force_refresh=force_refresh)
+        for s in localhost_svcs:
+            p = s.get('port')
+            if p:
+                host_open_ports.add(p)
+            if s.get('is_http') and s.get('url'):
+                lbl = s.get('label') or f"Servicio (:{p})"
+                host_web_links.append({
+                    'label': lbl,
+                    'url': s['url'],
+                    'port': p,
+                    'default_label': lbl,
+                    'is_custom': False,
+                    'bind': s.get('bind', '127.0.0.1')
+                })
+
     if not any(w.get('port') == 5001 for w in host_web_links):
         host_web_links.insert(0, {
             'label': 'Panel DHCP (:5001)',
@@ -2730,8 +2738,10 @@ def build_state(force_refresh=False):
         'static_order_summary': static_order_summary,
         'ha_plugin_enabled': cfg.get('ha_plugin_enabled', False),
         'home_assistant_instances': cfg.get('home_assistant_instances', []),
+        'detect_localhost_services': detect_lh,
         'localhost_services': localhost_svcs,
         'localhost_info': {
+            'enabled': detect_lh,
             'hostname': socket.gethostname(),
             'local_ip': local_ip,
             'platform': platform.system(),
@@ -2743,11 +2753,14 @@ def build_state(force_refresh=False):
 
 @app.route('/api/localhost-services', methods=['GET', 'POST'])
 def api_localhost_services():
+    cfg = load_config()
+    detect_lh = bool(cfg.get('detect_localhost_services', False))
     force = bool(request.args.get('force') or request.args.get('refresh') or request.method == 'POST')
-    services = scan_localhost_services(probe_http=True, force_refresh=force)
+    services = scan_localhost_services(probe_http=True, force_refresh=force) if (detect_lh or force) else []
     local_ip, _, _ = get_network_info()
     return jsonify({
         'success': True,
+        'enabled': detect_lh,
         'hostname': socket.gethostname(),
         'local_ip': local_ip,
         'platform': platform.system(),

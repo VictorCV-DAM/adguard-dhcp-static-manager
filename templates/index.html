@@ -1484,7 +1484,7 @@
             <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columnas</button>
             <button class="btn btn-outline" onclick="openStaticOrderModal()">📌 Orden de Fijadas <span id="btn-statics-badge" class="badge" style="background:rgba(56,189,248,0.18); color:#38bdf8; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
             <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="openMacHunterModal()" title="Cazador forense de dispositivos por MAC">🔍 Cazador de MAC</button>
-            <button class="btn btn-outline" style="border-color:#a855f7; color:#d8b4fe; font-weight:600;" onclick="openLocalhostModal()" title="Servicios locales activos en este ordenador (localhost:puerto)">💻 Servicios Locales <span id="btn-localhost-badge" class="badge" style="background:rgba(168,85,247,0.22); color:#d8b4fe; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
+            <button class="btn btn-outline" id="btn-header-localhost" style="display:none; border-color:#a855f7; color:#d8b4fe; font-weight:600;" onclick="openLocalhostModal()" title="Servicios locales activos en este ordenador (localhost:puerto)">💻 Servicios Locales <span id="btn-localhost-badge" class="badge" style="background:rgba(168,85,247,0.22); color:#d8b4fe; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
             <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Configuraciones (AdGuard / Routers)</button>
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
                 <button class="btn btn-outline" style="font-weight:600;" onclick="toggleUserMenu(event)" title="Sesión y seguridad">👤 {{ auth_user }} ▾</button>
@@ -1639,6 +1639,9 @@
                 </div>
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:700; color:#f8fafc; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:8px; border:1px solid var(--border);">
                     <input type="checkbox" id="cfg-ha-plugin-enabled" onchange="toggleHaPluginUi(this.checked)"> Activar Plugin Home Assistant
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:700; color:#f8fafc; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:8px; border:1px solid var(--border);" title="Escanea y muestra en la barra superior los puertos y aplicaciones en escucha en este ordenador">
+                    <input type="checkbox" id="cfg-detect-localhost-services" onchange="toggleLocalhostFeature(this.checked)"> 💻 Detectar Servicios Locales (<span style="color:#c084fc; font-family:monospace;">localhost:puerto</span>)
                 </label>
             </div>
             
@@ -3685,6 +3688,12 @@ async function loadConfig() {
     haInstancesConfig = Array.isArray(c.home_assistant_instances) ? c.home_assistant_instances : [];
     toggleHaPluginUi(haPluginEnabled);
     renderHaInstancesList();
+
+    // Localhost Services Detection (Opcional)
+    const lhEnabled = !!c.detect_localhost_services;
+    const chkLh = document.getElementById('cfg-detect-localhost-services');
+    if (chkLh) chkLh.checked = lhEnabled;
+    toggleLocalhostFeature(lhEnabled);
 }
 
 
@@ -4099,6 +4108,7 @@ async function saveConfig() {
         routers: routersConfig,
         wifi_plugin_enabled: !!document.getElementById('cfg-wifi-plugin-enabled')?.checked,
         ha_plugin_enabled: !!document.getElementById('cfg-ha-plugin-enabled')?.checked,
+        detect_localhost_services: !!document.getElementById('cfg-detect-localhost-services')?.checked,
         home_assistant_instances: haInstancesConfig
     };
     const res = await fetch('/api/config', {
@@ -4186,7 +4196,9 @@ async function loadState(isManual = false, showToast = isManual) {
         renderServicesCards();
         updateStaticOrderWidgets(data.static_order_summary);
         updateTabsCounts();
-        if (data.localhost_info || data.localhost_services) {
+        const lhEnabled = !!data.detect_localhost_services;
+        toggleLocalhostFeature(lhEnabled);
+        if (lhEnabled && (data.localhost_info || data.localhost_services)) {
             updateLocalhostBadge(data.localhost_info, data.localhost_services);
         }
         if (currentMainTab === 'ipmap') loadIpMap();
@@ -11192,6 +11204,14 @@ function sortByStaticOrder(toggle = true) {
 
     <script>
     // ==================== SERVICIOS LOCALHOST DEL HOST ====================
+    function toggleLocalhostFeature(enabled) {
+        const btn = document.getElementById('btn-header-localhost');
+        if (btn) btn.style.display = enabled ? 'inline-flex' : 'none';
+        if (enabled && (!_localhostServicesData || _localhostServicesData.length === 0)) {
+            refreshLocalhostServices(false);
+        }
+    }
+
     let _localhostServicesData = [];
     let _localhostInfo = {};
     let _localhostCurrentFilter = 'all';
