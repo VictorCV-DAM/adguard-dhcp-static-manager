@@ -13,7 +13,8 @@ El repositorio incluye auto-instaladores independientes que configuran una **ins
    * Descarga y configura automáticamente Python 3.11 Embeddable / Portable en `python_portable\`.
    * Instala las dependencias necesarias (`Flask`, `cryptography`) dentro de esa carpeta.
    * Genera el archivo `config.json` si no existe.
-2. Para iniciar el panel: doble clic en **`iniciar_windows.bat`** (o `start_windows.bat`).
+2. **Iniciar:** doble clic en **`iniciar_windows.bat`** (o `start_windows.bat`).
+3. **Detener:** doble clic en **`detener_windows.bat`** (o `stop_windows.bat`) para cerrar la aplicación y liberar el puerto.
 
 ### 🐧 En Linux / Raspberry Pi
 1. Dale permisos de ejecución y ejecuta el instalador:
@@ -25,11 +26,15 @@ El repositorio incluye auto-instaladores independientes que configuran una **ins
    * Instala las dependencias exclusivamente en `python_portable/` (cumpliendo con PEP 668 en Debian Bookworm / Raspberry Pi OS sin tocar el Python del sistema).
    * Genera `config.json` si no existe.
    * Actualiza el servicio `dhcp-panel.service` para apuntar a la instancia portable.
-2. Para iniciar manualmente:
+2. **Iniciar manualmente:**
    ```bash
    ./iniciar_linux.sh
    ```
-3. O para activarlo como servicio persistente en segundo plano (systemd):
+3. **Detener:**
+   ```bash
+   ./detener_linux.sh
+   ```
+4. O para activarlo como servicio persistente en segundo plano (systemd):
    ```bash
    sudo cp dhcp-panel.service /etc/systemd/system/
    sudo systemctl daemon-reload
