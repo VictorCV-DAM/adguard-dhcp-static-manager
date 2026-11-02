@@ -2657,6 +2657,7 @@ function resetAllFilters() {
 const DEFAULT_COLUMNS = [
     { id: 'hostname', label: 'Dispositivo', visible: true, width: 195 },
     { id: 'prediction', label: 'Predicción / Clase', visible: true, width: 200 },
+    { id: 'hunter', label: 'Cazador / HA', visible: true, width: 185 },
     { id: 'medium', label: 'Medio', visible: true, width: 120 },
     { id: 'router', label: 'Router / Conexión', visible: true, width: 165 },
     { id: 'ip', label: 'IP en AdGuard', visible: true, width: 125 },
@@ -2672,11 +2673,27 @@ let columnsConfig = loadColumnsConfig();
 
 function loadColumnsConfig() {
     try {
-        const raw = localStorage.getItem('dhcp_panel_columns_v3');
+        const raw = localStorage.getItem('dhcp_panel_columns_v4') || localStorage.getItem('dhcp_panel_columns_v3');
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length === DEFAULT_COLUMNS.length) {
-                return parsed;
+            if (Array.isArray(parsed)) {
+                const existingIds = new Set(parsed.map(c => c.id));
+                const merged = parsed.filter(c => DEFAULT_COLUMNS.some(d => d.id === c.id));
+                for (const def of DEFAULT_COLUMNS) {
+                    if (!existingIds.has(def.id)) {
+                        if (def.id === 'hunter') {
+                            const predIdx = merged.findIndex(c => c.id === 'prediction');
+                            if (predIdx >= 0) {
+                                merged.splice(predIdx + 1, 0, JSON.parse(JSON.stringify(def)));
+                            } else {
+                                merged.push(JSON.parse(JSON.stringify(def)));
+                            }
+                        } else {
+                            merged.push(JSON.parse(JSON.stringify(def)));
+                        }
+                    }
+                }
+                return merged;
             }
         }
     } catch (e) {}
@@ -2684,7 +2701,7 @@ function loadColumnsConfig() {
 }
 
 function saveColumnsConfig() {
-    localStorage.setItem('dhcp_panel_columns_v3', JSON.stringify(columnsConfig));
+    localStorage.setItem('dhcp_panel_columns_v4', JSON.stringify(columnsConfig));
 }
 
 function resetColumns() {
@@ -4413,6 +4430,7 @@ function getSortValue(d, colId) {
     switch (colId) {
         case 'hostname': return (d.hostname || '').toLowerCase();
         case 'prediction': return `${d.dev_class || ''} ${d.dev_vendor || ''}`.toLowerCase();
+        case 'hunter': return ((d.ha_info && d.ha_info.name) || (d.dev_vendor || '')).toLowerCase();
         case 'medium': return (d.conn_medium_label || '').toLowerCase();
         case 'mac': return (d.mac || '').toLowerCase();
         case 'ip': return ipToNum(d.ip);
@@ -4611,7 +4629,8 @@ function renderTable() {
         const portsText = openPorts.map(p => `${p} :${p} port:${p} puerto:${p}`).join(' ');
         const servicesText = (d.web_links || []).map(w => `${w.label} ${w.default_label || ''} ${w.url}`).join(' ');
         const tagsText = `${d.room || ''} ${(d.tags || []).join(' ')} ${d.notes || ''} ${d.os_guess || ''}`;
-        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText} ${tagsText}`.toLowerCase();
+        const haSearchText = d.ha_info ? `${d.ha_info.name || ''} ${d.ha_info.manufacturer || ''} ${d.ha_info.model || ''} ${d.ha_info.area || ''}` : '';
+        const text = `${d.hostname} ${d.dev_class || ''} ${d.dev_vendor || ''} ${d.mac} ${d.ip} ${haSearchText} ${d.router_node || ''} ${d.conn_medium || ''} ${d.conn_medium_label || ''} ${(d.live_ips || []).join(' ')} ${portsText} ${servicesText} ${tagsText}`.toLowerCase();
         return text.includes(q);
     });
 
@@ -4795,9 +4814,66 @@ function renderTable() {
             ${d.first_seen ? `<div>1ª: ${fmtRelTime(d.first_seen)}</div>` : ''}
         </div>`;
 
+        let hunterHtml = '';
+        if (d.ha_info && d.ha_info.name) {
+            const ha = d.ha_info;
+            const pwr = ha.power_w != null ? `<span style="color:#fde047; font-weight:700; font-size:0.71rem;">⚡${ha.power_w}W</span>` : '';
+            const st = ha.state ? `<span class="badge" style="background:${ha.state === 'on' ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.06)'}; color:${ha.state === 'on' ? '#86efac' : 'var(--muted)'}; font-size:0.65rem; padding:1px 5px;">${ha.state.toUpperCase()}</span>` : '';
+            hunterHtml = `
+                <div style="line-height:1.3; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                        <a class="hostname-link" style="color:#38bdf8; font-weight:700; font-size:0.83rem; cursor:pointer;" onclick="openMacHunterModal('${d.mac}')" title="Vinculado en Home Assistant (${escapeHtml(ha.instance_name || 'HA')})\nHaz clic para abrir el análisis forense">
+                            🏠 ${escapeHtml(ha.name)}
+                        </a>
+                        ${st}
+                        ${pwr}
+                    </div>
+                    <div style="font-size:0.71rem; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                        <span>${escapeHtml(ha.manufacturer || '')} ${escapeHtml(ha.model || '')}</span>
+                        ${ha.area ? `<span style="color:#94a3b8;">· 📍 ${escapeHtml(ha.area)}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        } else {
+            const hostLow = (d.hostname || '').toLowerCase();
+            let clue = '';
+            let clueIcon = '🔍';
+            if (hostLow.startsWith('esp-') || (d.dev_vendor && d.dev_vendor.toLowerCase().includes('espressif'))) {
+                clue = 'Espressif / Tuya Smart';
+                clueIcon = '⚡';
+            } else if (hostLow.includes('ck-bl602') || (d.dev_vendor && d.dev_vendor.toLowerCase().includes('sonoff'))) {
+                clue = 'Sonoff / CoolKit BL602';
+                clueIcon = '🔌';
+            } else if (hostLow.startsWith('desktop-') || hostLow.startsWith('laptop-')) {
+                clue = 'PC Microsoft Windows';
+                clueIcon = '💻';
+            } else if (d.dev_vendor && d.dev_vendor !== 'Desconocido') {
+                clue = d.dev_vendor;
+                clueIcon = '🏷️';
+            } else if (d.dev_class && d.dev_class !== 'Desconocido') {
+                clue = d.dev_class;
+                clueIcon = d.dev_icon || '🔹';
+            } else {
+                clue = 'No vinculado en HA';
+                clueIcon = '⚪';
+            }
+
+            hunterHtml = `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; min-width:0;">
+                    <span style="font-size:0.73rem; color:var(--muted); line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(clue)}">
+                        ${clueIcon} ${escapeHtml(clue)}
+                    </span>
+                    <button class="btn btn-outline" style="padding:1px 6px; font-size:0.67rem; color:#38bdf8; border-color:rgba(56,189,248,0.3); background:rgba(56,189,248,0.06); line-height:1.2; flex-shrink:0;" onclick="openMacHunterModal('${d.mac}')" title="Abrir análisis forense del Cazador para ${d.mac}">
+                        🔍 Cazador
+                    </button>
+                </div>
+            `;
+        }
+
         const cellMap = {
             hostname: hostHtml,
             prediction: predHtml,
+            hunter: hunterHtml,
             medium: mediumHtml,
             mac: macHtml,
             ip: ipCellHtml,
