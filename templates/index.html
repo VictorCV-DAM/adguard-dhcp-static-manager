@@ -1440,6 +1440,7 @@
             return isClean;
         }
     </script>
+    <script src="/static/translations.js"></script>
 </head>
 <body>
 <div class="container">
@@ -1462,15 +1463,15 @@
             </svg>
             <div>
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <h1 style="margin:0;">Gestor Directo de IPs Estáticas — AdGuard Home</h1>
-                    <span id="adguard-status-badge" style="font-size:0.75rem; font-weight:700; padding:3px 10px; border-radius:12px; background:rgba(16,185,129,0.18); color:#34d399; border:1px solid rgba(16,185,129,0.4);" title="Comprobando conexión con AdGuard Home...">🟢 AdGuard Activo</span>
+                    <h1 style="margin:0;" data-i18n="header_title">Gestor Directo de IPs Estáticas — AdGuard Home</h1>
+                    <span id="adguard-status-badge" style="font-size:0.75rem; font-weight:700; padding:3px 10px; border-radius:12px; background:rgba(16,185,129,0.18); color:#34d399; border:1px solid rgba(16,185,129,0.4);" title="Comprobando conexión con AdGuard Home..." data-i18n="badge_adguard_active">🟢 AdGuard Activo</span>
                 </div>
-                <p class="subtitle" style="margin-top:4px;">Reasigna IPs estáticas purgando la concesión previa al instante sin reducir tus 12 horas de estabilidad.</p>
+                <p class="subtitle" style="margin-top:4px;" data-i18n="header_subtitle">Reasigna IPs estáticas purgando la concesión previa al instante sin reducir tus 12 horas de estabilidad.</p>
             </div>
         </div>
         <div class="header-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
-                <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="toggleNetworkMenu(event)">🌐 Equipos de Red ▾</button>
+                <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" data-i18n="btn_network_equip" onclick="toggleNetworkMenu(event)">🌐 Equipos de Red ▾</button>
                 <div id="network-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid #38bdf8; border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:320px; z-index:150; padding:8px 0;">
                     <div style="padding:6px 14px 8px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:#94a3b8; border-bottom:1px solid rgba(148,163,184,0.15);">
                         Interfaces de Gestión de Red
@@ -1480,12 +1481,27 @@
                     </div>
                 </div>
             </div>
-            <button class="btn btn-outline" onclick="openAlertsModal()">🔔 Alertas</button>
-            <button class="btn btn-outline" onclick="openBackupModal()">💾 Exportar / Importar</button>
-            <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columnas</button>
-            <button class="btn btn-outline" onclick="openStaticOrderModal()">📌 Orden de Fijadas <span id="btn-statics-badge" class="badge" style="background:rgba(56,189,248,0.18); color:#38bdf8; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
-            <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="openMacHunterModal()" title="Cazador forense de dispositivos por MAC">🔍 Cazador de MAC</button>
-            <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Configuraciones (AdGuard / Routers)</button>
+            <button class="btn btn-outline" data-i18n="btn_alerts" onclick="openAlertsModal()">🔔 Alertas</button>
+            <button class="btn btn-outline" data-i18n="btn_export_import" onclick="openBackupModal()">💾 Exportar / Importar</button>
+            <button class="btn btn-outline" data-i18n="btn_columns" onclick="toggleColumnsPanel()">📊 Columnas</button>
+            <button class="btn btn-outline" data-i18n="btn_static_order" onclick="openStaticOrderModal()">📌 Orden de Fijadas <span id="btn-statics-badge" class="badge" style="background:rgba(56,189,248,0.18); color:#38bdf8; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
+            <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" data-i18n="btn_mac_hunter" data-i18n-title="mac_hunter_tooltip" onclick="openMacHunterModal()" title="Cazador forense de dispositivos por MAC">🔍 Cazador de MAC</button>
+            <button class="btn btn-outline" data-i18n="btn_settings" onclick="toggleSettings()">⚙️ Configuraciones (AdGuard / Routers)</button>
+            <!-- DESPLEGABLE DE IDIOMAS (ES / EN) -->
+            <div id="lang-selector-wrapper" class="dropdown-wrapper" style="position:relative; display:inline-block;">
+                <button id="lang-selector-btn" class="btn btn-outline" style="font-weight:600; padding:6px 12px; display:inline-flex; align-items:center; gap:6px; border-color:#38bdf8;" onclick="toggleLangMenu(event)" title="Cambiar idioma / Change language">
+                    🌐 <span id="current-lang-label">🇪🇸 ES</span> ▾
+                </button>
+                <div id="lang-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid #38bdf8; border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:145px; z-index:155; padding:6px 0;">
+                    <a href="#" class="dropdown-item-link" style="display:flex; align-items:center; gap:8px; padding:9px 14px; color:#f8fafc; text-decoration:none; font-size:0.85rem;" onclick="setLanguage('es', event)">
+                        <span>🇪🇸</span> <span>Español</span>
+                    </a>
+                    <a href="#" class="dropdown-item-link" style="display:flex; align-items:center; gap:8px; padding:9px 14px; color:#f8fafc; text-decoration:none; font-size:0.85rem;" onclick="setLanguage('en', event)">
+                        <span>🇬🇧</span> <span>English</span>
+                    </a>
+                </div>
+            </div>
+
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
                 <button class="btn btn-outline" style="font-weight:600;" onclick="toggleUserMenu(event)" title="Sesión y seguridad">👤 {{ auth_user }} ▾</button>
                 <div id="user-menu-dropdown" class="dropdown-menu-custom" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#1e293b; border:1px solid var(--border); border-radius:10px; box-shadow:0 14px 35px rgba(0,0,0,0.65); min-width:240px; z-index:150; padding:6px 0;">
@@ -1665,22 +1681,22 @@
 
     <!-- BARRA DE PESTAÑAS PRINCIPALES -->
     <div id="main-tabs-bar" class="main-tabs-bar" style="display:flex; gap:10px; margin: 20px 0 16px 0; border-bottom: 2px solid var(--border); padding-bottom: 4px; flex-wrap:wrap;">
-        <button id="tab-btn-devices" class="tab-nav-btn active" data-tab="devices" draggable="true" onclick="onMainTabClick('devices', event)" title="Arrastra para reordenar esta pestaña">
+        <button id="tab-btn-devices" data-i18n="tab_devices" class="tab-nav-btn active" data-tab="devices" draggable="true" onclick="onMainTabClick('devices', event)" title="Arrastra para reordenar esta pestaña">
             📋 Dispositivos de Red <span id="tab-badge-devices" class="tab-badge">0</span>
         </button>
-        <button id="tab-btn-services" class="tab-nav-btn" data-tab="services" draggable="true" onclick="onMainTabClick('services', event)" title="Arrastra para reordenar esta pestaña">
+        <button id="tab-btn-services" data-i18n="tab_services" class="tab-nav-btn" data-tab="services" draggable="true" onclick="onMainTabClick('services', event)" title="Arrastra para reordenar esta pestaña" data-i18n="tab_services">
             🌐 Servicios y Aplicaciones Web <span id="tab-badge-services" class="tab-badge tab-badge-services">0</span>
         </button>
-        <button id="tab-btn-ipmap" class="tab-nav-btn" data-tab="ipmap" draggable="true" onclick="onMainTabClick('ipmap', event)" title="Arrastra para reordenar esta pestaña">
+        <button id="tab-btn-ipmap" data-i18n="tab_ipmap" class="tab-nav-btn" data-tab="ipmap" draggable="true" onclick="onMainTabClick('ipmap', event)" title="Arrastra para reordenar esta pestaña">
             🗺️ Mapa de IPs (1–254)
         </button>
-        <button id="tab-btn-topology" class="tab-nav-btn" data-tab="topology" draggable="true" onclick="onMainTabClick('topology', event)" title="Arrastra para reordenar esta pestaña">
+        <button id="tab-btn-topology" data-i18n="tab_topology" class="tab-nav-btn" data-tab="topology" draggable="true" onclick="onMainTabClick('topology', event)" title="Arrastra para reordenar esta pestaña" data-i18n="tab_topology">
             🕸️ Topología de Red
         </button>
-        <button id="tab-btn-timeline" class="tab-nav-btn" data-tab="timeline" draggable="true" onclick="onMainTabClick('timeline', event)" title="Arrastra para reordenar esta pestaña">
+        <button id="tab-btn-timeline" data-i18n="tab_timeline" class="tab-nav-btn" data-tab="timeline" draggable="true" onclick="onMainTabClick('timeline', event)" title="Arrastra para reordenar esta pestaña">
             📅 Línea Temporal
         </button>
-        <button id="tab-btn-wifirf" class="tab-nav-btn" data-tab="wifirf" draggable="true" onclick="onMainTabClick('wifirf', event)" title="Arrastra para reordenar esta pestaña" style="display:none;">
+        <button id="tab-btn-wifirf" data-i18n="tab_wifirf" class="tab-nav-btn" data-tab="wifirf" draggable="true" onclick="onMainTabClick('wifirf', event)" title="Arrastra para reordenar esta pestaña" style="display:none;">
             ⚡ Expulsión Forzosa Wi-Fi
         </button>
         <button id="tab-btn-diagnostics" class="tab-nav-btn" data-tab="diagnostics" draggable="true" onclick="onMainTabClick('diagnostics', event)" title="Arrastra para reordenar esta pestaña">
@@ -1699,11 +1715,11 @@
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; margin-bottom:12px;">
                 <div>
                     <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Nombre del dispositivo (Hostname)</label>
-                    <input type="text" id="in-hostname" placeholder="Ej. enchufe-carga-oukitel" style="width:100%;">
+                    <input type="text" id="in-hostname" placeholder="Ej. enchufe-carga-oukitel" data-i18n-placeholder="card_assign_hostname_ph" style="width:100%;">
                 </div>
                 <div>
                     <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección MAC</label>
-                    <input type="text" id="in-mac" placeholder="a8:80:55:d2:df:80" oninput="onMacInputCard(this.value)" style="width:100%;">
+                    <input type="text" id="in-mac" placeholder="a8:80:55:d2:df:80" data-i18n-placeholder="card_assign_mac_ph" oninput="onMacInputCard(this.value)" style="width:100%;">
                 </div>
                 <div>
                     <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección IP (192.168.1.X)</label>
@@ -1716,10 +1732,10 @@
             
             <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
                 <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Envía un paquete DHCPNAK por red local y solicita desasociación al Router o nodos Mesh si está soportado">
-                    <input type="checkbox" id="card-force-reconnect" checked> ⚡ Forzar por Router / Mesh (DHCPNAK)
+                    <input type="checkbox" id="card-force-reconnect" checked> ⚡ <span data-i18n="card_assign_force_router">Forzar por Router / Mesh (DHCPNAK)</span>
                 </label>
                 <label id="card-rf-reconnect-wrap" style="font-size:0.79rem; color:#38bdf8; display:none; align-items:center; gap:6px; cursor:pointer;" title="Envía tramas de desautenticación WiFi 802.11 por el aire usando la antena monitor de la Raspberry Pi">
-                    <input type="checkbox" id="card-force-rf"> 📡 Expulsión Forzosa por Radiofrecuencia (RF) <span id="card-rf-status-hint" style="font-size:0.73rem; color:var(--muted); margin-left:4px;"></span>
+                    <input type="checkbox" id="card-force-rf"> 📡 <span data-i18n="card_assign_force_rf">Expulsión Forzosa por Radiofrecuencia (RF)</span> <span id="card-rf-status-hint" style="font-size:0.73rem; color:var(--muted); margin-left:4px;"></span>
                 </label>
             </div>
 
@@ -1734,7 +1750,7 @@
         </div>
 
         <div class="card">
-            <h3>Estado del Servidor DHCP</h3>
+            <h3 data-i18n="card_dhcp_title">Estado del Servidor DHCP</h3>
             <p style="margin: 6px 0; font-size: 0.9rem;">
                 Tiempo de concesión actual: <strong id="lbl-duration">...</strong>
             </p>
@@ -1806,7 +1822,7 @@
                     <span id="icon-table-width">↔</span>
                     <span id="lbl-table-width">Ampliar Ancho</span>
                 </button>
-                <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()">✕ Restablecer Filtros</button>
+                <button id="btn-reset-filters" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; border-radius:999px; display:none;" onclick="resetAllFilters()" data-i18n="btn_reset_filters">✕ Restablecer Filtros</button>
                 <button id="btn-refresh" class="btn btn-outline" style="padding:7px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; font-weight:600; border-color:var(--border);" onclick="manualRefresh()" title="Actualizar inmediatamente dispositivos y puertos">
                     <span id="refresh-icon" style="font-size:0.95rem; line-height:1;">🔄</span>
                     <span id="refresh-text">Actualizar</span>
@@ -2410,10 +2426,10 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:10px;">
                     <div style="display:flex; flex-direction:column; gap:6px;">
                         <label style="font-size:0.79rem; color:#fcd34d; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Fuerza la reconexión por red local a través del Router o nodos Mesh (y envía DHCPNAK)">
-                            <input type="checkbox" id="ds-force-reconnect"> ⚡ Forzar por Router / Mesh (DHCPNAK) <span id="ds-connected-router-hint" style="color:var(--muted); font-size:0.73rem; margin-left:4px;"></span>
+                            <input type="checkbox" id="ds-force-reconnect"> ⚡ <span data-i18n="card_assign_force_router">Forzar por Router / Mesh (DHCPNAK)</span> <span id="ds-connected-router-hint" style="color:var(--muted); font-size:0.73rem; margin-left:4px;"></span>
                         </label>
                         <label id="ds-rf-reconnect-wrap" style="font-size:0.79rem; color:#38bdf8; display:none; align-items:center; gap:6px; cursor:pointer;" title="Emite una trama de expulsión por radiofrecuencia (802.11 RF) mediante la antena monitor de la Raspberry Pi">
-                            <input type="checkbox" id="ds-rf-reconnect"> 📡 Expulsión Forzosa por Radiofrecuencia (RF) <span id="ds-rf-status-hint" style="font-size:0.73rem; margin-left:4px;"></span>
+                            <input type="checkbox" id="ds-rf-reconnect"> 📡 <span data-i18n="card_assign_force_rf">Expulsión Forzosa por Radiofrecuencia (RF)</span> <span id="ds-rf-status-hint" style="font-size:0.73rem; margin-left:4px;"></span>
                         </label>
                     </div>
                     <button type="button" id="ds-btn-apply-dhcp" class="btn btn-primary" style="padding:7px 14px; font-size:0.81rem; font-weight:700;" onclick="applyDhcpFromSheet()">📌 Guardar Nombre / Aplicar IP</button>
@@ -4684,13 +4700,14 @@ function updateRefreshTimestamp() {
     if (!el) return;
     const now = new Date();
     const diffSec = Math.floor((now - lastRefreshTime) / 1000);
+    const isEn = (window.currentLang === 'en');
     if (diffSec < 5) {
-        el.textContent = 'Actualizado hace un momento';
+        el.textContent = isEn ? 'Updated just now' : 'Actualizado hace un momento';
     } else if (diffSec < 60) {
-        el.textContent = `Actualizado hace ${diffSec}s`;
+        el.textContent = isEn ? `Updated ${diffSec}s ago` : `Actualizado hace ${diffSec}s`;
     } else {
         const min = Math.floor(diffSec / 60);
-        el.textContent = `Actualizado hace ${min}m`;
+        el.textContent = isEn ? `Updated ${min}m ago` : `Actualizado hace ${min}m`;
     }
 }
 
@@ -5100,7 +5117,7 @@ function renderTable() {
     tbody.innerHTML = '';
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" style="text-align:center; padding:80px 20px; color:var(--muted); font-size:0.95rem;">No se encontraron dispositivos con los filtros seleccionados</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" style="text-align:center; padding:80px 20px; color:var(--muted); font-size:0.95rem;">${window.currentLang === 'en' ? 'No devices found matching the selected filters' : 'No se encontraron dispositivos con los filtros seleccionados'}</td></tr>`;
         return;
     }
 
@@ -5348,7 +5365,7 @@ function renderTable() {
                     <button class="btn btn-outline ${d.watched ? 'btn-bell-active' : ''}" style="padding:4px 8px;font-size:0.76rem; ${d.watched ? 'border-color:#f59e0b; color:#fcd34d; background:rgba(245,158,11,0.14); font-weight:700;' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)" title="${d.watched ? '🔔 Aviso por correo al conectar ACTIVADO (clic para desactivar)' : '🔕 Activar aviso por correo cuando este equipo se conecte'}">${d.watched ? '🔔 Avisar' : '🔕 Avisar'}</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${((d.ha_info && d.ha_info.name) || d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Editar / Fijar</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.ip}')" title="Hacer Ping a ${d.ip}">⚡ Ping</button>
-                    <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Borrar</button>
+                    <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">${window.currentLang === 'en' ? 'Delete' : 'Borrar'}</button>
                 </div>
             `
         };
