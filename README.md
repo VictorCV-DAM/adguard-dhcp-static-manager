@@ -1,6 +1,6 @@
-# 🛡️ Panel Privado — Gestor DHCP AdGuard Home (PI-Server `192.168.1.249`)
+# 🛡️ AdGuard Home DHCP Panel (Instancia Portable Multiplataforma)
 
-Repositorio privado con la configuración real de red doméstica (`192.168.1.0/24`), rutas de `PI-Server` (`/home/yo/dhcp-panel` y `/home/yo/servicios/...`) y copia de seguridad de las concesiones DHCP e IPs estáticas (`leases.backup.json`), **sin contraseñas almacenadas**.
+Panel web privado y portable para la gestión integral de concesiones DHCP, asignaciones estáticas, escaneo ARP dinámico de red local y topología visual para AdGuard Home.
 
 ---
 
@@ -43,40 +43,35 @@ El repositorio incluye auto-instaladores independientes que configuran una **ins
 
 ---
 
-## 📍 Datos de red y servicios en `PI-Server`
+## ⚙️ Configuración y Servicios
 
-* **Raspberry Pi (`PI-Server`):** `192.168.1.249` (usuario: `yo`)
-* **Panel Gestor DHCP:** `http://192.168.1.249:5001` (`/home/yo/dhcp-panel`)
-* **Panel Wi-Fi original:** `http://192.168.1.249:5000` (`/home/yo/wifi-panel`)
-* **AdGuard Home:** `http://192.168.1.249:8080` (usuario: `victorlike`)
-  * `leases.json`: `/home/yo/servicios/adguard-work/data/leases.json`
-  * `AdGuardHome.yaml`: `/home/yo/servicios/adguard-conf/AdGuardHome.yaml`
-* **Router / AP TP-Link TL-WR841N:** `http://192.168.1.10` (usuario: `admin`)
-* **Mercusys Halo H80X:** `192.168.1.11`, `192.168.1.12`, `192.168.1.13`
+* **Panel Gestor DHCP:** `http://<ip-servidor>:5001` (puerto configurable en `config.json`)
+* **AdGuard Home:** `http://<ip-adguard>:3000` (o el puerto configurado en tu servidor AdGuard)
+  * Rutas o conexión API configurables cómodamente desde el asistente web inicial (`/setup`).
 
 ---
 
-## 🔄 Restauración rápida en la Raspberry Pi
+## 🔄 Instalación rápida en Linux / Servidores
 
-1. Clonar en `/home/yo/dhcp-panel`:
+1. Clonar el repositorio:
    ```bash
-   git clone https://github.com/VictorCV-DAM/adguard-dhcp-panel-privado.git /home/yo/dhcp-panel
+   git clone https://github.com/VictorCV-DAM/adguard-dhcp-panel-privado.git /opt/adguard-panel
    ```
 2. Ejecutar auto-instalador:
    ```bash
-   cd /home/yo/dhcp-panel
+   cd /opt/adguard-panel
    ./instalar_linux.sh
    ```
 3. Activar el servicio `systemd`:
    ```bash
-   sudo cp /home/yo/dhcp-panel/dhcp-panel.service /etc/systemd/system/dhcp-panel.service
+   sudo cp /opt/adguard-panel/dhcp-panel.service /etc/systemd/system/dhcp-panel.service
    sudo systemctl daemon-reload
    sudo systemctl enable --now dhcp-panel.service
    ```
-4. Entrar en `http://192.168.1.249:5001` → **⚙️ Configuraciones** e introducir las contraseñas de AdGuard Home y de los routers.
-5. *(Opcional)* Para restaurar el backup de IPs estáticas en AdGuard Home:
+4. Entrar en `http://<ip-servidor>:5001` e iniciar la configuración guiada.
+5. *(Opcional)* Para restaurar un backup de leases en AdGuard Home:
    ```bash
    sudo docker stop adguardhome
-   sudo cp /home/yo/dhcp-panel/leases.backup.json /home/yo/servicios/adguard-work/data/leases.json
+   sudo cp ./leases.backup.json /ruta/hacia/adguard/data/leases.json
    sudo docker start adguardhome
    ```

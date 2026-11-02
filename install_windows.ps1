@@ -11,7 +11,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
 Set-Location $ScriptDir
 
-# Comprobar si se está ejecutando desde una unidad de red remota o SSHFS (ej. T:\ -> \\sshfs.r\...)
+# Comprobar si se está ejecutando desde una unidad de red remota o montaje de red
 $isRemote = $false
 try {
     $driveLetter = if ($ScriptDir.Length -ge 2 -and $ScriptDir[1] -eq ':') { $ScriptDir.Substring(0, 2) } else { "" }
@@ -31,24 +31,22 @@ if ($isRemote) {
     Write-Host "==================================================================" -ForegroundColor Red
     Write-Host "Ruta detectada: $ScriptDir" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Estas intentando ejecutar el instalador dentro de una unidad remota" -ForegroundColor White
-    Write-Host "montada por SSHFS/red (por ejemplo, unidad T:\ hacia tu MiniPC)." -ForegroundColor White
+    Write-Host "Se ha detectado que el instalador se ejecuta desde una unidad de red" -ForegroundColor White
+    Write-Host "o almacenamiento remoto montado." -ForegroundColor White
     Write-Host ""
-    Write-Host "Python, los entornos virtuales venv y SQLite NO pueden funcionar sobre" -ForegroundColor White
-    Write-Host "unidades SSHFS debido al bloqueo de archivos y rutas con caracteres especiales." -ForegroundColor White
+    Write-Host "Los entornos de Python y SQLite requieren ejecutarse en un disco fisico local" -ForegroundColor White
+    Write-Host "para garantizar compatibilidad con bloqueos de archivos y dependencias." -ForegroundColor White
     Write-Host ""
-    Write-Host "¿COMO PROCEDER SEGUN LO QUE QUIERES HACER?" -ForegroundColor Cyan
+    Write-Host "OPCIONES:" -ForegroundColor Cyan
     Write-Host "------------------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host "OPCION 1: Ejecutar el panel en tu PC Windows local:" -ForegroundColor Green
-    Write-Host "   1. Copia esta carpeta completa desde T:\ a un disco local (C:\ o D:\)" -ForegroundColor White
-    Write-Host "      (Por ejemplo: C:\adguard-dhcp-panel)" -ForegroundColor Yellow
-    Write-Host "   2. Abre la carpeta copiada en C:\ y haz doble clic en iniciar_windows.bat" -ForegroundColor White
+    Write-Host "OPCION 1: Si deseas ejecutar el panel en esta maquina Windows local:" -ForegroundColor Green
+    Write-Host "   1. Copia la carpeta completa a un disco local (ej. C:\adguard-panel)" -ForegroundColor White
+    Write-Host "   2. Abre la carpeta copiada y haz doble clic en iniciar_windows.bat" -ForegroundColor White
     Write-Host ""
-    Write-Host "OPCION 2: Ejecutar el panel dentro de tu MiniPC (minipc-gmktec):" -ForegroundColor Green
-    Write-Host "   1. Conectate a tu MiniPC por terminal SSH directamente:" -ForegroundColor White
-    Write-Host "      ssh minipc-gmktec@victorlike.duckdns.org -p 22223" -ForegroundColor Yellow
-    Write-Host "   2. Entra en la carpeta del proyecto en el MiniPC y ejecuta:" -ForegroundColor White
-    Write-Host "      ./iniciar_linux.sh" -ForegroundColor Yellow
+    Write-Host "OPCION 2: Si deseas ejecutar el panel en el servidor remoto:" -ForegroundColor Green
+    Write-Host "   1. Conectate directamente al servidor (por SSH o terminal local)." -ForegroundColor White
+    Write-Host "   2. Entra en la carpeta del proyecto en ese servidor y ejecuta:" -ForegroundColor White
+    Write-Host "      ./iniciar_linux.sh  o  iniciar_windows.bat" -ForegroundColor Yellow
     Write-Host "==================================================================" -ForegroundColor Red
     Write-Host ""
     Write-Host "Presiona cualquier tecla para salir..." -ForegroundColor Gray

@@ -43,8 +43,8 @@ def add_no_cache_headers(response):
 
 import tempfile
 
-LEASES_PATH = os.environ.get('DHCP_PANEL_LEASES_PATH') or '/home/yo/servicios/adguard-work/data/leases.json'
-YAML_PATH = os.environ.get('DHCP_PANEL_YAML_PATH') or '/home/yo/servicios/adguard-conf/AdGuardHome.yaml'
+LEASES_PATH = os.environ.get('DHCP_PANEL_LEASES_PATH') or os.path.join(_CURRENT_DIR, 'leases.json')
+YAML_PATH = os.environ.get('DHCP_PANEL_YAML_PATH') or os.path.join(_CURRENT_DIR, 'AdGuardHome.yaml')
 CONFIG_PATH = os.environ.get('DHCP_PANEL_CONFIG_PATH') or os.path.join(_CURRENT_DIR, 'config.json')
 
 DEFAULT_CONFIG = {
@@ -1251,7 +1251,9 @@ def verify_ip_l2(ip, target_mac=None, iface="eth0", timeout=2):
         return alive, None
 
 def test_adguard_credentials(cfg):
-    url = (cfg.get('adguard_url') or 'http://192.168.1.249:8080').rstrip('/')
+    url = (cfg.get('adguard_url') or '').rstrip('/')
+    if not url:
+        return False, "La URL de AdGuard Home no está configurada."
     user = (cfg.get('adguard_user') or '').strip()
     pwd = (cfg.get('adguard_pass') or '').strip()
     if not user or not pwd:
@@ -2030,20 +2032,14 @@ def build_state(force_refresh=False):
             router_type = 'infra'
             conn_medium = 'cable'
             conn_medium_label = 'Cable Ethernet'
-        elif ip in ('192.168.1.1', '192.168.1.249') or 'router-principal' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
+        elif (gateway_ip and ip == gateway_ip) or 'router-principal' in hostname.lower() or 'gateway' in hostname.lower():
             router_node = 'Router Principal / LAN'
             router_tooltip = f'Equipo Central / Pasarela ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
             conn_medium_label = 'Cable Ethernet'
         elif is_infra_node:
-            # Identificar el equipo específico de infraestructura
-            if 'wr841n' in hostname.lower() or ip == '192.168.1.10':
-                router_node = 'TP-Link WR841N'
-            elif 'em4590' in hostname.lower() or ip == '192.168.1.9':
-                router_node = 'Repetidor Wi-Fi EM4590'
-            else:
-                router_node = hostname or 'Punto de Acceso / Router'
+            router_node = hostname or 'Punto de Acceso / Router'
             router_tooltip = f'Equipo de infraestructura de red ({ip})'
             router_type = 'infra'
             conn_medium = 'cable'
@@ -2063,7 +2059,7 @@ def build_state(force_refresh=False):
         elif live_ips:
             if is_wireless:
                 router_node = 'Router Principal / Wi-Fi'
-                router_tooltip = 'Dispositivo Wi-Fi conectado a la red principal (192.168.1.1)'
+                router_tooltip = f'Dispositivo Wi-Fi conectado a la red principal ({gateway_ip or "Router"})'
                 router_type = 'wifi'
                 conn_medium = 'wifi'
                 conn_medium_label = 'Wi-Fi'
@@ -2113,7 +2109,7 @@ def build_state(force_refresh=False):
         for aip in arp_ips:
             if not aip or ':' in aip or aip in seen_ips:
                 continue
-            if aip in ('127.0.0.1', '192.168.1.249'):
+            if aip in ('127.0.0.1', local_ip):
                 continue
 
             # Determinar nombre del host
@@ -2125,12 +2121,10 @@ def build_state(force_refresh=False):
                     break
 
             if not hostname:
-                if aip == '192.168.1.1':
+                if gateway_ip and aip == gateway_ip:
                     hostname = 'router-principal-gateway'
-                elif m.startswith('00:14:5c') or aip == '192.168.1.9':
-                    hostname = 'wifi-repeater-em4590'
                 else:
-                    hostname = f"192-168-1-{aip.split('.')[-1]}"
+                    hostname = f"host-{aip.replace('.', '-')}"
 
             halo_info = halo_client_map.get(m)
             dev_class, dev_vendor, dev_icon, dev_cat = predict_device_info(hostname, m, halo_info)
@@ -2150,19 +2144,14 @@ def build_state(force_refresh=False):
                 router_type = 'infra'
                 conn_medium = 'cable'
                 conn_medium_label = 'Cable Ethernet'
-            elif aip in ('192.168.1.1', '192.168.1.249') or 'router-principal' in hostname.lower() or 'xg-pon' in hostname.lower() or 'xgb430v' in hostname.lower():
+            elif (gateway_ip and aip == gateway_ip) or 'router-principal' in hostname.lower() or 'gateway' in hostname.lower():
                 router_node = 'Router Principal / LAN'
                 router_tooltip = f'Equipo Central / Pasarela ({aip})'
                 router_type = 'infra'
                 conn_medium = 'cable'
                 conn_medium_label = 'Cable Ethernet'
             elif is_infra_node:
-                if 'wr841n' in hostname.lower() or aip == '192.168.1.10':
-                    router_node = 'TP-Link WR841N'
-                elif 'em4590' in hostname.lower() or aip == '192.168.1.9':
-                    router_node = 'Repetidor Wi-Fi EM4590'
-                else:
-                    router_node = hostname or 'Punto de Acceso / Router'
+                router_node = hostname or 'Punto de Acceso / Router'
                 router_tooltip = f'Equipo de infraestructura de red ({aip})'
                 router_type = 'infra'
                 conn_medium = 'cable'
@@ -2182,7 +2171,7 @@ def build_state(force_refresh=False):
             else:
                 if is_wireless:
                     router_node = 'Router Principal / Wi-Fi'
-                    router_tooltip = 'Dispositivo Wi-Fi conectado a la red principal (192.168.1.1)'
+                    router_tooltip = f'Dispositivo Wi-Fi conectado a la red principal ({gateway_ip or "Router"})'
                     router_type = 'wifi'
                     conn_medium = 'wifi'
                     conn_medium_label = 'Wi-Fi'
@@ -2682,7 +2671,8 @@ def api_assign_static():
     try:
         send_nak_script = os.path.join(os.path.dirname(__file__), 'send_nak.py')
         if os.path.exists(send_nak_script):
-            nak_res = run_sudo(['python3', send_nak_script, mac, '192.168.1.249', old_ip or '-', 'eth0'])
+            srv_ip = get_network_info()[0] or '0.0.0.0'
+            nak_res = run_sudo(['python3', send_nak_script, mac, srv_ip, old_ip or '-', 'eth0'])
             if nak_res.returncode == 0:
                 actions_taken.append("DHCPNAK emitido")
     except Exception as e:

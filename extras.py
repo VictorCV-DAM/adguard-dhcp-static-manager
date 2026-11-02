@@ -1928,8 +1928,14 @@ def api_portscan_start():
     body = request.json or {}
     ip = (body.get('ip') or '').strip()
     mode = body.get('mode', 'common')
-    if not valid_ipv4(ip) or not ip.startswith('192.168.'):
-        return jsonify({'status': 'error', 'message': 'Solo se permiten IPs de la red local.'})
+    import ipaddress
+    is_private = False
+    try:
+        is_private = ipaddress.ip_address(ip).is_private
+    except Exception:
+        pass
+    if not valid_ipv4(ip) or not is_private:
+        return jsonify({'status': 'error', 'message': 'Solo se permiten IPs privadas de la red local.'})
     if mode == 'full':
         ports, timeout = list(range(1, 65536)), 0.35
     elif mode == 'top':

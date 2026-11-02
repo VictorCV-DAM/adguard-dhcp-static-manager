@@ -1605,11 +1605,11 @@
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
                 <div class="form-group">
                     <label>URL de AdGuard Home</label>
-                    <input type="text" id="cfg-ag-url" placeholder="http://192.168.1.249:8080">
+                    <input type="text" id="cfg-ag-url" placeholder="http://192.168.1.2:3000">
                 </div>
                 <div class="form-group">
                     <label>Usuario de AdGuard Home</label>
-                    <input type="text" id="cfg-ag-user" placeholder="victorlike">
+                    <input type="text" id="cfg-ag-user" placeholder="admin">
                 </div>
                 <div class="form-group">
                     <label>Contraseña de AdGuard Home</label>
@@ -3156,7 +3156,7 @@ function renderRoutersList() {
             </div>
             <div class="form-group">
                 <label>IP(s) (separadas por coma)</label>
-                <input type="text" value="${r.ip || ''}" oninput="routersConfig[${idx}].ip = this.value" placeholder="192.168.1.10">
+                <input type="text" value="${r.ip || ''}" oninput="routersConfig[${idx}].ip = this.value" placeholder="192.168.1.2">
             </div>
             <div class="form-group">
                 <label>Usuario</label>
@@ -6963,12 +6963,14 @@ function nodeMatchesSearch(n) {
     const d = n.dev || {};
 
     // Recopilar todas las IPs asociadas
+    const coreNodeRef = (topoState.nodes || []).find(x => x.type === 'core');
+    const coreIps = (coreNodeRef && coreNodeRef.ips) ? coreNodeRef.ips : (coreNodeRef && coreNodeRef.ip ? [coreNodeRef.ip] : []);
     const ips = [
         d.ip,
         ...(Array.isArray(d.live_ips) ? d.live_ips : (d.live_ips ? [d.live_ips] : [])),
         n.ip,
         ...(Array.isArray(n.ips) ? n.ips : (n.ips ? [n.ips] : [])),
-        ...(n.id === '__core__' ? ['192.168.1.1', '192.168.1.249'] : [])
+        ...(n.id === '__core__' ? coreIps : [])
     ].filter(Boolean).map(x => String(x).trim().toLowerCase());
 
     const mac = String(d.mac || n.mac || '').toLowerCase();
@@ -7280,6 +7282,10 @@ function relaxTopoPositions(nodes) {
 function buildTopoGraph(fitView = false) {
     const isOnline = d => (d.conn_medium !== 'offline') && (Boolean(d.live_ips && d.live_ips.length > 0) || (d.router_type && d.router_type !== 'offline'));
 
+    // Detectar IP del gateway / router principal dinámicamente de allDevices o cálculo de subred
+    const gwDevice = allDevices.find(d => (d.hostname && (d.hostname.includes('router-principal') || d.hostname.includes('gateway'))) || (d.router_tooltip && d.router_tooltip.includes('Pasarela')));
+    const gwIp = gwDevice ? gwDevice.ip : (allDevices.length > 0 && allDevices[0].ip ? allDevices[0].ip.split('.').slice(0, 3).join('.') + '.1' : '192.168.1.1');
+
     // Lista de IPs y nombres identificados como Nodos de Infraestructura (Puntos de Red físicos)
     const isInfraDev = d => {
         if (!d) return false;
@@ -7287,11 +7293,9 @@ function buildTopoGraph(fitView = false) {
         const h = (d.hostname || '').toLowerCase();
         const c = (d.dev_class || '').toLowerCase();
         const rt = d.router_type || '';
-        return ip === '192.168.1.1' || ip === '192.168.1.249' ||
-               ip === '192.168.1.11' || ip === '192.168.1.12' || ip === '192.168.1.13' ||
-               ip === '192.168.1.10' || ip === '192.168.1.9' ||
-               h.includes('mercusys-halo') || h.includes('wr841n') || h.includes('em4590') ||
-               h.includes('xgb430v') || h.includes('xg-pon') || h.includes('router-principal') ||
+        return (gwIp && ip === gwIp) ||
+               c.includes('router') || c.includes('repetidor') || c.includes('punto de acceso') ||
+               h.includes('router') || h.includes('gateway') || h.includes('mesh') ||
                rt === 'infra';
     };
 
@@ -7316,64 +7320,12 @@ function buildTopoGraph(fitView = false) {
         groups[key].push(d);
     });
 
-    // Definición de Nodos de Infraestructura base
+    // Definición de Nodos de Infraestructura base (dinámicos según la red detectada)
     const definedHubs = [
-        {
-            id: 'hub:halo1',
-            label: 'Halo 1 (Mi habitación)',
-            ip: '192.168.1.11',
-            parent: '__core__',
-            isMesh: true,
-            isCable: false,
-            color: '#00e5ff',
-            defaultX: 300,
-            defaultY: -260,
-            outwardAngle: -0.95,
-            dev: allDevices.find(d => d.ip === '192.168.1.11' || (d.hostname && d.hostname.includes('halo-1')))
-        },
-        {
-            id: 'hub:halo2',
-            label: 'Halo 2 (Estudio)',
-            ip: '192.168.1.12',
-            parent: 'hub:halo1', // Satélite Mesh conectado a Halo 1
-            isMesh: true,
-            isCable: false,
-            color: '#00e5ff',
-            defaultX: 680,
-            defaultY: -310,
-            outwardAngle: -0.15,
-            dev: allDevices.find(d => d.ip === '192.168.1.12' || (d.hostname && d.hostname.includes('halo-2')))
-        },
-        {
-            id: 'hub:halo3',
-            label: 'Halo 3 (Pasillo)',
-            ip: '192.168.1.13',
-            parent: 'hub:halo1', // Satélite Mesh conectado a Halo 1
-            isMesh: true,
-            isCable: false,
-            color: '#00e5ff',
-            defaultX: 230,
-            defaultY: -650,
-            outwardAngle: -Math.PI / 2,
-            dev: allDevices.find(d => d.ip === '192.168.1.13' || (d.hostname && d.hostname.includes('halo-3')))
-        },
-        {
-            id: 'hub:wr841n',
-            label: 'TP-Link WR841N',
-            ip: '192.168.1.10',
-            parent: '__core__',
-            isMesh: false,
-            isCable: true,
-            color: '#10b981',
-            defaultX: 390,
-            defaultY: 270,
-            outwardAngle: 0.68,
-            dev: allDevices.find(d => d.ip === '192.168.1.10' || (d.hostname && d.hostname.toLowerCase().includes('wr841n')))
-        },
         {
             id: 'hub:lan',
             label: 'Router Principal / LAN',
-            ip: '192.168.1.1',
+            ip: gwIp,
             parent: '__core__',
             isMesh: false,
             isCable: true,
@@ -7381,12 +7333,12 @@ function buildTopoGraph(fitView = false) {
             defaultX: -300,
             defaultY: 270,
             outwardAngle: 2.24,
-            dev: allDevices.find(d => d.ip === '192.168.1.1' || d.ip === '192.168.1.249')
+            dev: gwDevice || null
         },
         {
             id: 'hub:wifi',
             label: 'Router Principal / Wi-Fi',
-            ip: '192.168.1.1',
+            ip: gwIp,
             parent: '__core__',
             isMesh: false,
             isCable: false,
@@ -7398,12 +7350,12 @@ function buildTopoGraph(fitView = false) {
         }
     ];
 
-    // Detección dinámica y automática de nuevos nodos Mesh (ej. Halo 4, Deco, nuevo AP, o cualquier otro sistema Mesh)
+    // Detección dinámica y automática de nuevos nodos Mesh o APs descubiertos
     const masterMeshHub = definedHubs.find(h => h.isMesh && h.parent === '__core__') || definedHubs[0];
 
     // 1. Descubrir equipos físicos de infraestructura adicionales (incluso si tienen 0 clientes conectados)
     allDevices.filter(isInfraDev).forEach(d => {
-        if (d.ip === '192.168.1.1' || d.ip === '192.168.1.249') return;
+        if (d.ip === gwIp) return;
         const normName = normalizeHubKey(d);
         if (!definedHubs.some(h => h.label === normName || h.id === 'hub:' + normName || (h.ip && h.ip === d.ip))) {
             const hLow = (d.hostname || '').toLowerCase();
@@ -7454,15 +7406,15 @@ function buildTopoGraph(fitView = false) {
 
     const totalOnline = allDevices.filter(isOnline).length;
 
-    // 1. Nodo Central Protagonista: Router Principal / AdGuard Core
+    // 1. Nodo Central Protagonista: Router Principal / Pasarela
     const corePos = topoState.customPositions['__core__'] || { x: 0, y: 0 };
     const coreNode = {
         id: '__core__',
         type: 'core',
-        label: 'Router Principal · AdGuard Core',
-        sub: `192.168.1.1 / 192.168.1.249 · ${totalOnline} online`,
-        ip: '192.168.1.1',
-        ips: ['192.168.1.1', '192.168.1.249'],
+        label: 'Router Principal · Pasarela',
+        sub: `${gwIp} · ${totalOnline} online`,
+        ip: gwIp,
+        ips: [gwIp],
         x: corePos.x,
         y: corePos.y,
         baseX: corePos.x,
@@ -8256,7 +8208,7 @@ function updateTopoTooltip(node, sx, sy) {
             : '';
         tip.innerHTML = `
             <div style="font-weight:800; color:#00e5ff; font-size:0.9rem;">🌐 ${escapeHtml(node.label)}</div>
-            <div style="color:#94a3b8; font-size:0.76rem; margin-top:2px;">Núcleo Central de Red · Pasarela Fibra (192.168.1.1) + Servidor DNS/DHCP AdGuard (192.168.1.249)</div>
+            <div style="color:#94a3b8; font-size:0.76rem; margin-top:2px;">Núcleo Central de Red · Pasarela (${escapeHtml(node.ip || '')})</div>
             ${telInfo}
             <div style="margin-top:6px; font-size:0.75rem; color:#7dd3fc;">⚡ <strong>Haz clic</strong> para disparar una onda neuronal en zigzag a toda la red y encuadrar la vista.</div>
         `;
@@ -9538,9 +9490,9 @@ function findTopoNodeByMacOrIp(mac, ip) {
     if (n) return n;
 
     // 3. Coincidencia si es Core Node ('__core__')
-    if (cleanIp === '192.168.1.1' || cleanIp === '192.168.1.249') {
-        n = topoState.nodes.find(x => x.type === 'core');
-        if (n) return n;
+    const coreNodeRef = topoState.nodes.find(x => x.type === 'core');
+    if (coreNodeRef && (coreNodeRef.ip === cleanIp || (coreNodeRef.ips && coreNodeRef.ips.includes(cleanIp)))) {
+        return coreNodeRef;
     }
 
     // 4. Coincidencia por IP en Hubs de infraestructura o Core

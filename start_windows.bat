@@ -13,25 +13,23 @@ if errorlevel 42 (
     echo ==================================================================
     echo Ruta detectada: %~dp0
     echo.
-    echo Estas ejecutando el panel a traves de una unidad remota o SSHFS
-    echo (ej. disco T: conectado a minipc-gmktec@victorlike.duckdns.org).
+    echo Se ha detectado que estas ejecutando el panel a traves de una unidad
+    echo de red o almacenamiento remoto montado.
     echo.
-    echo Python, SQLite y los entornos virtuales NO funcionan a traves de
-    echo un tunel SSHFS por bloqueo de archivos y rutas con caracteres especiales.
+    echo Python, SQLite y los entornos virtuales requieren ejecutarse en un
+    echo disco fisico local para gestionar bloqueos y dependencias.
     echo.
     echo ==================================================================
-    echo INSTRUCCIONES:
+    echo OPCIONES:
     echo ==================================================================
-    echo OPCION 1: Si quieres ejecutar el panel en este PC Windows local:
-    echo   1. Copia esta carpeta completa a tu disco local C:\ o D:\
-    echo      (por ejemplo en: C:\adguard-dhcp-panel)
-    echo   2. Abre la carpeta en C:\ y haz doble clic en iniciar_windows.bat
+    echo OPCION 1: Si deseas ejecutar el panel en este PC Windows local:
+    echo   1. Copia esta carpeta completa a tu disco local (ej. C:\adguard-panel)
+    echo   2. Abre la carpeta en el disco local y haz doble clic en iniciar_windows.bat
     echo.
-    echo OPCION 2: Si quieres que el panel corra dentro de tu MiniPC:
-    echo   1. Conectate al MiniPC por SSH:
-    echo      ssh minipc-gmktec@victorlike.duckdns.org -p 22223
-    echo   2. Entra en la carpeta del panel en el MiniPC y ejecuta:
-    echo      ./iniciar_linux.sh
+    echo OPCION 2: Si deseas ejecutar el panel en el equipo o servidor remoto:
+    echo   1. Conectate directamente a dicho servidor (SSH, escritorio remoto o consola).
+    echo   2. Entra en la carpeta del proyecto en ese servidor y ejecuta:
+    echo      ./iniciar_linux.sh  o  iniciar_windows.bat
     echo ==================================================================
     echo.
     pause

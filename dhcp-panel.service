@@ -1,0 +1,14 @@
+[Unit]
+Description=AdGuard Home DHCP Panel Privado (Instancia Portable)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/adguard-panel
+ExecStart=/opt/adguard-panel/python_portable/bin/python3 /opt/adguard-panel/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
