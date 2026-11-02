@@ -11,6 +11,51 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
 Set-Location $ScriptDir
 
+# Comprobar si se está ejecutando desde una unidad de red remota o SSHFS (ej. T:\ -> \\sshfs.r\...)
+$isRemote = $false
+try {
+    $driveLetter = if ($ScriptDir.Length -ge 2 -and $ScriptDir[1] -eq ':') { $ScriptDir.Substring(0, 2) } else { "" }
+    if ($driveLetter) {
+        $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$driveLetter'" -ErrorAction SilentlyContinue
+        if ($disk -and $disk.DriveType -eq 4) { $isRemote = $true }
+    }
+} catch {}
+if ($ScriptDir.StartsWith("\\") -or $ScriptDir -match "sshfs" -or $ScriptDir.Contains([char]0xf03a)) {
+    $isRemote = $true
+}
+
+if ($isRemote) {
+    Write-Host ""
+    Write-Host "==================================================================" -ForegroundColor Red
+    Write-Host "   [ERROR CRITICO] EJECUCION EN UNIDAD DE RED O SSHFS DETECTADA" -ForegroundColor Red
+    Write-Host "==================================================================" -ForegroundColor Red
+    Write-Host "Ruta detectada: $ScriptDir" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Estas intentando ejecutar el instalador dentro de una unidad remota" -ForegroundColor White
+    Write-Host "montada por SSHFS/red (por ejemplo, unidad T:\ hacia tu MiniPC)." -ForegroundColor White
+    Write-Host ""
+    Write-Host "Python, los entornos virtuales venv y SQLite NO pueden funcionar sobre" -ForegroundColor White
+    Write-Host "unidades SSHFS debido al bloqueo de archivos y rutas con caracteres especiales." -ForegroundColor White
+    Write-Host ""
+    Write-Host "¿COMO PROCEDER SEGUN LO QUE QUIERES HACER?" -ForegroundColor Cyan
+    Write-Host "------------------------------------------------------------------" -ForegroundColor Cyan
+    Write-Host "OPCION 1: Ejecutar el panel en tu PC Windows local:" -ForegroundColor Green
+    Write-Host "   1. Copia esta carpeta completa desde T:\ a un disco local (C:\ o D:\)" -ForegroundColor White
+    Write-Host "      (Por ejemplo: C:\adguard-dhcp-panel)" -ForegroundColor Yellow
+    Write-Host "   2. Abre la carpeta copiada en C:\ y haz doble clic en iniciar_windows.bat" -ForegroundColor White
+    Write-Host ""
+    Write-Host "OPCION 2: Ejecutar el panel dentro de tu MiniPC (minipc-gmktec):" -ForegroundColor Green
+    Write-Host "   1. Conectate a tu MiniPC por terminal SSH directamente:" -ForegroundColor White
+    Write-Host "      ssh minipc-gmktec@victorlike.duckdns.org -p 22223" -ForegroundColor Yellow
+    Write-Host "   2. Entra en la carpeta del proyecto en el MiniPC y ejecuta:" -ForegroundColor White
+    Write-Host "      ./iniciar_linux.sh" -ForegroundColor Yellow
+    Write-Host "==================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Presiona cualquier tecla para salir..." -ForegroundColor Gray
+    try { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch {}
+    exit 1
+}
+
 # Aislar de variables de entorno de cualquier Python instalado en el host (ej. Python 3.14)
 $env:PYTHONHOME = $null
 $env:PYTHONPATH = $ScriptDir
@@ -77,9 +122,13 @@ if (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
         Write-Host "[1/3] Creando instancia aislada portable en python_portable\ (Ultra-rápido)..." -ForegroundColor Yellow
         Write-Host "      (Tu instalación principal de Python NO será tocada ni alterada)" -ForegroundColor Gray
         & $sysPython -m venv $TargetDir
-        if (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
-            $pyExe = Join-Path $TargetDir "Scripts\python.exe"
+        $candidateExe = Join-Path $TargetDir "Scripts\python.exe"
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $candidateExe)) {
+            $pyExe = $candidateExe
             Write-Host "[OK] Instancia portable configurada en segundos en python_portable\" -ForegroundColor Green
+        } else {
+            Write-Host "[AVISO] La creación de venv falló. Limpiando y usando fallback embeddable..." -ForegroundColor Yellow
+            Remove-Item -Recurse -Force $TargetDir -ErrorAction SilentlyContinue
         }
     }
 
