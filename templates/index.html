@@ -1484,7 +1484,6 @@
             <button class="btn btn-outline" onclick="toggleColumnsPanel()">📊 Columnas</button>
             <button class="btn btn-outline" onclick="openStaticOrderModal()">📌 Orden de Fijadas <span id="btn-statics-badge" class="badge" style="background:rgba(56,189,248,0.18); color:#38bdf8; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
             <button class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8; font-weight:600;" onclick="openMacHunterModal()" title="Cazador forense de dispositivos por MAC">🔍 Cazador de MAC</button>
-            <button class="btn btn-outline" id="btn-header-localhost" style="display:none; border-color:#a855f7; color:#d8b4fe; font-weight:600;" onclick="openLocalhostModal()" title="Servicios locales activos en este ordenador (localhost:puerto)">💻 Servicios Locales <span id="btn-localhost-badge" class="badge" style="background:rgba(168,85,247,0.22); color:#d8b4fe; font-size:0.72rem; margin-left:2px; padding:1px 5px; border-radius:4px;">0</span></button>
             <button class="btn btn-outline" onclick="toggleSettings()">⚙️ Configuraciones (AdGuard / Routers)</button>
             <div class="dropdown-wrapper" style="position:relative; display:inline-block;">
                 <button class="btn btn-outline" style="font-weight:600;" onclick="toggleUserMenu(event)" title="Sesión y seguridad">👤 {{ auth_user }} ▾</button>
@@ -4481,9 +4480,6 @@ function renderServicesCards() {
     let items = [];
     allDevices.forEach(d => {
         if (!d.web_links || d.web_links.length === 0) return;
-        // Excluir el host para que los servicios de localhost no se mezclen con los servicios de red
-        const isHost = (d.ip === (_localhostInfo?.local_ip || '') || (d.hostname && d.hostname.includes('(Panel Host)')) || d.mac === '00:00:00:00:00:00');
-        if (isHost) return;
         d.web_links.forEach(l => {
             const meta = Object.assign({}, getServiceMeta(l.default_label || l.label, l.port, d.hostname));
             if (l.is_custom) {
