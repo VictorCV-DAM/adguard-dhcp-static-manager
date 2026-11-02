@@ -766,27 +766,30 @@ KNOWN_LOCAL_SERVICES = {
 _LOCALHOST_SERVICES_CACHE = (0, [])  # (timestamp, [services])
 
 def get_listening_ports_map():
-    """Obtiene el mapa de puertos locales abiertos: puerto -> {'bind': bind_ip, 'pid': pid_str, 'process': proc_name}."""
+    """Obtiene el mapa de puertos locales abiertos (IPv4 e IPv6): puerto -> {'bind': bind_ip, 'pid': pid_str, 'process': proc_name}."""
     system = platform.system()
     raw_ports = {}
 
     if system == 'Windows':
         try:
-            out = subprocess.check_output(['netstat', '-ano', '-p', 'tcp'], text=True, stderr=subprocess.DEVNULL)
+            # netstat -ano sin -p tcp incluye tanto IPv4 como IPv6
+            out = subprocess.check_output(['netstat', '-ano'], text=True, stderr=subprocess.DEVNULL)
             pid_map = {}
             for line in out.splitlines():
                 parts = line.strip().split()
-                if len(parts) >= 5 and parts[0].upper() == 'TCP' and parts[3].upper() == 'LISTENING':
-                    addr = parts[1]
-                    pid = parts[4]
-                    if ':' in addr:
-                        try:
-                            ip_part, port_str = addr.rsplit(':', 1)
-                            p = int(port_str)
-                            if 1 <= p <= 65535:
-                                pid_map[p] = (ip_part, pid)
-                        except Exception:
-                            pass
+                if len(parts) >= 5 and parts[0].upper() == 'TCP':
+                    state = parts[3].upper()
+                    if state in ('LISTENING', 'ESCUCHANDO', 'LISTEN'):
+                        addr = parts[1]
+                        pid = parts[4]
+                        if ':' in addr:
+                            try:
+                                ip_part, port_str = addr.rsplit(':', 1)
+                                p = int(port_str)
+                                if 1 <= p <= 65535:
+                                    pid_map[p] = (ip_part, pid)
+                            except Exception:
+                                pass
             pids = set(pid for _, pid in pid_map.values())
             proc_names = {}
             try:
@@ -864,30 +867,33 @@ def scan_localhost_services(probe_http=True, force_refresh=False):
 
         if should_probe:
             for proto in ['http', 'https']:
-                test_url = f'{proto}://127.0.0.1:{port}/'
-                try:
-                    req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-                    with urllib.request.urlopen(req, timeout=0.18, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
-                        is_http = True
-                        http_code = resp.getcode()
-                        url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
-                        content = resp.read(2048).decode('utf-8', errors='ignore')
-                        m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                        title = m.group(1).strip() if m else ''
-                        server_header = resp.headers.get('Server', '')
-                        break
-                except urllib.error.HTTPError as e:
-                    if e.code in (401, 403, 301, 302, 307, 308, 404, 400, 405):
-                        is_http = True
-                        http_code = e.code
-                        url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
-                        content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ''
-                        m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                        title = m.group(1).strip() if m else f'HTTP {e.code}'
-                        server_header = e.headers.get('Server', '')
-                        break
-                except Exception:
-                    pass
+                for test_host in ['127.0.0.1', 'localhost', '[::1]']:
+                    test_url = f'{proto}://{test_host}:{port}/'
+                    try:
+                        req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                        with urllib.request.urlopen(req, timeout=0.35, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
+                            is_http = True
+                            http_code = resp.getcode()
+                            url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
+                            content = resp.read(2048).decode('utf-8', errors='ignore')
+                            m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                            title = m.group(1).strip() if m else ''
+                            server_header = resp.headers.get('Server', '')
+                            break
+                    except urllib.error.HTTPError as e:
+                        if e.code in (401, 403, 301, 302, 307, 308, 404, 400, 405):
+                            is_http = True
+                            http_code = e.code
+                            url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
+                            content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ''
+                            m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                            title = m.group(1).strip() if m else f'HTTP {e.code}'
+                            server_header = e.headers.get('Server', '')
+                            break
+                    except Exception:
+                        pass
+                if is_http:
+                    break
 
         known = KNOWN_LOCAL_SERVICES.get(port)
         icon = '⚙️'
