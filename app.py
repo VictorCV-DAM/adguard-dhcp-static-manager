@@ -1293,9 +1293,14 @@ def read_leases():
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode('utf-8', errors='ignore'))
-                    all_leases = list(data.get('leases', []))
+                    all_leases = []
+                    for dl in data.get('leases', []):
+                        dl_copy = dict(dl)
+                        dl_copy['static'] = False
+                        all_leases.append(dl_copy)
                     for sl in data.get('static_leases', []):
                         sl_copy = dict(sl)
+                        sl_copy['static'] = True
                         sl_copy.setdefault('expires', '')
                         all_leases.append(sl_copy)
                     return {"version": 1, "leases": all_leases}

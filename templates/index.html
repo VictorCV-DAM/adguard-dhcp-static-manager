@@ -7494,8 +7494,8 @@ function buildTopoGraph(fitView = false) {
     // 2. Colocar los Nodos de Infraestructura (Hubs) en sectores espaciosos con jerarquía Mesh
     definedHubs.forEach((h, idx) => {
         const devs = groups[h.label] || [];
-        // Si es un hub predefinido pero en la red del usuario no existe el equipo físico ni tiene clientes, se omite
-        if (!h.dev && devs.length === 0 && h.id !== 'hub:lan' && h.id !== 'hub:wifi') return;
+        // Omitir nodos de red repetidos o sin clientes conectados para evitar duplicados 0/0 online
+        if (devs.length === 0 && h.id !== 'hub:lan' && h.id !== 'hub:wifi') return;
 
         const savedPos = topoState.customPositions[h.id];
         const hx = savedPos ? savedPos.x : (h.defaultX !== undefined ? h.defaultX : (Math.cos(idx * 1.2) * 380));
