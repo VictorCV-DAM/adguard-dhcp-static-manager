@@ -4634,11 +4634,42 @@ function ipToNum(ip) {
     return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
 }
 
+function getHunterSortMeta(d) {
+    // Nivel 1: Home Assistant con nombre real verificado (siempre primero)
+    if (d.ha_info && d.ha_info.name && d.ha_info.name.trim()) {
+        return { tier: 1, label: d.ha_info.name.trim().toLowerCase() };
+    }
+
+    // Nivel 2: Nombre real obtenido por pistas forenses o fabricante/modelo identificado
+    const hostLow = (d.hostname || '').toLowerCase();
+    if (hostLow.startsWith('esp-') || (d.dev_vendor && d.dev_vendor.toLowerCase().includes('espressif'))) {
+        return { tier: 2, label: 'espressif tuya smart ' + (d.hostname || '') };
+    }
+    if (hostLow.includes('ck-bl602') || (d.dev_vendor && d.dev_vendor.toLowerCase().includes('sonoff'))) {
+        return { tier: 2, label: 'sonoff coolkit bl602 ' + (d.hostname || '') };
+    }
+    if (hostLow.startsWith('desktop-') || hostLow.startsWith('laptop-')) {
+        return { tier: 2, label: 'pc microsoft windows ' + (d.hostname || '') };
+    }
+    if (d.dev_vendor && d.dev_vendor !== 'Desconocido' && !d.dev_vendor.toLowerCase().includes('unknown')) {
+        return { tier: 2, label: d.dev_vendor.toLowerCase() + ' ' + (d.hostname || '') };
+    }
+    if (d.dev_class && d.dev_class !== 'Desconocido' && !d.dev_class.toLowerCase().includes('unknown')) {
+        return { tier: 2, label: d.dev_class.toLowerCase() + ' ' + (d.hostname || '') };
+    }
+
+    // Nivel 3: El resto (sin vincular en HA / sin identificar)
+    return { tier: 3, label: (d.hostname || d.ip || '').toLowerCase() };
+}
+
 function getSortValue(d, colId) {
     switch (colId) {
         case 'hostname': return (d.hostname || '').toLowerCase();
         case 'prediction': return `${d.dev_class || ''} ${d.dev_vendor || ''}`.toLowerCase();
-        case 'hunter': return ((d.ha_info && d.ha_info.name) || (d.dev_vendor || '')).toLowerCase();
+        case 'hunter': {
+            const meta = getHunterSortMeta(d);
+            return `${meta.tier}_${meta.label}`;
+        }
         case 'medium': return (d.conn_medium_label || '').toLowerCase();
         case 'mac': return (d.mac || '').toLowerCase();
         case 'ip': return ipToNum(d.ip);
@@ -4898,6 +4929,19 @@ function renderTable() {
     });
 
     filtered.sort((a, b) => {
+        if (sortState.colId === 'hunter') {
+            const ha = getHunterSortMeta(a);
+            const hb = getHunterSortMeta(b);
+            // El nivel 1 (Home Assistant verificado) siempre va primero, luego nivel 2 (pistas/fabricantes), y al final nivel 3 (sin datos)
+            if (ha.tier !== hb.tier) {
+                return ha.tier - hb.tier;
+            }
+            // Mismo nivel: ordenar alfabéticamente respetando el sentido (▲ A-Z / ▼ Z-A)
+            if (ha.label < hb.label) return sortState.asc ? -1 : 1;
+            if (ha.label > hb.label) return sortState.asc ? 1 : -1;
+            return 0;
+        }
+
         const va = getSortValue(a, sortState.colId);
         const vb = getSortValue(b, sortState.colId);
         if (va < vb) return sortState.asc ? -1 : 1;
