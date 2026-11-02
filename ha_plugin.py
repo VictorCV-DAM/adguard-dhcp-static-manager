@@ -695,7 +695,7 @@ def _lookup_oui(prefix: str, full_mac: str) -> Dict[str, Any]:
 def _get_db_history(mac: str) -> Dict[str, Any]:
     try:
         import extras
-        db_path = extras.DB_PATH or '/home/yo/dhcp-panel/panel.db'
+        db_path = getattr(extras, 'DB_PATH', None) or os.path.join(_CURRENT_DIR, 'panel.db')
         if not os.path.exists(db_path):
             return {}
         import sqlite3

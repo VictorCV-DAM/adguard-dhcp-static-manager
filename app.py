@@ -41,9 +41,11 @@ def add_no_cache_headers(response):
     response.headers['Pragma'] = 'no-cache'
     return response
 
-LEASES_PATH = '/home/yo/servicios/adguard-work/data/leases.json'
-YAML_PATH = '/home/yo/servicios/adguard-conf/AdGuardHome.yaml'
-CONFIG_PATH = '/home/yo/dhcp-panel/config.json'
+import tempfile
+
+LEASES_PATH = os.environ.get('DHCP_PANEL_LEASES_PATH') or '/home/yo/servicios/adguard-work/data/leases.json'
+YAML_PATH = os.environ.get('DHCP_PANEL_YAML_PATH') or '/home/yo/servicios/adguard-conf/AdGuardHome.yaml'
+CONFIG_PATH = os.environ.get('DHCP_PANEL_CONFIG_PATH') or os.path.join(_CURRENT_DIR, 'config.json')
 
 DEFAULT_CONFIG = {
     "adguard_url": "http://192.168.1.249:8080",
@@ -480,7 +482,7 @@ class MercusysHaloSession:
 
 
 # Caché en memoria y disco de sesiones Mercusys Halo para respuesta instantánea en la web
-HALO_CACHE_FILE = '/tmp/halo_topology_cache.json'
+HALO_CACHE_FILE = os.environ.get('DHCP_PANEL_HALO_CACHE') or os.path.join(tempfile.gettempdir(), 'halo_topology_cache.json')
 _HALO_SESSIONS = {}
 _HALO_CACHE = {
     "timestamp": 0.0,
