@@ -2309,6 +2309,7 @@
                         <div id="ds-subtitle" style="font-size:0.82rem; color:var(--muted); margin-top:4px;"></div>
                         <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
                             <button id="ds-bell-btn" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; display:inline-flex; align-items:center; gap:4px;" onclick="toggleDeviceWatch(currentSheetMac, event)" title="Recibir un correo electrónico cuando este dispositivo se conecte a la red">🔔 Aviso Conexión</button>
+                            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); background:rgba(56,189,248,0.06); display:inline-flex; align-items:center; gap:4px; font-weight:600;" onclick="openMacHunterModal(currentSheetMac)" title="Investigación y análisis forense completo del dispositivo (Cazador de MAC)">🔍 Análisis Forense</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="exportSingleDeviceSheet()" title="Descargar archivo comprimido (.zip) con ficha técnica y carpeta de imágenes">📥 Exportar Ficha (.zip)</button>
                             <button class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:#34d399; border-color:rgba(52,211,153,0.4);" onclick="document.getElementById('ds-import-file').click()" title="Restaurar o importar ficha técnica con imágenes (.zip o .json)">📤 Importar Ficha</button>
                             <input type="file" id="ds-import-file" accept=".zip,.json" style="display:none;" onchange="importSingleDeviceSheet(event)" />
@@ -2321,6 +2322,9 @@
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.12); display:inline-flex; align-items:center; gap:6px; font-weight:700;" onclick="openMacHunterModal(currentSheetMac)" title="Abrir análisis forense completo para este dispositivo (Cazador de MAC, OUI, Home Assistant, Wi-Fi...)">
+                        <span>🔍</span> Análisis Forense
+                    </button>
                     <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:6px;" onclick="closeDeviceSheet(); locateDeviceInTopology(currentSheetMac, currentSheetIp)" title="Ver y centrar este dispositivo en el mapa de topología">
                         <span>🌐</span> Ver en Topología
                     </button>
@@ -2365,6 +2369,25 @@
                     <button type="button" id="ds-btn-apply-dhcp" class="btn btn-primary" style="padding:7px 14px; font-size:0.81rem; font-weight:700;" onclick="applyDhcpFromSheet()">📌 Guardar Nombre / Aplicar IP</button>
                 </div>
                 <div id="ds-dhcp-status" style="display:none; margin-top:8px; padding:6px 10px; border-radius:6px; font-size:0.78rem;"></div>
+            </div>
+
+            <!-- SECCIÓN: ANÁLISIS FORENSE Y CAZADOR DE IDENTIDAD -->
+            <div style="background:#0f172a; padding:12px 14px; border-radius:10px; border:1px solid rgba(56,189,248,0.35); margin-bottom:14px; box-shadow:0 2px 8px rgba(0,0,0,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:1.15rem;">🕵️‍♂️</span>
+                        <div>
+                            <strong style="font-size:0.88rem; color:#e0f2fe;">Análisis Forense y Cazador de MAC</strong>
+                            <div style="font-size:0.72rem; color:var(--muted);">Auditoría OUI, sincronización Home Assistant, telemetría e inteligencia web</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline" style="padding:6px 13px; font-size:0.79rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.12); font-weight:700; display:inline-flex; align-items:center; gap:6px;" onclick="openMacHunterModal(currentSheetMac)" title="Abrir informe forense completo del Cazador para esta MAC">
+                        <span>🔍</span> Abrir Análisis Forense Completo
+                    </button>
+                </div>
+                <div id="ds-forensic-preview" style="margin-top:10px; font-size:0.8rem; color:var(--muted); line-height:1.45; background:rgba(30,41,59,0.5); padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                    Cargando datos forenses...
+                </div>
             </div>
 
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px;">
@@ -9746,6 +9769,48 @@ async function openDeviceSheet(mac, ipHint = '') {
     document.getElementById('ds-dns').innerHTML = 'Consultando registro de AdGuard Home...';
     document.getElementById('ds-events').innerHTML = 'Cargando historial...';
     document.getElementById('ds-portscan').innerHTML = 'Pulsa un modo arriba para escanear puertos TCP abiertos en este dispositivo.';
+
+    // Actualizar vista previa forense
+    const forensicPreview = document.getElementById('ds-forensic-preview');
+    if (forensicPreview) {
+        let lines = [];
+        lines.push(`🏭 <strong>Fabricante / Chipset OUI:</strong> ${escapeHtml(dev.dev_vendor || 'Desconocido')} ${dev.random_mac ? '<span style="color:#fcd34d;">(MAC aleatoria / privada)</span>' : ''}`);
+        if (dev.ha_info) {
+            lines.push(`🏠 <strong>Home Assistant (${escapeHtml(dev.ha_info.instance_name || 'HA')}):</strong> <span style="color:#86efac; font-weight:700;">${escapeHtml(dev.ha_info.name)}</span> ${dev.ha_info.model ? `(${escapeHtml(dev.ha_info.model)})` : ''} ${dev.ha_info.area ? `· Ubicación: ${escapeHtml(dev.ha_info.area)}` : ''}`);
+        } else {
+            lines.push(`🏠 <strong>Home Assistant:</strong> <span style="color:var(--muted);">Sin vincular directamente por MAC (el cazador puede buscar coincidencias por modelo/IP)</span>`);
+        }
+        const mediumTxt = dev.conn_medium === 'cable' ? '🔌 Cable Ethernet' : (dev.conn_medium === 'wifi' ? `📶 Wi-Fi (${dev.router_node || 'Punto de Acceso'})` : 'Desconectado / Pasivo');
+        lines.push(`🌐 <strong>Medio de red:</strong> ${mediumTxt} · <strong>IP Actual:</strong> <code>${dev.ip || currentSheetIp || '—'}</code>`);
+        forensicPreview.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;">
+                ${lines.map(l => `<div>${l}</div>`).join('')}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px; margin-top:6px;">
+                <span style="font-size:0.75rem; color:#38bdf8; cursor:pointer; text-decoration:underline; font-weight:600;" onclick="openMacHunterModal('${mac}')">
+                    ➔ Lanzar rastreo forense multi-capa (OUI, sondeo ARP, telemetría e inteligencia web)
+                </span>
+                <button type="button" class="btn btn-outline" style="padding:3px 9px; font-size:0.74rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); background:rgba(56,189,248,0.08); font-weight:600;" onclick="openMacHunterModal('${mac}')">🔍 Analizar ahora</button>
+            </div>
+        `;
+    }
+
+    // Acciones rápidas (render inmediato sincrónico)
+    const renderSheetActions = (dBlocked) => {
+        const acts = document.getElementById('ds-actions');
+        if (!acts) return;
+        acts.innerHTML = `
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.1); font-weight:700;" onclick="openMacHunterModal('${mac}')" title="Investigación forense completa de la MAC, Home Assistant, chip OUI e inteligencia web">🔍 Análisis Forense</button>
+            <button class="btn ${dBlocked ? 'btn-success' : 'btn-danger'}" style="padding:6px 12px; font-size:0.8rem;" onclick="toggleBlockDevice('${mac}', ${!dBlocked})">
+                ${dBlocked ? '✅ Desbloquear Internet (DNS)' : '⛔ Cortar Internet (Bloquear DNS)'}
+            </button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">⚡ Wake-on-LAN (Encender)</button>
+            ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="quickPing(this, '${currentSheetIp}')" title="Hacer Ping a ${currentSheetIp}">⚡ Hacer Ping</button>` : ''}
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\\'")}', '${mac}', '${dev.ip || currentSheetIp}')">✏️ Editar Concesión DHCP</button>
+        `;
+    };
+    renderSheetActions(!!dev.blocked);
+
     document.getElementById('device-sheet-overlay').style.display = 'flex';
 
     const res = await fetch(`/api/device/${encodeURIComponent(mac)}?ip=${encodeURIComponent(currentSheetIp)}`);
@@ -9760,16 +9825,7 @@ async function openDeviceSheet(mac, ipHint = '') {
         if (dev) dev.photo = meta.photo;
     }
 
-    const blocked = !!dev.blocked;
-    document.getElementById('ds-actions').innerHTML = `
-        <button class="btn ${blocked ? 'btn-success' : 'btn-danger'}" style="padding:6px 12px; font-size:0.8rem;" onclick="toggleBlockDevice('${mac}', ${!blocked})">
-            ${blocked ? '✅ Desbloquear Internet (DNS)' : '⛔ Cortar Internet (Bloquear DNS)'}
-        </button>
-        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8;" onclick="closeDeviceSheet(); openMacHunterModal('${mac}')">🔍 Cazador Forense</button>
-        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">⚡ Wake-on-LAN (Encender)</button>
-        ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="quickPing(this, '${currentSheetIp}')" title="Hacer Ping a ${currentSheetIp}">⚡ Hacer Ping</button>` : ''}
-        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\\'")}', '${mac}', '${dev.ip || currentSheetIp}')">✏️ Editar Concesión DHCP</button>
-    `;
+    renderSheetActions(!!dev.blocked);
 
     const lat = dev.latency_ms ?? meta.latency_ms;
     document.getElementById('ds-metrics').innerHTML = `
