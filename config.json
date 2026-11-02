@@ -2,5 +2,6 @@
   "adguard_url": "",
   "adguard_user": "",
   "adguard_pass": "",
-  "routers": []
+  "routers": [],
+  "detect_localhost_services": true
 }
