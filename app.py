@@ -23,6 +23,9 @@ import os
 import re
 import time
 import base64
+import platform
+import csv
+import io
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -699,6 +702,245 @@ def scan_device_verified_services(ip):
         return []
     with ThreadPoolExecutor(max_workers=min(25, len(CANDIDATE_WEB_PORTS))) as pool:
         results = [r for r in pool.map(lambda p: probe_http_service(ip, p), CANDIDATE_WEB_PORTS) if r]
+    return results
+
+
+KNOWN_LOCAL_SERVICES = {
+    53: 'Servidor DNS',
+    80: 'Servidor Web HTTP',
+    443: 'Servidor Web HTTPS',
+    135: 'MS RPC Endpoint Mapper',
+    139: 'NetBIOS Session Service',
+    445: 'SMB / Compartición de Archivos',
+    902: 'VMware Server Auth Daemon',
+    1194: 'OpenVPN Server',
+    1234: 'LM Studio (Local LLM API)',
+    1433: 'Microsoft SQL Server',
+    1883: 'MQTT Broker',
+    2049: 'NFS Network File System',
+    2375: 'Docker REST API',
+    2376: 'Docker Daemon TLS',
+    3000: 'AdGuard Home / Grafana / Dev Server',
+    3001: 'Uptime Kuma / Node App',
+    3306: 'Base de Datos MySQL / MariaDB',
+    3389: 'Escritorio Remoto de Windows (RDP)',
+    4040: 'Subsonic / Airsonic',
+    4200: 'Angular Dev Server',
+    5000: 'Flask / Desarrollo Web',
+    5001: 'Panel DHCP AdGuard',
+    5050: 'pgAdmin',
+    5173: 'Vite Frontend Server',
+    5432: 'Base de Datos PostgreSQL',
+    5678: 'n8n Workflow Automation',
+    6052: 'ESPHome Dashboard',
+    6379: 'Redis In-Memory Key-Value',
+    6789: 'NZBGet',
+    7860: 'Gradio / Stable Diffusion WebUI',
+    7878: 'Radarr',
+    8000: 'Servidor HTTP / FastAPI / Django',
+    8080: 'Servidor Web Alternativo / qBittorrent',
+    8081: 'Web Admin Alternate',
+    8086: 'InfluxDB',
+    8096: 'Jellyfin Media Server',
+    8123: 'Home Assistant',
+    8443: 'Servidor HTTPS Alternativo',
+    8581: 'Homebridge',
+    8686: 'Lidarr',
+    8888: 'Jupyter Notebook',
+    8989: 'Sonarr',
+    9000: 'Portainer / SonarQube',
+    9090: 'Prometheus Metrics / Cockpit',
+    9091: 'Transmission Web',
+    9443: 'Portainer HTTPS',
+    9981: 'Tvheadend',
+    10000: 'Webmin',
+    11434: 'Ollama (Local LLM Server)',
+    27017: 'Base de Datos MongoDB',
+    32400: 'Plex Media Server',
+    47989: 'Sunshine Game Stream',
+    47990: 'Sunshine Game Stream Web UI'
+}
+
+_LOCALHOST_SERVICES_CACHE = (0, [])  # (timestamp, [services])
+
+def scan_localhost_services(probe_http=True, force_refresh=False):
+    """Detecta todos los servicios escuchando en localhost (127.0.0.1 y 0.0.0.0) en el PC del panel."""
+    global _LOCALHOST_SERVICES_CACHE
+    now = time.time()
+    if not force_refresh and _LOCALHOST_SERVICES_CACHE[1] and (now - _LOCALHOST_SERVICES_CACHE[0]) < 20:
+        return _LOCALHOST_SERVICES_CACHE[1]
+
+    system = platform.system()
+    raw_ports = {}  # port -> {'bind': bind_ip, 'pid': pid, 'process': proc_name}
+
+    if system == 'Windows':
+        try:
+            out = subprocess.check_output(['netstat', '-ano', '-p', 'tcp'], text=True, stderr=subprocess.DEVNULL)
+            pid_map = {}
+            for line in out.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and parts[0].upper() == 'TCP' and parts[3].upper() == 'LISTENING':
+                    addr = parts[1]
+                    pid = parts[4]
+                    if ':' in addr:
+                        try:
+                            ip_part, port_str = addr.rsplit(':', 1)
+                            p = int(port_str)
+                            if 1 <= p <= 65535:
+                                pid_map[p] = (ip_part, pid)
+                        except Exception:
+                            pass
+            pids = set(pid for _, pid in pid_map.values())
+            proc_names = {}
+            try:
+                tl = subprocess.check_output(['tasklist', '/fo', 'csv', '/nh'], text=True, stderr=subprocess.DEVNULL, timeout=2.0)
+                reader = csv.reader(io.StringIO(tl))
+                for row in reader:
+                    if len(row) >= 2 and row[1] in pids:
+                        proc_names[row[1]] = row[0]
+            except Exception:
+                pass
+            for p, (ip_part, pid) in pid_map.items():
+                raw_ports[p] = {'bind': ip_part, 'pid': pid, 'process': proc_names.get(pid, '')}
+        except Exception:
+            pass
+    elif system == 'Linux':
+        try:
+            out = subprocess.check_output(['ss', '-tlnp'], text=True, stderr=subprocess.DEVNULL, timeout=2.0)
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 4 and 'LISTEN' in parts[0]:
+                    addr = parts[3]
+                    if ':' in addr:
+                        try:
+                            ip_part, port_str = addr.rsplit(':', 1)
+                            p = int(port_str)
+                            proc_name = ''
+                            pid = ''
+                            if len(parts) >= 6:
+                                m = re.search(r'"([^"]+)",pid=(\d+)', parts[5])
+                                if m:
+                                    proc_name = m.group(1)
+                                    pid = m.group(2)
+                            raw_ports[p] = {'bind': ip_part, 'pid': pid, 'process': proc_name}
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        if not raw_ports:
+            try:
+                for proc_path in ['/proc/net/tcp', '/proc/net/tcp6']:
+                    if os.path.exists(proc_path):
+                        with open(proc_path, 'r') as f:
+                            lines = f.readlines()[1:]
+                            for line in lines:
+                                p_parts = line.strip().split()
+                                if len(p_parts) >= 4 and p_parts[3] == '0A':
+                                    local_addr = p_parts[1]
+                                    hex_port = local_addr.split(':')[1]
+                                    p = int(hex_port, 16)
+                                    raw_ports[p] = {'bind': '127.0.0.1', 'pid': '', 'process': ''}
+            except Exception:
+                pass
+
+    def probe_one(port, info):
+        bind_ip = info['bind']
+        pid = info['pid']
+        proc_name = info['process']
+        should_probe = probe_http and (port < 49152 or port in (49353, 50134, 5001, 8080, 8443, 3000, 8123))
+        is_http = False
+        url = None
+        title = ''
+        server_header = ''
+        http_code = None
+
+        if should_probe:
+            for proto in ['http', 'https']:
+                test_url = f'{proto}://127.0.0.1:{port}/'
+                try:
+                    req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                    with urllib.request.urlopen(req, timeout=0.18, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
+                        is_http = True
+                        http_code = resp.getcode()
+                        url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
+                        content = resp.read(2048).decode('utf-8', errors='ignore')
+                        m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                        title = m.group(1).strip() if m else ''
+                        server_header = resp.headers.get('Server', '')
+                        break
+                except urllib.error.HTTPError as e:
+                    if e.code in (401, 403, 301, 302, 307, 308, 404, 400, 405):
+                        is_http = True
+                        http_code = e.code
+                        url = f'{proto}://localhost:{port}' if port not in (80, 443) else f'{proto}://localhost'
+                        content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ''
+                        m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                        title = m.group(1).strip() if m else f'HTTP {e.code}'
+                        server_header = e.headers.get('Server', '')
+                        break
+                except Exception:
+                    pass
+
+        known = KNOWN_LOCAL_SERVICES.get(port)
+        icon = '⚙️'
+        category = 'system'
+        if is_http:
+            icon = '🌐'
+            category = 'web'
+        if port in (53, 5353):
+            icon = '🛡️'
+            category = 'dns'
+        elif port in (3306, 5432, 27017, 6379, 1433):
+            icon = '🗄️'
+            category = 'database'
+        elif port in (11434, 1234, 8000, 5000) or 'ollama' in proc_name.lower():
+            icon = '🤖'
+            category = 'ai'
+        elif port in (8123, 1883) or 'homeassistant' in proc_name.lower():
+            icon = '🏠'
+            category = 'iot'
+        elif port in (32400, 8096, 47989, 47990):
+            icon = '🎬'
+            category = 'media'
+        elif port == 5001:
+            icon = '🛡️'
+            category = 'web'
+            known = 'Panel DHCP AdGuard'
+
+        label = title or known or (f'{proc_name} (:{port})' if proc_name else f'Puerto :{port}')
+        is_loopback_only = bind_ip in ('127.0.0.1', '::1')
+        bind_label = 'Solo Local (127.0.0.1)' if is_loopback_only else f'Red Local ({bind_ip})'
+
+        return {
+            'port': port,
+            'bind': bind_ip,
+            'bind_label': bind_label,
+            'is_loopback_only': is_loopback_only,
+            'pid': pid,
+            'process': proc_name,
+            'is_http': is_http,
+            'http_code': http_code,
+            'url': url,
+            'label': label,
+            'title': title,
+            'server': server_header,
+            'known_service': known,
+            'icon': icon,
+            'category': category
+        }
+
+    results = []
+    if raw_ports:
+        with ThreadPoolExecutor(max_workers=min(20, len(raw_ports))) as pool:
+            futs = [pool.submit(probe_one, p, info) for p, info in sorted(raw_ports.items())]
+            for f in futs:
+                try:
+                    results.append(f.result())
+                except Exception:
+                    pass
+
+    results.sort(key=lambda x: (not x['is_http'], x['port']))
+    _LOCALHOST_SERVICES_CACHE = (now, results)
     return results
 
 
@@ -2206,6 +2448,35 @@ def build_state(force_refresh=False):
             })
             seen_ips.add(aip)
 
+    # Descubrir servicios en localhost del host local donde se ejecuta el panel
+    localhost_svcs = scan_localhost_services(probe_http=True, force_refresh=force_refresh)
+    host_web_links = []
+    host_open_ports = set()
+    for s in localhost_svcs:
+        p = s.get('port')
+        if p:
+            host_open_ports.add(p)
+        if s.get('is_http') and s.get('url'):
+            lbl = s.get('label') or f"Servicio (:{p})"
+            host_web_links.append({
+                'label': lbl,
+                'url': s['url'],
+                'port': p,
+                'default_label': lbl,
+                'is_custom': False,
+                'bind': s.get('bind', '127.0.0.1')
+            })
+    if not any(w.get('port') == 5001 for w in host_web_links):
+        host_web_links.insert(0, {
+            'label': 'Panel DHCP (:5001)',
+            'url': f'http://{local_ip}:5001' if local_ip else 'http://localhost:5001',
+            'port': 5001,
+            'default_label': 'Panel DHCP (:5001)',
+            'is_custom': False,
+            'bind': '0.0.0.0'
+        })
+        host_open_ports.add(5001)
+
     # Incluir el propio equipo host local si no está ya en la lista de IPs
     if local_ip and local_ip != '127.0.0.1' and local_ip not in seen_ips:
         devices.append({
@@ -2227,10 +2498,19 @@ def build_state(force_refresh=False):
             'dev_vendor': 'Host Local',
             'dev_icon': '🖥️',
             'dev_cat': 'server',
-            'web_links': [{'label': 'Panel DHCP (:5001)', 'url': f'http://{local_ip}:5001', 'port': 5001, 'default_label': 'Panel DHCP (:5001)', 'is_custom': False}],
-            'open_ports': [5001]
+            'web_links': host_web_links,
+            'open_ports': sorted(list(host_open_ports))
         })
         seen_ips.add(local_ip)
+    else:
+        for d in devices:
+            if d.get('ip') == local_ip:
+                existing_urls = {w.get('url') for w in (d.get('web_links') or [])}
+                for hl in host_web_links:
+                    if hl.get('url') not in existing_urls:
+                        d.setdefault('web_links', []).append(hl)
+                all_p = set(d.get('open_ports') or []) | host_open_ports
+                d['open_ports'] = sorted(list(all_p))
 
     # Pre-escaneo rápido y concurrente de puertos web para todos los dispositivos activos en la red
     active_ips = set()
@@ -2449,8 +2729,32 @@ def build_state(force_refresh=False):
         'custom_service_names': custom_names,
         'static_order_summary': static_order_summary,
         'ha_plugin_enabled': cfg.get('ha_plugin_enabled', False),
-        'home_assistant_instances': cfg.get('home_assistant_instances', [])
+        'home_assistant_instances': cfg.get('home_assistant_instances', []),
+        'localhost_services': localhost_svcs,
+        'localhost_info': {
+            'hostname': socket.gethostname(),
+            'local_ip': local_ip,
+            'platform': platform.system(),
+            'total_services': len(localhost_svcs),
+            'http_count': sum(1 for s in localhost_svcs if s.get('is_http'))
+        }
     }
+
+
+@app.route('/api/localhost-services', methods=['GET', 'POST'])
+def api_localhost_services():
+    force = bool(request.args.get('force') or request.args.get('refresh') or request.method == 'POST')
+    services = scan_localhost_services(probe_http=True, force_refresh=force)
+    local_ip, _, _ = get_network_info()
+    return jsonify({
+        'success': True,
+        'hostname': socket.gethostname(),
+        'local_ip': local_ip,
+        'platform': platform.system(),
+        'total': len(services),
+        'http_count': sum(1 for s in services if s.get('is_http')),
+        'services': services
+    })
 
 
 @app.route('/api/state', methods=['GET'])
