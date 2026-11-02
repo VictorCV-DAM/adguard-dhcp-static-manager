@@ -6464,7 +6464,7 @@ function smartAutoOrganizeTopology() {
     // 1. Guardar el estado actual en el historial de deshacer (Ctrl+Z)
     pushTopoUndo(JSON.parse(JSON.stringify(topoState.customPositions || {})));
 
-    _autoOrganizeCounter = (_autoOrganizeCounter + 1) % 3;
+    _autoOrganizeCounter = (_autoOrganizeCounter + 1) % 4;
     try {
         localStorage.setItem('ag_topo_organize_seed', String(_autoOrganizeCounter));
     } catch (e) {}
@@ -6472,66 +6472,169 @@ function smartAutoOrganizeTopology() {
     const hubNodes = topoState.nodes.filter(n => n.type === 'hub');
     if (hubNodes.length === 0) return;
 
-    // Preservar la arquitectura lógica y coherente de la red doméstica:
-    // - Router Principal / Pasarela en la base central
-    // - Ala izquierda: TP-Link WR841N (inferior) y Halo 2 Estudio (superior)
-    // - Ala derecha: Halo 1 Mi habitación (inferior) y Halo 3 Pasillo (superior)
-    // - Eje central: Servidores LAN (HA-VM, Pi-Server) y archivo Desconectado
-    const newPositions = {};
-
-    const varIndex = _autoOrganizeCounter; // 0, 1, 2
-    const varNames = [
-        'Constelación Expansiva Panorámica',
-        'Árbol Arquitectónico Balanceado',
-        'Flujo Orgánico Celestial'
-    ];
-
-    // Variaciones coherentes de espaciado y elevación por clic:
-    // Variación 0: Alas amplias horizontales, máxima separación central
-    // Variación 1: Elevación simétrica vertical, equilibrio de alturas
-    // Variación 2: Flujo orgánico con ligera respiración lateral
-    const wingX = varIndex === 0 ? 460 : (varIndex === 1 ? 400 : 430);
-    const upperY = varIndex === 0 ? -110 : (varIndex === 1 ? -150 : -80);
-    const lowerY = varIndex === 0 ? 190 : (varIndex === 1 ? 160 : 210);
-    const coreY = varIndex === 1 ? 330 : 360;
-
-    newPositions['__core__'] = { x: 0, y: coreY };
+    // 2. Clasificación universal de nodos (100% agnóstica de marcas o nombres de router)
+    // Aplica para cualquier usuario con cualquier combinación de routers, APs, mesh o switches
+    const offlineHubs = [];
+    const directLanHubs = [];
+    const activeHubs = [];
 
     hubNodes.forEach(h => {
-        const labelLow = (h.label || '').toLowerCase();
         const idLow = (h.id || '').toLowerCase();
+        const labelLow = (h.label || '').toLowerCase();
+        const isOff = idLow.includes('offline') || idLow.includes('desconectado') || labelLow.includes('desconectado');
+        const isLanDirect = (h.isCable && (h.parentId === '__core__' || idLow === 'hub:lan')) || labelLow === 'router principal / lan';
 
-        if (labelLow.includes('lan') || labelLow.includes('router principal') || idLow === 'hub:lan') {
-            newPositions[h.id] = { x: 0, y: coreY - 110 };
-        } else if (labelLow.includes('wr841n') || labelLow.includes('tp-link') || labelLow.includes('taller')) {
-            // Ala izquierda inferior
-            newPositions[h.id] = { x: -wingX + 40, y: lowerY };
-        } else if (labelLow.includes('halo 2') || labelLow.includes('estudio')) {
-            // Ala izquierda superior
-            newPositions[h.id] = { x: -wingX, y: upperY };
-        } else if (labelLow.includes('halo 3') || labelLow.includes('pasillo')) {
-            // Ala derecha superior
-            newPositions[h.id] = { x: wingX, y: upperY };
-        } else if (labelLow.includes('halo 1') || labelLow.includes('habitaci')) {
-            // Ala derecha inferior
-            newPositions[h.id] = { x: wingX - 40, y: lowerY };
-        } else if (labelLow.includes('desconectado') || labelLow.includes('offline')) {
-            // Zona superior central
-            newPositions[h.id] = { x: 0, y: -240 };
-        } else if (labelLow.includes('wifi') || idLow === 'hub:wifi') {
-            newPositions[h.id] = { x: -180, y: coreY - 90 };
+        if (isOff) {
+            offlineHubs.push(h);
+        } else if (isLanDirect) {
+            directLanHubs.push(h);
         } else {
-            // Cualquier otro nodo descubierto: asignar a la banda que corresponda
-            const isLeft = (h.baseX < 0);
-            newPositions[h.id] = {
-                x: isLeft ? -wingX - 60 : wingX + 60,
-                y: Math.round(upperY + (varIndex === 0 ? 80 : -60))
-            };
+            activeHubs.push(h);
         }
     });
 
-    // 3. Aplicar las nuevas posiciones a los hubs y purgar las posiciones cliente
-    // para que buildTopoGraph proyecte los clientes en sus nuevas constelaciones exteriores protegidas
+    // Ordenar los hubs activos por volumen de dispositivos (subárbol) para un equilibrio visual perfecto
+    activeHubs.sort((a, b) => {
+        const ca = (a.totalCount || a.onlineCount || 0);
+        const cb = (b.totalCount || b.onlineCount || 0);
+        return cb - ca;
+    });
+
+    const newPositions = {};
+
+    // 4 Arquetipos de organización universales, balanceados y libres de colisiones
+    const archetypeIndex = _autoOrganizeCounter; // 0..3
+    const archNames = [
+        'Árbol Panorámico Ascendente',
+        'Constelación Radial 360°',
+        'Panorámica Espejada (Invertida)',
+        'Cúmulos Orgánicos Proporcionales'
+    ];
+
+    if (archetypeIndex === 1) {
+        // =========================================================================
+        // ARQUETIPO 1: CONSTELACIÓN RADIAL 360° (Core en el centro, órbitas libres)
+        // =========================================================================
+        newPositions['__core__'] = { x: 0, y: 0 };
+
+        // Servidores LAN directos en un radio cercano (200px)
+        directLanHubs.forEach((h, idx) => {
+            newPositions[h.id] = { x: 0, y: 190 };
+        });
+
+        // Hubs activos repartidos en sectores angulares de 360° según su carga de clientes
+        const totalWeight = activeHubs.reduce((acc, h) => acc + Math.max(3, (h.totalCount || 1)), 0);
+        let currentAngle = -Math.PI / 2 + 0.2; // Comenzar en el cuadrante superior
+
+        activeHubs.forEach((h, idx) => {
+            const weight = Math.max(3, (h.totalCount || 1));
+            const sliceSpan = (weight / totalWeight) * (Math.PI * 2);
+            const midAngle = currentAngle + sliceSpan / 2;
+            currentAngle += sliceSpan;
+
+            // Distancia radial: mayor para hubs con más clientes para darles amplio cielo
+            const radius = Math.round(480 + Math.min(160, weight * 6) + (idx % 2 === 0 ? 30 : -30));
+            newPositions[h.id] = {
+                x: Math.round(Math.cos(midAngle) * radius),
+                y: Math.round(Math.sin(midAngle) * radius)
+            };
+        });
+
+        // Nodo desconectado en órbita externa superior
+        offlineHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: -450 };
+        });
+
+    } else if (archetypeIndex === 2) {
+        // =========================================================================
+        // ARQUETIPO 2: PANORÁMICA ESPEJADA (Inversión lateral para nueva perspectiva)
+        // =========================================================================
+        const coreY = 340;
+        newPositions['__core__'] = { x: 0, y: coreY };
+
+        directLanHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: coreY - 110 };
+        });
+
+        // Distribución en herradura invertida de derecha a izquierda
+        const M = activeHubs.length;
+        activeHubs.forEach((h, idx) => {
+            const u = M === 1 ? 0.5 : idx / (M - 1);
+            // Ángulo desde derecha (0.2 rad) hacia izquierda (pi - 0.2 rad)
+            const angle = 0.25 + u * (Math.PI - 0.50);
+            const rx = 470 + (idx % 2 === 0 ? 35 : -35);
+            const ry = 250 + (idx % 2 === 0 ? -40 : 40);
+
+            const hx = Math.round(Math.cos(angle) * rx);
+            const hy = Math.round(-Math.sin(angle) * ry + 90);
+            newPositions[h.id] = { x: hx, y: hy };
+        });
+
+        offlineHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: -260 };
+        });
+
+    } else if (archetypeIndex === 3) {
+        // =========================================================================
+        // ARQUETIPO 3: CÚMULOS ORGÁNICOS PROPORCIONALES (Escala según peso real)
+        // =========================================================================
+        const coreY = 350;
+        newPositions['__core__'] = { x: 0, y: coreY };
+
+        directLanHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: coreY - 110 };
+        });
+
+        // Intercalar hubs pesados y ligeros alternando alas izquierda y derecha
+        activeHubs.forEach((h, idx) => {
+            const isLeft = (idx % 2 === 0);
+            const tierInWing = Math.floor(idx / 2);
+            const cCount = h.totalCount || h.onlineCount || 1;
+
+            // Distancia lateral según volumen de clientes
+            const wingDist = 420 + Math.min(180, cCount * 7) + (tierInWing === 0 ? 0 : 70);
+            const sign = isLeft ? -1 : 1;
+            const hx = Math.round(sign * wingDist);
+            const hy = Math.round((tierInWing === 0 ? -110 : 170) + (isLeft ? -25 : 25));
+
+            newPositions[h.id] = { x: hx, y: hy };
+        });
+
+        offlineHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: -270 };
+        });
+
+    } else {
+        // =========================================================================
+        // ARQUETIPO 0: ÁRBOL PANORÁMICO ASCENDENTE (Base central, apertura lateral)
+        // =========================================================================
+        const coreY = 350;
+        newPositions['__core__'] = { x: 0, y: coreY };
+
+        directLanHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: coreY - 110 };
+        });
+
+        const M = activeHubs.length;
+        activeHubs.forEach((h, idx) => {
+            const u = M === 1 ? 0.5 : idx / (M - 1);
+            // Ángulo desde izquierda (pi - 0.25) hacia derecha (0.25)
+            const angle = (Math.PI - 0.25) - u * (Math.PI - 0.50);
+            const rx = 460 + (idx % 2 === 0 ? 35 : -35);
+            const ry = 250 + (idx % 2 === 0 ? -40 : 40);
+
+            const hx = Math.round(Math.cos(angle) * rx);
+            const hy = Math.round(-Math.sin(angle) * ry + 90);
+            newPositions[h.id] = { x: hx, y: hy };
+        });
+
+        offlineHubs.forEach(h => {
+            newPositions[h.id] = { x: 0, y: -260 };
+        });
+    }
+
+    // 3. Aplicar las nuevas posiciones calculadas a los hubs
+    // Purgar las posiciones personalizadas de clientes para que se proyecten en sus constelaciones exteriores protegidas
     topoState.customPositions = newPositions;
     buildTopoGraph(false);
 
@@ -6544,7 +6647,7 @@ function smartAutoOrganizeTopology() {
     fitTopoToScreen(true);
     triggerNeuralCascade();
     updateTopoUndoBtn();
-    showMessage(`✨ Topología autoorganizada: ${varNames[varIndex]} (ramas coherentes y sin solapamientos).`);
+    showMessage(`✨ Topología autoorganizada: ${archNames[archetypeIndex]} (algoritmo universal sin solapamientos).`);
 }
 
 function resetTopoStageBox() {
