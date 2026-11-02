@@ -1586,7 +1586,7 @@
                 </div>
                 <div>
                     <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección MAC</label>
-                    <input type="text" id="in-mac" placeholder="a8:80:55:d2:df:80" style="width:100%;">
+                    <input type="text" id="in-mac" placeholder="a8:80:55:d2:df:80" oninput="onMacInputCard(this.value)" style="width:100%;">
                 </div>
                 <div>
                     <label style="display:block; font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Dirección IP (192.168.1.X)</label>
@@ -4887,7 +4887,7 @@ function renderTable() {
                     ${webDropdownHtml}
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ficha completa: notas, DNS, historial, WoL, cortar Internet y puertos">🧾 Ficha</button>
                     <button class="btn btn-outline" style="padding:4px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar y centrar este dispositivo en la topología de red">🌐 Mapa</button>
-                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${(d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Editar / Fijar</button>
+                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${((d.ha_info && d.ha_info.name) || d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">Editar / Fijar</button>
                     <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.ip}')" title="Hacer Ping a ${d.ip}">⚡ Ping</button>
                     <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">Borrar</button>
                 </div>
@@ -4969,8 +4969,33 @@ function syncCardMode() {
     }
 }
 
+function onMacInputCard(val) {
+    syncCardMode();
+    const m = (val || '').trim().toLowerCase();
+    if (m.length >= 12 && typeof allDevices !== 'undefined') {
+        const cleanM = m.replace(/[^0-9a-f]/g, '');
+        const dev = allDevices.find(x => {
+            const xClean = (x.mac || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+            return xClean === cleanM;
+        });
+        if (dev && dev.ha_info && dev.ha_info.name) {
+            const hostInp = document.getElementById('in-hostname');
+            if (hostInp && (!hostInp.value.trim() || hostInp.value.startsWith('esp-') || hostInp.value === '(Sin nombre)')) {
+                hostInp.value = dev.ha_info.name;
+            }
+        }
+    }
+}
+
 function fillForm(hostname, mac, ip) {
-    document.getElementById('in-hostname').value = hostname === '(Sin nombre)' ? '' : hostname;
+    const dev = (typeof allDevices !== 'undefined') ? allDevices.find(x => x.mac && x.mac.toLowerCase() === (mac || '').toLowerCase()) : null;
+    let chosenName = hostname === '(Sin nombre)' ? '' : hostname;
+    // Si existe en Home Assistant, presuponer siempre su nombre de Home Assistant
+    if (dev && dev.ha_info && dev.ha_info.name) {
+        chosenName = dev.ha_info.name;
+    }
+
+    document.getElementById('in-hostname').value = chosenName;
     document.getElementById('in-mac').value = mac;
     document.getElementById('in-ip').value = ip;
 
