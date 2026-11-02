@@ -7334,7 +7334,8 @@ function fitTopoToScreen(smooth = true) {
     const bh = Math.max(260, maxY - minY);
     const scaleX = (cw - 60) / bw;
     const scaleY = (ch - 90) / bh;
-    const sc = Math.max(0.28, Math.min(1.25, Math.min(scaleX, scaleY)));
+    const minAllowedScale = (window.innerWidth <= 768) ? 0.08 : 0.18;
+    const sc = Math.max(minAllowedScale, Math.min(1.25, Math.min(scaleX, scaleY)));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     centerOnPoint(cx, cy, sc, smooth);
@@ -7857,10 +7858,7 @@ function buildTopoGraph(fitView = false) {
     // Ejecutar relajación espacial para garantizar separación amplia y cero solapamientos
     relaxTopoPositions(nodes);
 
-    // Guardar limpieza de posiciones si hubo transiciones automáticas
-    if (nodes.some(n => n.flash > 0)) {
-        saveCustomPositionsToStorage();
-    }
+    // Renderizado puro y pasivo: cero guardado automático a servidor
 
     // 4. Construir enlaces troncales (Jerarquía real: Core -> Hubs directos, y Halo 1 -> Halo 2 & Halo 3)
     const hubsList = nodes.filter(n => n.type === 'hub');
@@ -8192,6 +8190,17 @@ function initTopoCanvas() {
         window.addEventListener('resize', () => {
             if (currentMainTab === 'topology') {
                 resizeCanvas();
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => fitTopoToScreen(false), 60);
+                }
+            }
+        });
+        window.addEventListener('orientationchange', () => {
+            if (currentMainTab === 'topology') {
+                setTimeout(() => {
+                    resizeCanvas();
+                    fitTopoToScreen(false);
+                }, 150);
             }
         });
 
@@ -8507,7 +8516,6 @@ function initTopoCanvas() {
                 });
 
                 canvas.style.cursor = 'grabbing';
-                saveCustomPositionsToStorage();
                 return;
             }
 
@@ -8571,7 +8579,6 @@ function initTopoCanvas() {
                 });
 
                 canvas.style.cursor = 'grabbing';
-                saveCustomPositionsToStorage();
                 return;
             }
 
@@ -8613,7 +8620,6 @@ function initTopoCanvas() {
                     });
                 }
                 canvas.style.cursor = 'grabbing';
-                saveCustomPositionsToStorage();
                 return;
             }
 
@@ -8650,9 +8656,12 @@ function initTopoCanvas() {
         window.addEventListener('mouseup', () => {
             if (currentMainTab !== 'topology') return;
             if (topoState.dragNode) {
-                if (topoState.movedDuringDrag && topoState.dragPreSnapshot) {
-                    pushTopoUndo(topoState.dragPreSnapshot);
-                    topoState.dragPreSnapshot = null;
+                if (topoState.movedDuringDrag) {
+                    if (topoState.dragPreSnapshot) {
+                        pushTopoUndo(topoState.dragPreSnapshot);
+                        topoState.dragPreSnapshot = null;
+                    }
+                    saveCustomPositionsToStorage();
                 } else if (!topoState.movedDuringDrag) {
                     const n = topoState.dragNode;
                     // Al hacer clic en otro cliente o nodo, cambiar el foco al nuevo nodo clicado
@@ -8679,9 +8688,12 @@ function initTopoCanvas() {
                 }
             }
             if (topoState.rotatingHub || topoState.rotatingTrunk) {
-                if (topoState.movedDuringDrag && topoState.dragPreSnapshot) {
-                    pushTopoUndo(topoState.dragPreSnapshot);
-                    topoState.dragPreSnapshot = null;
+                if (topoState.movedDuringDrag) {
+                    if (topoState.dragPreSnapshot) {
+                        pushTopoUndo(topoState.dragPreSnapshot);
+                        topoState.dragPreSnapshot = null;
+                    }
+                    saveCustomPositionsToStorage();
                 }
                 topoState.rotatingHub = null;
                 topoState.rotatingLink = null;
@@ -11235,30 +11247,28 @@ if (initCardsBtn) initCardsBtn.classList.toggle('active', topoState.showCards);
 const initCardsBox = document.getElementById('topology-container');
 if (initCardsBox) initCardsBox.style.display = topoState.showCards ? 'block' : 'none';
 
-// Sincronizar distribución de topología desde el servidor
-if (Object.keys(topoState.customPositions).length === 0) {
-    fetch('/api/topology/positions')
-        .then(r => r.json())
-        .then(res => {
-            if (res.status === 'success' && res.positions && Object.keys(res.positions).length > 0) {
+// Sincronizar distribución de topología desde el servidor (Fuente de verdad única para PC y Smartphone)
+fetch('/api/topology/positions')
+    .then(r => r.json())
+    .then(res => {
+        if (res.status === 'success') {
+            if (res.positions && Object.keys(res.positions).length > 0) {
                 topoState.customPositions = res.positions;
                 try {
                     localStorage.setItem('ag_topo_custom_positions_v3', JSON.stringify(res.positions));
                 } catch (e) {}
-                buildTopoGraph(false);
-                if (window.innerWidth <= 768) {
-                    setTimeout(() => fitTopoToScreen(false), 80);
-                }
+            } else {
+                topoState.customPositions = {};
+                try {
+                    localStorage.removeItem('ag_topo_custom_positions_v3');
+                } catch (e) {}
             }
-        }).catch(() => {});
-} else {
-    // Si ya tiene posiciones guardadas (ej. en PC), propagarlas al servidor para el smartphone
-    fetch('/api/topology/positions', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(topoState.customPositions)
+            if (currentMainTab === 'topology' && topoState.canvas) {
+                buildTopoGraph(false);
+                setTimeout(() => fitTopoToScreen(false), 60);
+            }
+        }
     }).catch(() => {});
-}
 
 
 // ==========================================================================
