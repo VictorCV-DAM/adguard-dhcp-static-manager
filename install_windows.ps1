@@ -1,7 +1,7 @@
 <#
     ========================================================================
-    Auto-instalador de AdGuard DHCP Panel Privado para Windows
-    Instala una instancia PORTABLE y aislada de Python (sin tocar tu PC)
+    Portable Auto-Installer for AdGuard DHCP Panel (Windows)
+    Installs an isolated PORTABLE instance of Python (zero system modification)
     ========================================================================
 #>
 
@@ -11,7 +11,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
 Set-Location $ScriptDir
 
-# Comprobar si se está ejecutando desde una unidad de red remota o montaje de red
+# Check if running on remote network drive or sshfs
 $isRemote = $false
 try {
     $driveLetter = if ($ScriptDir.Length -ge 2 -and $ScriptDir[1] -eq ':') { $ScriptDir.Substring(0, 2) } else { "" }
@@ -27,34 +27,31 @@ if ($ScriptDir.StartsWith("\\") -or $ScriptDir -match "sshfs" -or $ScriptDir.Con
 if ($isRemote) {
     Write-Host ""
     Write-Host "==================================================================" -ForegroundColor Red
-    Write-Host "   [ERROR CRITICO] EJECUCION EN UNIDAD DE RED O SSHFS DETECTADA" -ForegroundColor Red
+    Write-Host "   [CRITICAL ERROR] NETWORK DRIVE OR SSHFS EXECUTION DETECTED" -ForegroundColor Red
     Write-Host "==================================================================" -ForegroundColor Red
-    Write-Host "Ruta detectada: $ScriptDir" -ForegroundColor Yellow
+    Write-Host "Detected path: $ScriptDir" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Se ha detectado que el instalador se ejecuta desde una unidad de red" -ForegroundColor White
-    Write-Host "o almacenamiento remoto montado." -ForegroundColor White
+    Write-Host "Python environments and SQLite require running on a local physical disk" -ForegroundColor White
+    Write-Host "to ensure file locking and dependencies work reliably." -ForegroundColor White
     Write-Host ""
-    Write-Host "Los entornos de Python y SQLite requieren ejecutarse en un disco fisico local" -ForegroundColor White
-    Write-Host "para garantizar compatibilidad con bloqueos de archivos y dependencias." -ForegroundColor White
-    Write-Host ""
-    Write-Host "OPCIONES:" -ForegroundColor Cyan
+    Write-Host "OPTIONS:" -ForegroundColor Cyan
     Write-Host "------------------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host "OPCION 1: Si deseas ejecutar el panel en esta maquina Windows local:" -ForegroundColor Green
-    Write-Host "   1. Copia la carpeta completa a un disco local (ej. C:\adguard-panel)" -ForegroundColor White
-    Write-Host "   2. Abre la carpeta copiada y haz doble clic en iniciar_windows.bat" -ForegroundColor White
+    Write-Host "OPTION 1: To run the panel on this local Windows machine:" -ForegroundColor Green
+    Write-Host "   1. Copy the full folder to a local disk (e.g. C:\adguard-panel)" -ForegroundColor White
+    Write-Host "   2. Open the copied folder and double-click start_windows.bat" -ForegroundColor White
     Write-Host ""
-    Write-Host "OPCION 2: Si deseas ejecutar el panel en el servidor remoto:" -ForegroundColor Green
-    Write-Host "   1. Conectate directamente al servidor (por SSH o terminal local)." -ForegroundColor White
-    Write-Host "   2. Entra en la carpeta del proyecto en ese servidor y ejecuta:" -ForegroundColor White
-    Write-Host "      ./iniciar_linux.sh  o  iniciar_windows.bat" -ForegroundColor Yellow
+    Write-Host "OPTION 2: To run the panel on the remote server directly:" -ForegroundColor Green
+    Write-Host "   1. Connect directly to the server (via SSH or local terminal)." -ForegroundColor White
+    Write-Host "   2. Navigate to the project folder on that server and run:" -ForegroundColor White
+    Write-Host "      ./start_linux.sh" -ForegroundColor Yellow
     Write-Host "==================================================================" -ForegroundColor Red
     Write-Host ""
-    Write-Host "Presiona cualquier tecla para salir..." -ForegroundColor Gray
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
     try { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch {}
     exit 1
 }
 
-# Aislar de variables de entorno de cualquier Python instalado en el host (ej. Python 3.14)
+# Isolate environment variables from any system Python
 $env:PYTHONHOME = $null
 $env:PYTHONPATH = $ScriptDir
 
@@ -62,23 +59,22 @@ $TargetDir = Join-Path $ScriptDir "python_portable"
 $ReqFile = Join-Path $ScriptDir "requirements.txt"
 $ConfigFile = Join-Path $ScriptDir "config.json"
 
-# Asegurar que el directorio Lib\site-packages exista fisicamente para evitar WinError 2 en pip/pathlib
+# Ensure Lib\site-packages exists
 $sitePkgDir = Join-Path $TargetDir "Lib\site-packages"
 if (-not (Test-Path $sitePkgDir)) {
     New-Item -ItemType Directory -Path $sitePkgDir -Force | Out-Null
 }
 
 Write-Host "==================================================================" -ForegroundColor Cyan
-Write-Host "   Instalador Portable - AdGuard DHCP Panel Privado (Windows)" -ForegroundColor Cyan
+Write-Host "   Portable Installer - AdGuard DHCP Panel (Windows)" -ForegroundColor Cyan
 Write-Host "==================================================================" -ForegroundColor Cyan
-Write-Host "Directorio del proyecto: $ScriptDir" -ForegroundColor Gray
-Write-Host "Destino de Python portable: $TargetDir" -ForegroundColor Gray
+Write-Host "Project directory: $ScriptDir" -ForegroundColor Gray
+Write-Host "Portable Python target: $TargetDir" -ForegroundColor Gray
 Write-Host ""
 
 $pyExe = $null
 
 function Update-PthFile($dir) {
-    # Asegurar que el directorio Lib\site-packages existe físicamente antes de que pip o python intenten leerlo
     $spDir = Join-Path $dir "Lib\site-packages"
     if (-not (Test-Path $spDir)) {
         New-Item -ItemType Directory -Path $spDir -Force | Out-Null
@@ -105,34 +101,34 @@ function Update-PthFile($dir) {
     }
 }
 
-# 1. Comprobar si ya existe una instancia previa en python_portable
+# 1. Check for existing python_portable instance
 if (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
     $pyExe = Join-Path $TargetDir "Scripts\python.exe"
-    Write-Host "[OK] Detectada instancia virtual/portable en python_portable\Scripts\python.exe" -ForegroundColor Green
+    Write-Host "[OK] Detected virtual/portable instance in python_portable\Scripts\python.exe" -ForegroundColor Green
 } elseif (Test-Path (Join-Path $TargetDir "python.exe")) {
     $pyExe = Join-Path $TargetDir "python.exe"
     Update-PthFile $TargetDir
-    Write-Host "[OK] Detectada instancia portable existente en python_portable\python.exe" -ForegroundColor Green
+    Write-Host "[OK] Detected portable instance in python_portable\python.exe" -ForegroundColor Green
 } else {
-    # 1.1 Intentar crear entorno aislado ultra-rápido en 2 segundos si el sistema tiene python
+    # 1.1 Fast venv creation if host system has python
     $sysPython = (Get-Command py, python, python3 -ErrorAction SilentlyContinue | Select-Object -First 1).Source
     if ($sysPython) {
-        Write-Host "[1/3] Creando instancia aislada portable en python_portable\ (Ultra-rápido)..." -ForegroundColor Yellow
-        Write-Host "      (Tu instalación principal de Python NO será tocada ni alterada)" -ForegroundColor Gray
+        Write-Host "[1/3] Creating isolated portable instance in python_portable\..." -ForegroundColor Yellow
+        Write-Host "      (Your primary Python installation will NOT be modified)" -ForegroundColor Gray
         & $sysPython -m venv $TargetDir
         $candidateExe = Join-Path $TargetDir "Scripts\python.exe"
         if ($LASTEXITCODE -eq 0 -and (Test-Path $candidateExe)) {
             $pyExe = $candidateExe
-            Write-Host "[OK] Instancia portable configurada en segundos en python_portable\" -ForegroundColor Green
+            Write-Host "[OK] Portable instance configured in seconds in python_portable\" -ForegroundColor Green
         } else {
-            Write-Host "[AVISO] La creación de venv falló. Limpiando y usando fallback embeddable..." -ForegroundColor Yellow
+            Write-Host "[WARNING] venv creation failed. Falling back to embeddable package..." -ForegroundColor Yellow
             Remove-Item -Recurse -Force $TargetDir -ErrorAction SilentlyContinue
         }
     }
 
-    # 1.2 Si el sistema no tiene Python instalado, descargar paquete oficial Portable Embeddable
+    # 1.2 Fallback to official embeddable package
     if (-not $pyExe) {
-        Write-Host "[1/3] Descargando y configurando Python Portable oficial (Embeddable 3.11)..." -ForegroundColor Yellow
+        Write-Host "[1/3] Downloading official Python Portable (Embeddable 3.11)..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 
         $is64Bit = [Environment]::Is64BitOperatingSystem
@@ -142,16 +138,16 @@ if (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
         $zipPath = Join-Path $TargetDir "python_embed.zip"
 
         try {
-            Write-Host "      Descargando paquete oficial de Python.org ($arch)..." -ForegroundColor Gray
+            Write-Host "      Downloading official Python.org package ($arch)..." -ForegroundColor Gray
             Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 45
             
-            Write-Host "      Descomprimiendo archivos..." -ForegroundColor Gray
+            Write-Host "      Extracting files..." -ForegroundColor Gray
             Expand-Archive -Path $zipPath -DestinationPath $TargetDir -Force
             Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 
             Update-PthFile $TargetDir
 
-            Write-Host "      Instalando gestor de paquetes pip en la instancia portable..." -ForegroundColor Gray
+            Write-Host "      Installing pip package manager in portable instance..." -ForegroundColor Gray
             $pipUrl = "https://bootstrap.pypa.io/get-pip.py"
             $pipPath = Join-Path $TargetDir "get-pip.py"
             Invoke-WebRequest -Uri $pipUrl -OutFile $pipPath -UseBasicParsing -TimeoutSec 45
@@ -163,26 +159,26 @@ if (Test-Path (Join-Path $TargetDir "Scripts\python.exe")) {
             $pipVer = & $candidatePy -m pip --version 2>$null
             if ($pipVer) {
                 $pyExe = $candidatePy
-                Write-Host "[OK] Python Portable 3.11 instalado correctamente en python_portable\" -ForegroundColor Green
+                Write-Host "[OK] Python Portable 3.11 installed successfully in python_portable\" -ForegroundColor Green
             }
         } catch {
-            Write-Host "      [!] Falló la descarga de Python embeddable: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "      [!] Embeddable Python download failed: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 }
 
 if (-not $pyExe -or -not (Test-Path $pyExe)) {
     Write-Host ""
-    Write-Host "[ERROR] No se pudo preparar la instancia portable de Python." -ForegroundColor Red
-    Write-Host "Verifica tu conexión a Internet para descargar Python Portable o instala Python en Windows." -ForegroundColor Red
+    Write-Host "[ERROR] Could not prepare portable Python instance." -ForegroundColor Red
+    Write-Host "Check your internet connection or install Python on Windows." -ForegroundColor Red
     exit 1
 }
 
-# 1.3 Asegurar pip en python_portable si se usa python.exe embeddable
+# 1.3 Ensure pip in python_portable
 Update-PthFile $TargetDir
 $hasPip = & $pyExe -m pip --version 2>$null
 if (-not $hasPip) {
-    Write-Host "      Configurando pip en python_portable..." -ForegroundColor Yellow
+    Write-Host "      Configuring pip in python_portable..." -ForegroundColor Yellow
     $pipUrl = "https://bootstrap.pypa.io/get-pip.py"
     $pipPath = Join-Path $TargetDir "get-pip.py"
     try {
@@ -190,37 +186,37 @@ if (-not $hasPip) {
         & $pyExe $pipPath --no-warn-script-location
         Remove-Item $pipPath -Force -ErrorAction SilentlyContinue
     } catch {
-        Write-Host "      [!] Advertencia con get-pip.py: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "      [!] Warning with get-pip.py: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
 Write-Host ""
-Write-Host "[2/3] Instalando dependencias en la instancia portable..." -ForegroundColor Yellow
-Write-Host "      (Tu instalación principal de Python NO será tocada ni alterada)" -ForegroundColor Cyan
+Write-Host "[2/3] Installing dependencies in portable instance..." -ForegroundColor Yellow
+Write-Host "      (Your primary system Python will NOT be modified)" -ForegroundColor Cyan
 
 if (Test-Path $ReqFile) {
     & $pyExe -m pip install -r $ReqFile --no-warn-script-location --prefer-binary --disable-pip-version-check
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[!] Advertencia: pip devolvió un código de error al instalar requerimientos." -ForegroundColor Yellow
+        Write-Host "[!] Warning: pip returned a non-zero exit code." -ForegroundColor Yellow
     } else {
-        Write-Host "[OK] Dependencias instaladas satisfactoriamente en python_portable." -ForegroundColor Green
+        Write-Host "[OK] Dependencies installed successfully in python_portable." -ForegroundColor Green
     }
 } else {
-    Write-Host "[!] No se encontró requirements.txt. Instalando flask y cryptography directamente..." -ForegroundColor Yellow
+    Write-Host "[!] requirements.txt not found. Installing flask and cryptography directly..." -ForegroundColor Yellow
     & $pyExe -m pip install flask cryptography --no-warn-script-location --prefer-binary --disable-pip-version-check
 }
 
-# Verificación de Flask
+# Verify Flask
 Update-PthFile $TargetDir
 $verifyFlask = & $pyExe -c "import flask; print('FLASK_OK')" 2>$null
 if ($verifyFlask -notmatch 'FLASK_OK') {
-    Write-Host "      Asegurando instalacion de Flask en site-packages..." -ForegroundColor Yellow
+    Write-Host "      Ensuring Flask installation in site-packages..." -ForegroundColor Yellow
     & $pyExe -m pip install flask cryptography --prefer-binary --no-warn-script-location --force-reinstall
 }
 
-# 3. Comprobar o generar config.json
+# 3. Check or generate config.json
 Write-Host ""
-Write-Host "[3/3] Comprobando archivo de configuración config.json..." -ForegroundColor Yellow
+Write-Host "[3/3] Checking configuration file config.json..." -ForegroundColor Yellow
 if (-not (Test-Path $ConfigFile)) {
     $defaultConfig = @"
 {
@@ -235,15 +231,15 @@ if (-not (Test-Path $ConfigFile)) {
 }
 "@
     $defaultConfig | Set-Content -Path $ConfigFile -Encoding UTF8
-    Write-Host "[OK] Se ha creado un archivo config.json neutro y limpio." -ForegroundColor Green
+    Write-Host "[OK] Created clean, neutral config.json file." -ForegroundColor Green
 } else {
-    Write-Host "[OK] config.json ya existe." -ForegroundColor Green
+    Write-Host "[OK] config.json already exists." -ForegroundColor Green
 }
 
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Green
-Write-Host "   ¡Instalación completada con éxito!" -ForegroundColor Green
+Write-Host "   Installation completed successfully!" -ForegroundColor Green
 Write-Host "==================================================================" -ForegroundColor Green
-Write-Host "La instancia portable está lista en: python_portable\" -ForegroundColor Gray
-Write-Host "Para iniciar el servidor ejecuta: iniciar_windows.bat (o start_windows.bat)" -ForegroundColor Cyan
+Write-Host "Portable instance ready in: python_portable\" -ForegroundColor Gray
+Write-Host "To start the server, run: start_windows.bat" -ForegroundColor Cyan
 Write-Host ""

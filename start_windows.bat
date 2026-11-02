@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title AdGuard DHCP Panel - Instancia Portable
+title AdGuard DHCP Panel - Portable Instance
 cd /d "%~dp0"
 
 set "PYTHONHOME="
@@ -9,7 +9,7 @@ set "PYTHONPATH=%~dp0"
 if not exist "python_portable\Lib\site-packages" mkdir "python_portable\Lib\site-packages" >nul 2>&1
 
 echo ==================================================================
-echo   Iniciando AdGuard DHCP Panel (Instancia Portable)
+echo   Starting AdGuard DHCP Panel (Portable Instance)
 echo ==================================================================
 echo.
 
@@ -25,8 +25,8 @@ if not "%PY_EXE%"=="" (
 )
 
 if "%NEED_INSTALL%"=="1" (
-    echo [INFO] Configurando dependencias portables: Flask, cryptography...
-    echo Esto solo tardara unos segundos.
+    echo [INFO] Setting up portable dependencies: Flask, cryptography...
+    echo This will only take a few seconds.
     echo.
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install_windows.ps1"
     echo.
@@ -36,8 +36,8 @@ if "%NEED_INSTALL%"=="1" (
 
 if "%PY_EXE%"=="" (
     echo.
-    echo [ERROR] No se pudo configurar la instancia portable de Python.
-    echo Ejecuta instalar_windows.bat para revisar los detalles.
+    echo [ERROR] Could not configure portable Python instance.
+    echo Run install_windows.bat to review details.
     echo.
     pause
     exit /b 1
@@ -45,7 +45,7 @@ if "%PY_EXE%"=="" (
 
 "%PY_EXE%" -c "import flask" >nul 2>&1
 if errorlevel 1 (
-    echo [AVISO] Instalando Flask directamente en la instancia portable...
+    echo [WARNING] Installing Flask directly into portable instance...
     "%PY_EXE%" -m pip install flask cryptography --prefer-binary --no-warn-script-location
 )
 
@@ -53,6 +53,6 @@ if errorlevel 1 (
 
 if errorlevel 1 (
     echo.
-    echo [ERROR] La aplicacion se ha cerrado con error.
+    echo [ERROR] The application exited with an error.
     pause
 )

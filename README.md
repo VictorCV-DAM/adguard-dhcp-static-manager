@@ -1,40 +1,40 @@
-# 🛡️ AdGuard Home DHCP Panel (Instancia Portable Multiplataforma)
+# 🛡️ AdGuard Home DHCP Panel (Cross-Platform Portable Instance)
 
-Panel web privado y portable para la gestión integral de concesiones DHCP, asignaciones estáticas, escaneo ARP dinámico de red local y topología visual para AdGuard Home.
+Private, portable web management panel for AdGuard Home DHCP static leases, dynamic ARP network scanning, and interactive visual topology.
 
 ---
 
-## 🚀 Instalación Automática Portable (Windows y Linux)
+## 🚀 Portable Automatic Installation (Windows & Linux)
 
-El repositorio incluye auto-instaladores independientes que configuran una **instancia aislada y portable de Python (`python_portable/`)**, garantizando que **no se modifica ni se contamina el Python principal del sistema ni los paquetes globales del PC**.
+The repository provides standalone auto-installers that create an **isolated, portable Python environment (`python_portable/`)**, ensuring that **your system's primary Python installation and global packages remain completely untouched**.
 
-### 🪟 En Windows
-1. Haz doble clic en **`instalar_windows.bat`** (o ejecuta `install_windows.bat`).
-   * Descarga y configura automáticamente Python 3.11 Embeddable / Portable en `python_portable\`.
-   * Instala las dependencias necesarias (`Flask`, `cryptography`) dentro de esa carpeta.
-   * Genera el archivo `config.json` si no existe.
-2. **Iniciar:** doble clic en **`iniciar_windows.bat`** (o `start_windows.bat`).
-3. **Detener:** doble clic en **`detener_windows.bat`** (o `stop_windows.bat`) para cerrar la aplicación y liberar el puerto.
+### 🪟 Windows
+1. Double-click **`install_windows.bat`**.
+   * Automatically downloads and configures Python 3.11 Portable inside `python_portable\`.
+   * Installs required dependencies (`Flask`, `cryptography`) in the portable folder.
+   * Generates a clean `config.json` file if it does not already exist.
+2. **Start:** Double-click **`start_windows.bat`**.
+3. **Stop:** Double-click **`stop_windows.bat`** to shut down the server and release the port.
 
-### 🐧 En Linux / Raspberry Pi
-1. Dale permisos de ejecución y ejecuta el instalador:
+### 🐧 Linux / Raspberry Pi
+1. Grant execution permissions and run the installer:
    ```bash
-   chmod +x instalar_linux.sh
-   ./instalar_linux.sh
+   chmod +x install_linux.sh
+   ./install_linux.sh
    ```
-   * Crea una instancia aislada y portable en `python_portable/`.
-   * Instala las dependencias exclusivamente en `python_portable/` (cumpliendo con PEP 668 en Debian Bookworm / Raspberry Pi OS sin tocar el Python del sistema).
-   * Genera `config.json` si no existe.
-   * Actualiza el servicio `dhcp-panel.service` para apuntar a la instancia portable.
-2. **Iniciar manualmente:**
+   * Creates an isolated portable instance in `python_portable/`.
+   * Installs dependencies exclusively inside `python_portable/` (PEP 668 compliant on Debian / Raspberry Pi OS without modifying system Python).
+   * Generates `config.json` if it does not already exist.
+   * Configures `dhcp-panel.service` with the portable instance path.
+2. **Start manually:**
    ```bash
-   ./iniciar_linux.sh
+   ./start_linux.sh
    ```
-3. **Detener:**
+3. **Stop:**
    ```bash
-   ./detener_linux.sh
+   ./stop_linux.sh
    ```
-4. O para activarlo como servicio persistente en segundo plano (systemd):
+4. **Enable as persistent background service (systemd):**
    ```bash
    sudo cp dhcp-panel.service /etc/systemd/system/
    sudo systemctl daemon-reload
@@ -43,35 +43,30 @@ El repositorio incluye auto-instaladores independientes que configuran una **ins
 
 ---
 
-## ⚙️ Configuración y Servicios
+## ⚙️ Configuration & Access
 
-* **Panel Gestor DHCP:** `http://<ip-servidor>:5001` (puerto configurable en `config.json`)
-* **AdGuard Home:** `http://<ip-adguard>:3000` (o el puerto configurado en tu servidor AdGuard)
-  * Rutas o conexión API configurables cómodamente desde el asistente web inicial (`/setup`).
+* **DHCP Panel Web Interface:** `http://<server-ip>:5001` (port configurable in `config.json`)
+* **AdGuard Home:** `http://<adguard-ip>:3000` (or your configured AdGuard port)
+  * Set up API connection or local path easily from the initial web setup wizard (`/setup`).
 
 ---
 
-## 🔄 Instalación rápida en Linux / Servidores
+## 🔄 Quick Server Deployment (Linux)
 
-1. Clonar el repositorio:
+1. Clone repository:
    ```bash
-   git clone https://github.com/VictorCV-DAM/adguard-dhcp-panel-privado.git /opt/adguard-panel
+   git clone https://github.com/VictorCV-DAM/adguard-dhcp-static-manager.git /opt/adguard-panel
    ```
-2. Ejecutar auto-instalador:
+2. Run installer:
    ```bash
    cd /opt/adguard-panel
-   ./instalar_linux.sh
+   chmod +x install_linux.sh start_linux.sh stop_linux.sh
+   ./install_linux.sh
    ```
-3. Activar el servicio `systemd`:
+3. Enable systemd service:
    ```bash
    sudo cp /opt/adguard-panel/dhcp-panel.service /etc/systemd/system/dhcp-panel.service
    sudo systemctl daemon-reload
    sudo systemctl enable --now dhcp-panel.service
    ```
-4. Entrar en `http://<ip-servidor>:5001` e iniciar la configuración guiada.
-5. *(Opcional)* Para restaurar un backup de leases en AdGuard Home:
-   ```bash
-   sudo docker stop adguardhome
-   sudo cp ./leases.backup.json /ruta/hacia/adguard/data/leases.json
-   sudo docker start adguardhome
-   ```
+4. Navigate to `http://<server-ip>:5001` and follow the guided setup.
