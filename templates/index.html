@@ -5901,6 +5901,12 @@ try {
 
 let topoState = {
     initialized: false,
+    rotatingHub: null,
+    rotatingSpoke: null,
+    rotatingClients: null,
+    rotateStartAngle: 0,
+    rotateStartDist: 1,
+    hoverSpoke: null,
     showOffline: true,
     labelMode: 'name',     // 'name' | 'name_ip' | 'mac'
         meshOpacity: (function() {
@@ -8020,6 +8026,37 @@ function initTopoCanvas() {
             return null;
         };
 
+        const distToSegment = (px, py, x1, y1, x2, y2) => {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const l2 = dx * dx + dy * dy;
+            if (l2 === 0) return Math.hypot(px - x1, py - y1);
+            let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+        };
+
+        const findSpokeAt = (wx, wy) => {
+            const hitTolerance = Math.max(9, 15 / topoState.scale);
+            const usePlexus = (topoState.visualStyle === 'plexus');
+            for (let i = (topoState.links || []).length - 1; i >= 0; i--) {
+                const lk = topoState.links[i];
+                if (lk.type !== 'spoke' || !lk.from || !lk.to) continue;
+                const pts = (usePlexus && lk.joints && lk.joints.length)
+                    ? [lk.from, ...lk.joints, lk.to]
+                    : [lk.from, lk.to];
+                for (let j = 0; j < pts.length - 1; j++) {
+                    const p1 = pts[j];
+                    const p2 = pts[j + 1];
+                    const d = distToSegment(wx, wy, p1.x, p1.y, p2.x, p2.y);
+                    if (d <= hitTolerance) {
+                        return lk;
+                    }
+                }
+            }
+            return null;
+        };
+
         canvas.addEventListener('wheel', e => {
             e.preventDefault();
             topoState.smoothCamera = false;
@@ -8151,6 +8188,25 @@ function initTopoCanvas() {
                 topoState.dragNode = hit;
                 topoState.dragPreSnapshot = JSON.parse(JSON.stringify(topoState.customPositions));
             } else {
+                const hitSpoke = findSpokeAt(wx, wy);
+                if (hitSpoke && hitSpoke.from) {
+                    const hub = hitSpoke.from;
+                    const clients = topoState.nodes.filter(c => c.hubId === hub.id);
+                    if (clients.length > 0) {
+                        topoState.rotatingHub = hub;
+                        topoState.rotatingSpoke = hitSpoke;
+                        topoState.dragPreSnapshot = JSON.parse(JSON.stringify(topoState.customPositions));
+                        topoState.rotateStartAngle = Math.atan2(wy - hub.baseY, wx - hub.baseX);
+                        topoState.rotateStartDist = Math.hypot(wx - hub.baseX, wy - hub.baseY) || 1;
+                        topoState.rotatingClients = clients.map(c => ({
+                            node: c,
+                            initAngle: Math.atan2(c.baseY - hub.baseY, c.baseX - hub.baseX),
+                            initDist: Math.hypot(c.baseX - hub.baseX, c.baseY - hub.baseY)
+                        }));
+                        canvas.style.cursor = 'grabbing';
+                        return;
+                    }
+                }
                 topoState.isPanning = true;
             }
         });
@@ -8158,6 +8214,33 @@ function initTopoCanvas() {
         window.addEventListener('mousemove', e => {
             if (currentMainTab !== 'topology') return;
             const { sx, sy, wx, wy } = toWorld(e.clientX, e.clientY);
+
+            if (topoState.rotatingHub) {
+                if (Math.hypot(sx - topoState.dragStartX, sy - topoState.dragStartY) > 3) {
+                    topoState.movedDuringDrag = true;
+                }
+                const hub = topoState.rotatingHub;
+                const curAngle = Math.atan2(wy - hub.baseY, wx - hub.baseX);
+                const deltaAngle = curAngle - topoState.rotateStartAngle;
+                const curDist = Math.hypot(wx - hub.baseX, wy - hub.baseY) || 1;
+                const distRatio = e.shiftKey ? Math.max(0.4, Math.min(2.5, curDist / topoState.rotateStartDist)) : 1.0;
+
+                topoState.rotatingClients.forEach(item => {
+                    const c = item.node;
+                    const newAngle = item.initAngle + deltaAngle;
+                    const newDist = item.initDist * distRatio;
+                    c.baseX = Math.round(hub.baseX + Math.cos(newAngle) * newDist);
+                    c.baseY = Math.round(hub.baseY + Math.sin(newAngle) * newDist);
+                    c.x = c.baseX;
+                    c.y = c.baseY;
+                    c.relX = c.baseX - hub.baseX;
+                    c.relY = c.baseY - hub.baseY;
+                    topoState.customPositions[c.id] = { x: c.baseX, y: c.baseY, hubId: hub.id };
+                });
+                canvas.style.cursor = 'grabbing';
+                saveCustomPositionsToStorage();
+                return;
+            }
 
             if (topoState.dragNode) {
                 if (Math.hypot(sx - topoState.dragStartX, sy - topoState.dragStartY) > 4) {
@@ -8214,8 +8297,21 @@ function initTopoCanvas() {
 
             const hit = findNodeAt(wx, wy);
             topoState.hoverNode = hit;
-            canvas.style.cursor = hit ? 'pointer' : 'grab';
-            updateTopoTooltip(hit, sx, sy);
+            if (hit) {
+                topoState.hoverSpoke = null;
+                canvas.style.cursor = 'pointer';
+                updateTopoTooltip(hit, sx, sy);
+            } else {
+                const spoke = findSpokeAt(wx, wy);
+                topoState.hoverSpoke = spoke;
+                if (spoke) {
+                    canvas.style.cursor = 'grab';
+                    updateTopoSpokeTooltip(spoke, sx, sy);
+                } else {
+                    canvas.style.cursor = 'grab';
+                    updateTopoTooltip(null);
+                }
+            }
         });
 
         window.addEventListener('mouseup', () => {
@@ -8249,11 +8345,39 @@ function initTopoCanvas() {
                     clearTopoPin();
                 }
             }
+            if (topoState.rotatingHub) {
+                if (topoState.movedDuringDrag && topoState.dragPreSnapshot) {
+                    pushTopoUndo(topoState.dragPreSnapshot);
+                    topoState.dragPreSnapshot = null;
+                }
+                topoState.rotatingHub = null;
+                topoState.rotatingSpoke = null;
+                topoState.rotatingClients = null;
+            }
             topoState.dragNode = null;
             topoState.dragWithCtrl = false;
             topoState.isPanning = false;
+            canvas.style.cursor = 'grab';
         });
     }
+}
+
+function updateTopoSpokeTooltip(spoke, sx, sy) {
+    const tip = document.getElementById('topo-tooltip');
+    if (!tip || !spoke || !spoke.from) return;
+    const hubName = spoke.from.label || 'Nodo';
+    const clientCount = topoState.nodes.filter(n => n.hubId === spoke.from.id).length;
+    tip.style.display = 'block';
+    tip.style.left = (sx + 14) + 'px';
+    tip.style.top = (sy + 14) + 'px';
+    tip.innerHTML = `
+        <div style="font-weight:800; color:#00e5ff; font-size:0.86rem;">🔄 Rotación Orbital de Clientes</div>
+        <div style="color:#cbd5e1; font-size:0.75rem; margin-top:2px;">Conector de <strong>${escapeHtml(hubName)}</strong> (${clientCount} clientes)</div>
+        <div style="margin-top:5px; font-size:0.74rem; color:#94a3b8;">
+            ✨ <strong>Arrastra la línea</strong> para girar todos los clientes alrededor del nodo.<br>
+            <span style="color:#38bdf8;">Tip:</span> Mantén <strong>Shift</strong> para alejar o acercar el radio.
+        </div>
+    `;
 }
 
 function updateTopoTooltip(node, sx, sy) {
@@ -8360,7 +8484,7 @@ function drawTopoFrame(now) {
 
             // 1. Movimiento flotante lento y constante ("Constelación / Zigzag Flotante")
             topoState.nodes.forEach(n => {
-                if (n === topoState.dragNode) return;
+                if (n === topoState.dragNode || (topoState.rotatingHub && n.hubId === topoState.rotatingHub.id)) return;
                 if (!topoState.effectsOn) {
                     n.x = n.baseX;
                     n.y = n.baseY;
@@ -8428,6 +8552,8 @@ function drawTopoFrame(now) {
             }
 
             const isLinkHighlighted = lk => {
+                if (topoState.rotatingHub && lk.from && lk.from.id === topoState.rotatingHub.id) return true;
+                if (topoState.hoverSpoke && lk.from && lk.from.id === topoState.hoverSpoke.from.id) return true;
                 if (!hov) return false;
                 if (hov.type === 'core') return lk.type === 'trunk';
                 if (hov.type === 'hub') return lk.from.id === hov.id || lk.to.id === hov.id;
@@ -8805,7 +8931,36 @@ function drawTopoFrame(now) {
                         ctx.stroke();
                     }
                 });
+            }            // Guía visual orbital al rotar clientes alrededor del Hub
+            if (topoState.rotatingHub) {
+                const rh = topoState.rotatingHub;
+                const rClients = topoState.nodes.filter(c => c.hubId === rh.id);
+                if (rClients.length > 0) {
+                    const avgR = rClients.reduce((acc, c) => acc + Math.hypot(c.x - rh.x, c.y - rh.y), 0) / rClients.length;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(rh.x, rh.y, avgR, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(0, 229, 255, 0.55)';
+                    ctx.lineWidth = 2.0;
+                    ctx.setLineDash([8, 6]);
+                    ctx.shadowColor = '#00e5ff';
+                    ctx.shadowBlur = 16;
+                    ctx.stroke();
+
+                    const angles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+                    ctx.fillStyle = '#00e5ff';
+                    angles.forEach(a => {
+                        const mx = rh.x + Math.cos(a) * avgR;
+                        const my = rh.y + Math.sin(a) * avgR;
+                        ctx.beginPath();
+                        ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                    ctx.restore();
+                }
             }
+
+
 
             // 4. Dibujar nodos y etiquetas de texto
             topoState.nodes.forEach(n => {
