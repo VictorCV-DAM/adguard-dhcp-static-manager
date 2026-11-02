@@ -3113,7 +3113,7 @@ def api_state():
     global _API_STATE_CACHE
     force = bool(request.args.get('refresh') or request.args.get('force'))
     now = time.time()
-    if not force and _API_STATE_CACHE[2] and (now - _API_STATE_CACHE[0] < 4.5):
+    if not force and len(_API_STATE_CACHE) > 2 and _API_STATE_CACHE[2] and (now - _API_STATE_CACHE[0] < 4.5):
         return Response(_API_STATE_CACHE[2], mimetype='application/json')
 
     state = build_state(force_refresh=force)
@@ -3131,7 +3131,7 @@ def api_topology_positions():
             data = request.get_json(force=True) or {}
             save_topo_positions(data)
             global _API_STATE_CACHE
-            _API_STATE_CACHE = [0, None]
+            _API_STATE_CACHE = [0, None, None]
             return jsonify({'status': 'success', 'count': len(data)})
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
