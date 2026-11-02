@@ -87,12 +87,13 @@ if [ ! -f "$CONFIG_FILE" ]; then
     SECRET_HEX=$(python3 -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null || echo "secret_dhcp_panel_default")
     cat <<EOF > "$CONFIG_FILE"
 {
-  "adguard_url": "http://192.168.1.2:80",
-  "adguard_user": "admin",
-  "adguard_pass": "admin",
+  "adguard_url": "",
+  "adguard_user": "",
+  "adguard_pass": "",
   "port": 5001,
   "debug": false,
   "home_assistant_instances": [],
+  "routers": [],
   "session_secret": "$SECRET_HEX"
 }
 EOF

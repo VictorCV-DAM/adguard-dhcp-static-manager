@@ -9,7 +9,15 @@ import struct
 import time
 import subprocess
 
-def send_dhcp_nak(mac_str, server_ip="192.168.1.249", old_ip=None, iface="eth0"):
+def send_dhcp_nak(mac_str, server_ip=None, old_ip=None, iface="eth0"):
+    if not server_ip:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            server_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            server_ip = "127.0.0.1"
     mac_clean = mac_str.replace(':', '').replace('-', '').lower()
     if len(mac_clean) != 12:
         print(f"MAC inválida: {mac_str}", file=sys.stderr)
@@ -111,7 +119,7 @@ if __name__ == '__main__':
         print("Uso: python3 send_nak.py <MAC> [SERVER_IP] [OLD_IP] [IFACE]")
         sys.exit(1)
     target_mac = sys.argv[1]
-    sip = sys.argv[2] if len(sys.argv) > 2 else "192.168.1.249"
+    sip = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] != '-' else None
     oip = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != '-' else None
     ifa = sys.argv[4] if len(sys.argv) > 4 else "eth0"
     success = send_dhcp_nak(target_mac, sip, oip, ifa)

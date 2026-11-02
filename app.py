@@ -48,32 +48,13 @@ YAML_PATH = os.environ.get('DHCP_PANEL_YAML_PATH') or '/home/yo/servicios/adguar
 CONFIG_PATH = os.environ.get('DHCP_PANEL_CONFIG_PATH') or os.path.join(_CURRENT_DIR, 'config.json')
 
 DEFAULT_CONFIG = {
-    "adguard_url": "http://192.168.1.249:8080",
-    "adguard_user": "victorlike",
+    "adguard_url": "",
+    "adguard_user": "",
     "adguard_pass": "",
     "custom_service_names": {},
     "ha_plugin_enabled": False,
     "home_assistant_instances": [],
-    "routers": [
-        {
-            "id": "tplink-wr841n",
-            "name": "TP-Link WR841N",
-            "type": "tplink_wr841n",
-            "ip": "192.168.1.10",
-            "user": "admin",
-            "password": "",
-            "enabled": True
-        },
-        {
-            "id": "mercusys-halo",
-            "name": "Mercusys Halo H80X",
-            "type": "mercusys_halo",
-            "ip": "192.168.1.11, 192.168.1.12, 192.168.1.13",
-            "user": "admin",
-            "password": "",
-            "enabled": True
-        }
-    ]
+    "routers": []
 }
 
 # Diccionario de prefijos MAC (OUI) conocidos -> (Fabricante, Clase sugerida, Icono)
@@ -318,11 +299,6 @@ class MercusysHaloSession:
                 return {}, {}
 
         ip_to_mac_hint = ip_to_mac_hint or {}
-        default_nicknames = {
-            "192.168.1.11": "Mi habitación",
-            "192.168.1.12": "Estudio",
-            "192.168.1.13": "Pasillo"
-        }
 
         # 1. Consultar siempre device_list para inicializar la topología interna en el firmware Halo H80X
         nodes = []
@@ -334,13 +310,8 @@ class MercusysHaloSession:
         except Exception:
             pass
 
-        # 2. Si device_list no respondió, fallback a las IPs configuradas con ip_to_mac_hint o MACs conocidas
-        known_halo_fallback = [
-            {"device_ip": "192.168.1.11", "mac": "30-16-9D-2B-61-54", "role": "master", "nickname": "Mi habitación"},
-            {"device_ip": "192.168.1.12", "mac": "30-16-9D-2B-62-60", "role": "slave", "nickname": "Estudio"},
-            {"device_ip": "192.168.1.13", "mac": "30-16-9D-2B-5F-F0", "role": "slave", "nickname": "Pasillo"}
-        ]
-        if not nodes or len(nodes) < len(known_halo_fallback):
+        # 2. Si device_list no respondió, fallback a las IPs configuradas con ip_to_mac_hint
+        if not nodes:
             for idx, cip in enumerate(configured_ips):
                 cip = cip.strip()
                 if not cip:
@@ -348,16 +319,12 @@ class MercusysHaloSession:
                 if any(n.get("device_ip") == cip for n in nodes):
                     continue
                 mac_colon = ip_to_mac_hint.get(cip, "")
-                if not mac_colon:
-                    matched_k = next((k for k in known_halo_fallback if k["device_ip"] == cip), None)
-                    if matched_k:
-                        mac_colon = matched_k["mac"].lower().replace("-", ":")
                 if mac_colon:
                     nodes.append({
                         "device_ip": cip,
                         "mac": mac_colon.upper().replace(":", "-"),
                         "role": "master" if idx == 0 else "slave",
-                        "nickname": default_nicknames.get(cip, f"Nodo {idx + 1}")
+                        "nickname": f"Nodo {idx + 1}"
                     })
 
         if not nodes:
@@ -756,7 +723,8 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             router_name = r.get('name') or 'Router'
             break
 
-    is_router = (ip == '192.168.1.1' or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
+    _, gateway_ip, _ = get_network_info()
+    is_router = ((gateway_ip and ip == gateway_ip) or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
 
     now = time.time()
     cached = _SERVICE_SCAN_CACHE.get(ip)
@@ -815,17 +783,17 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = "eWeLink Smart Home (:8325)"
         elif 'go2rtc' in t_low or 'go2rtc' in b_low or port == 1984:
             label = "go2rtc WebRTC (:1984)"
-        elif ip == '192.168.1.249' and port == 8080:
-            label = "AdGuard Home (:8080)"
-        elif ip == '192.168.1.249' and port == 5001:
+        elif 'adguard' in t_low or 'adguard' in b_low or port == 8080:
+            label = f"AdGuard Home (:{port})"
+        elif port == 5001:
             label = "Panel DHCP (:5001)"
-        elif ip == '192.168.1.249' and port == 5000:
+        elif port == 5000:
             label = "Panel Wi-Fi (:5000)"
-        elif ip == '192.168.1.1':
-            label = f"Router Fibra ({proto.upper()})"
-        elif ip == '192.168.1.9' or 'em4590' in h_lower:
+        elif gateway_ip and ip == gateway_ip:
+            label = f"Router Principal ({proto.upper()})"
+        elif 'em4590' in h_lower:
             label = f"Web Repetidor EM4590 ({proto.upper()})"
-        elif ip == '192.168.1.10' or 'wr841n' in h_lower:
+        elif 'wr841n' in h_lower:
             label = f"Web TP-Link WR841N ({proto.upper()})"
         elif ip in halo_node_info or 'mercusys-halo' in h_lower:
             lbl = halo_node_info.get(ip, {}).get('label', f'Nodo Halo ({ip})')
@@ -864,32 +832,6 @@ def load_config():
         try:
             with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                 saved = json.load(f)
-                if 'routers' not in saved:
-                    routers = []
-                    if saved.get('tplink_ip') or saved.get('tplink_pass'):
-                        routers.append({
-                            "id": "tplink-wr841n",
-                            "name": "TP-Link WR841N",
-                            "type": "tplink_wr841n",
-                            "ip": saved.get('tplink_ip', '192.168.1.10'),
-                            "user": saved.get('tplink_user', 'admin'),
-                            "password": saved.get('tplink_pass', ''),
-                            "enabled": bool(saved.get('tplink_enabled', True))
-                        })
-                    if saved.get('halo_ip') or saved.get('halo_pass'):
-                        halo_ip = saved.get('halo_ip', '192.168.1.11')
-                        if halo_ip.strip() == '192.168.1.11':
-                            halo_ip = '192.168.1.11, 192.168.1.12, 192.168.1.13'
-                        routers.append({
-                            "id": "mercusys-halo",
-                            "name": "Mercusys Halo H80X",
-                            "type": "mercusys_halo",
-                            "ip": halo_ip,
-                            "user": "admin",
-                            "password": saved.get('halo_pass', ''),
-                            "enabled": True
-                        })
-                    saved['routers'] = routers or DEFAULT_CONFIG['routers']
                 cfg.update(saved)
         except Exception:
             pass
@@ -959,10 +901,45 @@ def check_adguard_available():
 
 
 def read_leases():
-    res = run_sudo(['cat', LEASES_PATH])
-    if res.returncode != 0 or not res.stdout.strip():
-        return {"version": 1, "leases": []}
-    return json.loads(res.stdout)
+    # 1. Archivo local de AdGuard Home si existe
+    if os.path.exists(LEASES_PATH):
+        try:
+            with open(LEASES_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    try:
+        res = run_sudo(['cat', LEASES_PATH])
+        if res.returncode == 0 and res.stdout.strip():
+            return json.loads(res.stdout)
+    except Exception:
+        pass
+
+    # 2. Conexión remota por API REST de AdGuard Home si está configurada
+    try:
+        cfg = load_config()
+        url = (cfg.get('adguard_url') or '').strip().rstrip('/')
+        user = (cfg.get('adguard_user') or '').strip()
+        pwd = (cfg.get('adguard_pass') or '').strip()
+        if url:
+            api_url = f"{url}/control/dhcp/status"
+            req = urllib.request.Request(api_url, headers={'User-Agent': 'DHCP-Panel'})
+            if user or pwd:
+                tok = base64.b64encode(f"{user}:{pwd}".encode('utf-8')).decode('ascii')
+                req.add_header('Authorization', f'Basic {tok}')
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode('utf-8', errors='ignore'))
+                    all_leases = list(data.get('leases', []))
+                    for sl in data.get('static_leases', []):
+                        sl_copy = dict(sl)
+                        sl_copy.setdefault('expires', '')
+                        all_leases.append(sl_copy)
+                    return {"version": 1, "leases": all_leases}
+    except Exception:
+        pass
+
+    return {"version": 1, "leases": []}
 
 
 def write_leases(data):
@@ -1007,7 +984,78 @@ def set_lease_duration_yaml(seconds):
     return proc.returncode == 0
 
 
-def get_arp_table():
+def get_network_info():
+    """Detecta dinámicamente la IP local, la puerta de enlace (Gateway) y el prefijo de subred."""
+    local_ip = '127.0.0.1'
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+
+    gateway = None
+    if sys.platform == 'win32':
+        try:
+            out = subprocess.check_output(['route', 'print', '0.0.0.0'], text=True, timeout=3)
+            for line in out.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and parts[0] == '0.0.0.0' and parts[1] == '0.0.0.0':
+                    gateway = parts[2]
+                    break
+        except Exception:
+            pass
+    else:
+        try:
+            out = subprocess.check_output(['ip', 'route', 'show', 'default'], text=True, timeout=3)
+            m = re.search(r'default via (\d+\.\d+\.\d+\.\d+)', out)
+            if m:
+                gateway = m.group(1)
+        except Exception:
+            pass
+
+    base_ip = gateway or local_ip
+    parts = base_ip.split('.')
+    prefix = '.'.join(parts[:3]) + '.' if len(parts) == 4 and parts[0] != '127' else '192.168.1.'
+    return local_ip, gateway, prefix
+
+
+_LAST_SUBNET_SWEEP = 0.0
+
+def sweep_subnet(prefix=None, force=False):
+    """Realiza un barrido ICMP rápido y concurrente para poblar la tabla ARP del sistema."""
+    global _LAST_SUBNET_SWEEP
+    now = time.time()
+    if not force and (now - _LAST_SUBNET_SWEEP) < 40:
+        return
+    _LAST_SUBNET_SWEEP = now
+
+    if not prefix:
+        _, _, prefix = get_network_info()
+
+    def _ping_worker(ip):
+        try:
+            cmd = ['ping', '-n', '1', '-w', '200', ip] if sys.platform == 'win32' else ['ping', '-c', '1', '-W', '1', ip]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        except Exception:
+            pass
+
+    ips = [f"{prefix}{i}" for i in range(1, 255)]
+    with ThreadPoolExecutor(max_workers=min(64, len(ips))) as pool:
+        list(pool.map(_ping_worker, ips))
+
+
+def trigger_subnet_sweep(prefix=None, force=False, background=True):
+    """Lanza el barrido de subred en segundo plano o síncrono."""
+    if background:
+        t = threading.Thread(target=sweep_subnet, args=(prefix, force), daemon=True)
+        t.start()
+    else:
+        sweep_subnet(prefix, force)
+
+
+def get_arp_table(auto_sweep=True):
     """Obtiene la tabla de vecinos ARP tanto en Linux (ip neigh) como en Windows (arp -a)."""
     arp = {}
     try:
@@ -1048,6 +1096,11 @@ def get_arp_table():
                                 arp.setdefault(mac, []).append(ip)
     except Exception:
         pass
+
+    if auto_sweep and len(arp) <= 1:
+        trigger_subnet_sweep(background=False)
+        return get_arp_table(auto_sweep=False)
+
     return arp
 
 
@@ -1498,10 +1551,12 @@ def discover_network_routers(current_routers=None):
     cfg = load_config()
     existing_list = current_routers if current_routers is not None else cfg.get('routers', [])
 
+    local_ip, gateway_ip, prefix = get_network_info()
     candidates = set()
-    # 1. Gateways / IPs habituales de routers e infraestructura
-    for gip in ["192.168.1.1", "192.168.1.10", "192.168.1.11", "192.168.1.12", "192.168.1.13", "192.168.1.254", "192.168.0.1", "192.168.0.254"]:
-        candidates.add(gip)
+    if gateway_ip:
+        candidates.add(gateway_ip)
+    candidates.add(f"{prefix}1")
+    candidates.add(f"{prefix}254")
 
     # 2. IPs de leases de AdGuard Home
     leases_data = read_leases()
@@ -1524,8 +1579,8 @@ def discover_network_routers(current_routers=None):
             if rip_s:
                 candidates.add(rip_s)
 
-    # Descartar IP local del servidor Pi y localhost
-    candidates.discard("192.168.1.249")
+    # Descartar IP local y localhost
+    candidates.discard(local_ip)
     candidates.discard("127.0.0.1")
 
     # Sondeo concurrente
@@ -1569,7 +1624,7 @@ def discover_network_routers(current_routers=None):
                 rtype = "tplink_wr841n"
             elif model_name:
                 disp_name = f"TP-Link {model_name}" + (f" ({model_desc})" if model_desc and model_desc != model_name else "")
-                rtype = "tplink_wr841n" if ip != "192.168.1.1" else "generic_ap"
+                rtype = "tplink_wr841n" if ip != gateway_ip else "generic_ap"
             elif model_desc:
                 disp_name = model_desc
                 rtype = "tplink_wr841n"
@@ -1823,10 +1878,17 @@ def build_state(force_refresh=False):
     arp = get_arp_table()
     now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
+    local_ip, gateway_ip, prefix = get_network_info()
+    if force_refresh:
+        trigger_subnet_sweep(prefix=prefix, force=True, background=False)
+        arp = get_arp_table(auto_sweep=False)
+    else:
+        trigger_subnet_sweep(prefix=prefix, force=False, background=True)
+
     router_mac_map = {}
     halo_client_map = {}
     halo_node_info = {}
-    infra_ips = {'192.168.1.1'}
+    infra_ips = {gateway_ip} if gateway_ip else set()
     fallback_lan_name = 'Router Principal / LAN'
 
     ip_to_mac_hint = {}
@@ -2127,31 +2189,31 @@ def build_state(force_refresh=False):
             })
             seen_ips.add(aip)
 
-    # Incluir el propio servidor Raspberry Pi (host local) si no está en la lista de IPs
-    if '192.168.1.249' not in seen_ips:
+    # Incluir el propio equipo host local si no está ya en la lista de IPs
+    if local_ip and local_ip != '127.0.0.1' and local_ip not in seen_ips:
         devices.append({
-            'hostname': 'pi-server (Servidor Local)',
-            'mac': 'b8:27:eb:a0:ff:6e',
-            'ip': '192.168.1.249',
+            'hostname': f'{socket.gethostname()} (Panel Host)',
+            'mac': '00:00:00:00:00:00',
+            'ip': local_ip,
             'static': True,
             'manual_static': True,
             'expires': '',
             'expired': False,
-            'live_ips': ['192.168.1.249'],
+            'live_ips': [local_ip],
             'mismatch_ip': None,
-            'router_node': 'Router Principal / LAN',
-            'router_tooltip': 'Host local donde se ejecuta AdGuard Home y este panel',
+            'router_node': 'Host Local / Red',
+            'router_tooltip': 'Equipo local donde se ejecuta este panel',
             'router_type': 'lan',
             'conn_medium': 'cable',
-            'conn_medium_label': 'Cable Ethernet',
-            'dev_class': 'Servidor / Raspberry Pi',
-            'dev_vendor': 'Raspberry Pi Foundation',
-            'dev_icon': '🍓',
+            'conn_medium_label': 'Conexión Local',
+            'dev_class': 'Servidor / PC',
+            'dev_vendor': 'Host Local',
+            'dev_icon': '🖥️',
             'dev_cat': 'server',
-            'web_links': [],
-            'open_ports': []
+            'web_links': [{'label': 'Panel DHCP (:5001)', 'url': f'http://{local_ip}:5001', 'port': 5001, 'default_label': 'Panel DHCP (:5001)', 'is_custom': False}],
+            'open_ports': [5001]
         })
-        seen_ips.add('192.168.1.249')
+        seen_ips.add(local_ip)
 
     # Pre-escaneo rápido y concurrente de puertos web para todos los dispositivos activos en la red
     active_ips = set()
@@ -2160,8 +2222,10 @@ def build_state(force_refresh=False):
             active_ips.add(d['ip'])
             for lip in d['live_ips']:
                 active_ips.add(lip)
-    active_ips.add('192.168.1.1')
-    active_ips.add('192.168.1.249')
+    if gateway_ip:
+        active_ips.add(gateway_ip)
+    if local_ip and local_ip != '127.0.0.1':
+        active_ips.add(local_ip)
     for r in routers:
         for x in (r.get('ip') or '').split(','):
             if x.strip():
@@ -2187,7 +2251,7 @@ def build_state(force_refresh=False):
     # Actualizar web_links para todos los dispositivos con los servicios recién descubiertos
     custom_names = cfg.get('custom_service_names', {})
     for d in devices:
-        is_active = bool(d.get('live_ips')) or d['ip'] in ('192.168.1.1', '192.168.1.249')
+        is_active = bool(d.get('live_ips')) or (gateway_ip and d['ip'] == gateway_ip) or (local_ip and d['ip'] == local_ip)
         d['web_links'] = get_device_web_links(
             d['ip'],
             d.get('hostname', ''),
@@ -2218,42 +2282,27 @@ def build_state(force_refresh=False):
             })
 
     existing_link_ips = {l['ip'] for l in global_network_links}
-    if '192.168.1.1' not in existing_link_ips:
+    if gateway_ip and gateway_ip not in existing_link_ips:
         global_network_links.insert(0, {
-            'name': 'Router Principal de Fibra',
-            'ip': '192.168.1.1',
-            'url': 'http://192.168.1.1',
+            'name': 'Router Principal (Puerta de Enlace)',
+            'ip': gateway_ip,
+            'url': f'http://{gateway_ip}',
             'icon': '🏠'
         })
-    if '192.168.1.9' not in existing_link_ips:
-        global_network_links.append({
-            'name': 'Repetidor Wi-Fi EM4590 (Eminent)',
-            'ip': '192.168.1.9',
-            'url': 'http://192.168.1.9',
-            'icon': '📶'
-        })
 
-    global_network_links.append({
-        'name': 'AdGuard Home (DNS/DHCP)',
-        'ip': '192.168.1.249:8080',
-        'url': 'http://192.168.1.249:8080',
-        'icon': '🛡️'
-    })
-
-    ha_dev = next((d for d in devices if d.get('ip') == '192.168.1.219' or 'ha-vm' in (d.get('hostname') or '').lower()), None)
-    if ha_dev:
-        global_network_links.append({
-            'name': 'Home Assistant',
-            'ip': '192.168.1.219:8123',
-            'url': 'http://192.168.1.219:8123',
-            'icon': '🏠'
-        })
-        global_network_links.append({
-            'name': 'Nginx Proxy Manager',
-            'ip': '192.168.1.219:81',
-            'url': 'http://192.168.1.219:81',
-            'icon': '🔀'
-        })
+    adg_url = (cfg.get('adguard_url') or '').strip()
+    if adg_url:
+        try:
+            adg_host = urllib.parse.urlparse(adg_url).netloc
+        except Exception:
+            adg_host = adg_url
+        if adg_host not in existing_link_ips:
+            global_network_links.append({
+                'name': 'AdGuard Home (DNS/DHCP)',
+                'ip': adg_host,
+                'url': adg_url,
+                'icon': '🛡️'
+            })
 
     # Orden histórico/persistente de fijación de IPs Estáticas (1..N)
     static_order_macs = cfg.get('static_order_macs')
@@ -2810,6 +2859,7 @@ extras.init_app(app, {
     'get_arp_table': get_arp_table,
     'read_leases': read_leases,
     'write_leases': write_leases,
+    'get_network_info': get_network_info,
 })
 
 

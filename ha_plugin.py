@@ -413,11 +413,21 @@ def get_ha_mac_map(cfg: Dict[str, Any], force_refresh: bool = False) -> Dict[str
 
     return merged
 
-def discover_ha_instances(subnet_prefix: str = "192.168.1") -> List[Dict[str, Any]]:
+def discover_ha_instances(subnet_prefix: str = None) -> List[Dict[str, Any]]:
     """Escanea rápidamente IPs clave en la red local buscando instancias de Home Assistant (puerto 8123)."""
+    if not subnet_prefix:
+        try:
+            from app import get_network_info
+            _, _, prefix = get_network_info()
+            subnet_prefix = prefix.rstrip('.')
+        except Exception:
+            subnet_prefix = "192.168.1"
+    else:
+        subnet_prefix = subnet_prefix.rstrip('.')
+
     candidates = [
-        "127.0.0.1", "192.168.1.14", "192.168.1.249", "192.168.1.2", "192.168.1.3",
-        "192.168.1.15", "192.168.1.20", "192.168.1.50", "192.168.1.100", "192.168.1.200"
+        "127.0.0.1", f"{subnet_prefix}.2", f"{subnet_prefix}.3", f"{subnet_prefix}.14",
+        f"{subnet_prefix}.20", f"{subnet_prefix}.50", f"{subnet_prefix}.100", f"{subnet_prefix}.200"
     ]
     # Añadir rango común 1..30
     for i in range(1, 31):

@@ -323,6 +323,18 @@ def send_smtp_email(host, port, user, password, to_addr, subject, body_text, bod
         return False, str(e)
 
 
+def get_panel_url():
+    net_func = D.get('get_network_info')
+    if net_func:
+        try:
+            local_ip, _, _ = net_func()
+            if local_ip and local_ip != '127.0.0.1':
+                return f"http://{local_ip}:5001"
+        except Exception:
+            pass
+    return "http://localhost:5001"
+
+
 def build_device_alert_content(d, is_new=True, is_watched=False):
     """Construye el contenido en texto plano y HTML detallado para alertas de dispositivos."""
     hostname = d.get('hostname') or d.get('custom_name') or '(Sin nombre registrado)'
@@ -335,6 +347,7 @@ def build_device_alert_content(d, is_new=True, is_watched=False):
     rssi = f"{d.get('wifi_rssi')} dBm" if d.get('wifi_rssi') else (d.get('wifi_signal') or 'N/A')
     ip_type = 'Estática (Fija)' if d.get('static') else 'Dinámica (DHCP)'
     time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    panel_url = get_panel_url()
 
     if is_watched:
         title = f"🔔 Dispositivo marcado conectado: {hostname}"
@@ -356,7 +369,7 @@ def build_device_alert_content(d, is_new=True, is_watched=False):
         f"Señal Wi-Fi      : {rssi}\n"
         f"Fecha y hora     : {time_str}\n"
         f"-----------------------------------------\n"
-        f"Acceso al Panel: http://192.168.1.249:5001\n"
+        f"Acceso al Panel: {panel_url}\n"
     )
 
     if is_watched:
@@ -414,7 +427,7 @@ def build_device_alert_content(d, is_new=True, is_watched=False):
         </tr>
       </table>
       <div style="margin-top:24px; text-align:center;">
-        <a href="http://192.168.1.249:5001" style="display:inline-block; background:#38bdf8; color:#0f172a; text-decoration:none; font-weight:bold; padding:10px 24px; border-radius:8px; font-size:0.9rem;">
+        <a href="{panel_url}" style="display:inline-block; background:#38bdf8; color:#0f172a; text-decoration:none; font-weight:bold; padding:10px 24px; border-radius:8px; font-size:0.9rem;">
           Abrir Panel DHCP
         </a>
       </div>
@@ -430,6 +443,7 @@ def build_service_alert_content(url, label, ip, port, down_seconds, is_down=True
     time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     down_min = max(10, down_seconds // 60)
     label_str = label or url
+    panel_url = get_panel_url()
     if is_down:
         title = f"🔴 Servicio web caído (10+ min): {label_str}"
         text_body = (
@@ -441,7 +455,7 @@ def build_service_alert_content(url, label, ip, port, down_seconds, is_down=True
             f"Tiempo de caída  : más de {down_min} minutos\n"
             f"Fecha y hora     : {time_str}\n"
             f"-----------------------------------------\n"
-            f"Acceso al Panel: http://192.168.1.249:5001\n"
+            f"Acceso al Panel: {panel_url}\n"
         )
         html_body = f"""<!DOCTYPE html>
 <html>
@@ -472,7 +486,7 @@ def build_service_alert_content(url, label, ip, port, down_seconds, is_down=True
         </tr>
       </table>
       <div style="margin-top:24px; text-align:center;">
-        <a href="http://192.168.1.249:5001" style="display:inline-block; background:#38bdf8; color:#0f172a; text-decoration:none; font-weight:bold; padding:10px 24px; border-radius:8px; font-size:0.9rem;">
+        <a href="{panel_url}" style="display:inline-block; background:#38bdf8; color:#0f172a; text-decoration:none; font-weight:bold; padding:10px 24px; border-radius:8px; font-size:0.9rem;">
           Revisar en Panel DHCP
         </a>
       </div>
@@ -503,7 +517,7 @@ def build_service_alert_content(url, label, ip, port, down_seconds, is_down=True
     <div style="padding:22px;">
       <p style="margin:0 0 12px; font-size:0.95rem;">El servicio <strong>{html.escape(label_str)}</strong> ({html.escape(url)}) vuelve a responder con normalidad.</p>
       <div style="margin-top:16px; text-align:center;">
-        <a href="http://192.168.1.249:5001" style="display:inline-block; background:#10b981; color:#0f172a; text-decoration:none; font-weight:bold; padding:8px 20px; border-radius:8px; font-size:0.85rem;">
+        <a href="{panel_url}" style="display:inline-block; background:#10b981; color:#0f172a; text-decoration:none; font-weight:bold; padding:8px 20px; border-radius:8px; font-size:0.85rem;">
           Ir al Panel
         </a>
       </div>
@@ -1536,13 +1550,15 @@ def api_timeline():
 @bp.route('/api/ipmap')
 def api_ipmap():
     state = D['build_state'](False)
+    net_func = D.get('get_network_info')
+    prefix = net_func()[2] if net_func else '192.168.1.'
     rng = dhcp_range()
     rs, re_ = ip_last(rng['start']), ip_last(rng['end'])
-    cells = {i: {'n': i, 'ip': f'192.168.1.{i}', 'status': 'free', 'devices': []} for i in range(1, 255)}
+    cells = {i: {'n': i, 'ip': f'{prefix}{i}', 'status': 'free', 'devices': []} for i in range(1, 255)}
     for d in state.get('devices', []):
         ips = set([d.get('ip')] + list(d.get('live_ips') or []))
         for ip in ips:
-            if not ip or not ip.startswith('192.168.1.'):
+            if not ip or not ip.startswith(prefix):
                 continue
             n = ip_last(ip)
             if n not in cells:
@@ -1655,7 +1671,18 @@ def api_device_block():
     block = bool(body.get('block'))
     if not valid_ipv4(ip):
         return jsonify({'status': 'error', 'message': 'IP no válida.'})
-    if ip in ('192.168.1.249', '192.168.1.1', '127.0.0.1') and block:
+    net_func = D.get('get_network_info')
+    protected = {'127.0.0.1'}
+    if net_func:
+        try:
+            local_ip, gateway_ip, _ = net_func()
+            if gateway_ip:
+                protected.add(gateway_ip)
+            if local_ip:
+                protected.add(local_ip)
+        except Exception:
+            pass
+    if ip in protected and block:
         return jsonify({'status': 'error', 'message': 'No se puede bloquear el servidor ni el router principal.'})
     try:
         set_client_blocked(ip, block)
@@ -1830,7 +1857,9 @@ def api_wol():
         return jsonify({'status': 'error', 'message': 'MAC no válida.'})
     payload = b'\xff' * 6 + bytes.fromhex(mac.replace(':', '')) * 16
     sent = 0
-    for addr in ('255.255.255.255', '192.168.1.255'):
+    net_func = D.get('get_network_info')
+    prefix = net_func()[2] if net_func else '192.168.1.'
+    for addr in ('255.255.255.255', f'{prefix}255'):
         for port in (9, 7):
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
