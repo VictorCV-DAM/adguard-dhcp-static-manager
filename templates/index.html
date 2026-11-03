@@ -3677,7 +3677,7 @@ function renderMacHunterResults(d) {
 
             <!-- BOTONES DE ACCIÓN RÁPIDA -->
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px; flex-wrap:wrap;">
-                <button type="button" class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="copyHunterSummary('${mac}', this)">${(typeof window.t === 'function') ? window.t('btn_copy_summary', '${window.t('btn_copy_url', '📋 Copiar')} Resumen') : '${window.t('btn_copy_url', '📋 Copiar')} Resumen'}</button>
+                <button type="button" class="btn btn-outline" style="font-size:0.8rem; padding:6px 12px;" onclick="copyHunterSummary('${mac}', this)">${(typeof window.t === 'function') ? window.t('btn_copy_summary', '📋 Copiar Resumen') : '📋 Copiar Resumen'}</button>
                 <button type="button" class="btn btn-primary" style="font-size:0.8rem; padding:6px 14px;" onclick="fillFormFromHunter('${escapeHtml((haData && haData.name) || ag.hostname || '')}', '${mac}', '${ag.assigned_ip || (hist.past_ips && hist.past_ips[0]) || ''}')">${(typeof window.t === 'function') ? window.t('btn_fix_ip_hunter', '✏️ Fijar IP Estática a este Dispositivo') : '✏️ Fijar IP Estática a este Dispositivo'}</button>
             </div>
         </div>
@@ -8727,9 +8727,8 @@ function updateTopoTooltip(node, sx, sy) {
             <div style="margin-top:6px; font-size:0.75rem; color:#7dd3fc;">${(typeof window.t === 'function') ? window.t('topo_core_click_hint', '⚡ Haz clic para disparar una onda neuronal en zigzag a toda la red y encuadrar la vista.') : '⚡ Haz clic para disparar una onda neuronal en zigzag a toda la red y encuadrar la vista.'}</div>
         `;
     } else if (node.type === 'hub') {
+        const _t = (typeof window.t === 'function') ? window.t : ((k, fb) => fb);
         tip.innerHTML = `
-            const _t = (typeof window.t === 'function') ? window.t : ((k, fb) => fb);
-            tip.innerHTML = `
             <div style="font-weight:800; color:#00e5ff; font-size:0.88rem;">📡 ${escapeHtml(node.label)}</div>
             <div style="margin-top:3px; color:#cbd5e1;">${_t('topo_hub_clients_conn', 'Clientes conectados:')} <strong style="color:#86efac;">${node.onlineCount} online</strong> ${_t('topo_hub_of', 'de')} <strong>${node.totalCount}</strong></div>
             <div style="margin-top:5px; font-size:0.73rem; color:#7dd3fc;">${_t('topo_hub_controls_hint', '⚡ <strong>Clic:</strong> Disparar sinapsis a sus clientes y enfocar<br>🖐️ <strong>Arrastrar:</strong> Mover nodo y sus clientes<br>🎯 <strong>Ctrl + Arrastrar:</strong> Mover solo el nodo (clientes estáticos)')}</div>
@@ -10318,14 +10317,14 @@ async function openDeviceSheet(mac, ipHint = '') {
     const renderSheetActions = (dBlocked) => {
         const acts = document.getElementById('ds-actions');
         if (!acts) return;
-        acts.innerHTML = `
-            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.1); font-weight:700;" onclick="openMacHunterModal('${mac}')">${(typeof window.t === 'function') ? window.t('ds_act_forensic', '🔍 Análisis Forense') : '🔍 Análisis Forense'}</button>
+                acts.innerHTML = `
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; color:#38bdf8; border-color:#38bdf8; background:rgba(56,189,248,0.1); font-weight:700;" onclick="openMacHunterModal('${mac}')">${window.t('ds_act_forensic', '🔍 Análisis Forense')}</button>
             <button class="btn ${dBlocked ? 'btn-success' : 'btn-danger'}" style="padding:6px 12px; font-size:0.8rem;" onclick="toggleBlockDevice('${mac}', ${!dBlocked})">
-                ${dBlocked ? ((typeof window.t === 'function') ? window.t('ds_act_unblock_dns', '🟢 Desbloquear Internet (DNS)') : '🟢 Desbloquear Internet (DNS)') : ((typeof window.t === 'function') ? window.t('ds_act_block_dns', '🔴 Cortar Internet (Bloquear DNS)') : '🔴 Cortar Internet (Bloquear DNS)')}
+                ${dBlocked ? window.t('ds_act_unblock_dns', '🟢 Desbloquear Internet (DNS)') : window.t('ds_act_block_dns', '🔴 Cortar Internet (Bloquear DNS)')}
             </button>
-            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">${(typeof window.t === 'function') ? window.t('ds_act_wol', '${window.t('ds_act_wol', '⚡ Wake-on-LAN (Encender)')}') : '${window.t('ds_act_wol', '⚡ Wake-on-LAN (Encender)')}'}</button>
-            ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="quickPing(this, '${currentSheetIp}')">${(typeof window.t === 'function') ? window.t('ds_act_ping', '${window.t('ds_act_ping', '📶 Hacer Ping')}') : '${window.t('ds_act_ping', '📶 Hacer Ping')}'}</button>` : ''}
-            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\\'")}', '${mac}', '${dev.ip || currentSheetIp}')">${(typeof window.t === 'function') ? window.t('ds_act_edit_dhcp', '${window.t('ds_act_edit_dhcp', '✏️ Editar Concesión DHCP')}') : '${window.t('ds_act_edit_dhcp', '✏️ Editar Concesión DHCP')}'}</button>
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="sendWol('${mac}')">${window.t('ds_act_wol', '⚡ Wake-on-LAN (Encender)')}</button>
+            ${currentSheetIp ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="quickPing(this, '${currentSheetIp}')">${window.t('ds_act_ping', '📶 Hacer Ping')}</button>` : ''}
+            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="closeDeviceSheet(); fillForm('${(dev.hostname || '').replace(/'/g, "\'")}', '${mac}', '${dev.ip || currentSheetIp}')">${window.t('ds_act_edit_dhcp', '✏️ Editar Concesión DHCP')}</button>
         `;
     };
     renderSheetActions(!!dev.blocked);
