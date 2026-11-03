@@ -5220,19 +5220,19 @@ function renderTable() {
         }
         (d.tags || []).slice(0, 2).forEach(t => badges.push(`<span class="tag-chip">🏷️ ${escapeHtml(t)}</span>`));
 
-        const isWatched = Boolean(d.watched);
+                        const isWatched = Boolean(d.watched);
         const hostHtml = `
             <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ficha">${(typeof window.t === 'function') ? window.t('btn_device_sheet', '📄 Ficha') : '📄 Ficha'}</button>
-                    <button class="btn btn-outline" style="padding:4px 8px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Mapa">${(typeof window.t === 'function') ? window.t('btn_locate_topo', '🗺️ Mapa') : '🗺️ Mapa'}</button>
-                    <button class="btn btn-outline ${d.watched ? 'btn-bell-active' : ''}" style="padding:4px 8px;font-size:0.76rem; ${d.watched ? 'border-color:#f59e0b; color:#fcd34d; background:rgba(245,158,11,0.14); font-weight:700;' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)">${(typeof window.t === 'function') ? window.t('btn_watch_alert', '🔔 Avisar') : '🔔 Avisar'}</button>
-                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="fillForm('${((d.ha_info && d.ha_info.name) || d.hostname || '').replace(/'/g, "\\'")}', '${d.mac}', '${d.ip}')">${(typeof window.t === 'function') ? window.t('btn_edit_fix', 'Editar / Fijar') : 'Editar / Fijar'}</button>
-                    <button class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;" onclick="quickPing(this, '${d.ip}')">${(typeof window.t === 'function') ? window.t('btn_ping', '⚡ Ping') : '⚡ Ping'}</button>
-                    <button class="btn btn-danger" style="padding:4px 8px;font-size:0.76rem;" onclick="deleteLease('${d.mac}', '${d.ip}', '${(d.hostname || '').replace(/'/g, "\\'")}')">${(typeof window.t === 'function') ? window.t('btn_delete_lease', 'Borrar') : 'Borrar'}</button>
+                ${d.photo ? `<img src="${d.photo}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(56,189,248,0.5); cursor:pointer; flex-shrink:0;" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Ver foto y ficha de ${escapeHtml(d.hostname)}" />` : ''}
+                <div style="min-width:0; flex:1;">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <a class="hostname-link" onclick="openDeviceSheet('${d.mac}', '${d.ip}')" title="Abrir ficha técnica, historial, DNS y escáner de puertos"><strong>${escapeHtml(d.hostname)}</strong></a>
+                        <button class="btn btn-outline" style="padding:1px 6px; font-size:0.68rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); background:rgba(56,189,248,0.08); border-radius:4px; line-height:1.2; flex-shrink:0; display:inline-flex; align-items:center; gap:3px;" onclick="locateDeviceInTopology('${d.mac}', '${d.ip}')" title="Localizar ${escapeHtml(d.hostname)} en la topología de red">${window.t('btn_locate_topo_full', '🌐 Mapa')}</button>
+                        <button class="btn-bell-toggle ${isWatched ? 'active' : ''}" onclick="toggleDeviceWatch('${d.mac}', event)" title="${isWatched ? '🔔 Notificación de conexión por correo ACTIVADA' : '🔕 Notificación de conexión por correo DESACTIVADA'}">
                             ${isWatched ? '🔔' : '🔕'}
                         </button>
                     </div>
-                ${badges.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:3px;">${badges.join('')}</div>` : ''}
+                    ${badges.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:3px;">${badges.join('')}</div>` : ''}
                 </div>
             </div>
         `;
