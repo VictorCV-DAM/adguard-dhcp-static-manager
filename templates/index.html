@@ -255,6 +255,49 @@
         .badge-cable { background: rgba(16, 185, 129, 0.2); color: #34d399; }
         .badge-infra { background: rgba(234, 179, 8, 0.2); color: #fde047; }
         .badge-offline { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+        
+        /* --- Contenedores Desplazables de Filtros (Horizontal Scroll) --- */
+        .filter-row-scroll {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x pan-y;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .filter-row-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .filter-label {
+            flex-shrink: 0;
+            white-space: nowrap;
+            font-size: 0.75rem;
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .filter-group {
+            display: inline-flex;
+            background: #0f172a;
+            border-radius: 999px;
+            padding: 2px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .pill-btn {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        #btn-sort-static-order {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
         .filter-pills {
             display: flex;
             gap: 6px;
@@ -1315,10 +1358,103 @@
                 width: 100% !important;
                 box-sizing: border-box !important;
             }
+            
+        /* --- Contenedores Desplazables de Filtros (Horizontal Scroll) --- */
+        .filter-row-scroll {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x pan-y;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .filter-row-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .filter-label {
+            flex-shrink: 0;
+            white-space: nowrap;
+            font-size: 0.75rem;
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .filter-group {
+            display: inline-flex;
+            background: #0f172a;
+            border-radius: 999px;
+            padding: 2px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .pill-btn {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        #btn-sort-static-order {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        
+            /* --- Filtros desplazables en Smartphones / Pantallas Reducidas --- */
             .filter-pills {
-                gap: 6px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 8px !important;
                 width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
             }
+            .filter-row-scroll {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                align-items: center !important;
+                gap: 8px !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x pan-y !important;
+                scrollbar-width: none !important;
+                -ms-overflow-style: none !important;
+                padding-bottom: 4px !important;
+                box-sizing: border-box !important;
+            }
+            .filter-row-scroll::-webkit-scrollbar {
+                display: none !important;
+            }
+            .filter-row-scroll .filter-label,
+            .filter-label {
+                flex-shrink: 0 !important;
+                white-space: nowrap !important;
+            }
+            .filter-group {
+                display: inline-flex !important;
+                flex-shrink: 0 !important;
+                white-space: nowrap !important;
+                max-width: none !important;
+            }
+            .filter-group .pill-btn,
+            .pill-btn {
+                flex-shrink: 0 !important;
+                white-space: nowrap !important;
+                padding: 6px 12px !important;
+                font-size: 0.8rem !important;
+            }
+            #btn-sort-static-order {
+                flex-shrink: 0 !important;
+                white-space: nowrap !important;
+            }
+
             #table-outer-box, .table-outer-box {
                 width: 100% !important;
                 max-width: 100% !important;
@@ -1819,10 +1955,10 @@
                 <span id="last-updated-text" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;" data-i18n="last_updated_just_now">Actualizado hace un momento</span>
             </div>
         </div>
-        <div class="filter-pills" id="multi-filters" style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+        <div class="filter-pills" id="multi-filters">
             <!-- Grupo Estado -->
-            <div style="display:inline-flex; align-items:center; gap:5px;">
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;" data-i18n="filter_status">Estado:</span>
+            <div class="filter-row-scroll">
+                <span class="filter-label" data-i18n="filter_status">Estado:</span>
                 <div class="filter-group">
                     <button class="pill-btn active" data-group="status" data-val="all" data-i18n="filter_status_all" onclick="setFilter('status', 'all')">Todos <span class="pill-count" id="count-status-all">0</span></button>
                     <button class="pill-btn" data-group="status" data-val="online" data-i18n="filter_status_online" onclick="setFilter('status', 'online')">🟢 Activos <span class="pill-count" id="count-status-online">0</span></button>
@@ -1831,8 +1967,8 @@
             </div>
 
             <!-- Grupo Medio -->
-            <div style="display:inline-flex; align-items:center; gap:5px;">
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;" data-i18n="filter_medium">Medio:</span>
+            <div class="filter-row-scroll">
+                <span class="filter-label" data-i18n="filter_medium">Medio:</span>
                 <div class="filter-group">
                     <button class="pill-btn active" data-group="medium" data-val="all" data-i18n="filter_medium_all" onclick="setFilter('medium', 'all')">Todos <span class="pill-count" id="count-medium-all">0</span></button>
                     <button class="pill-btn" data-group="medium" data-val="wifi" data-i18n="filter_medium_wifi" onclick="setFilter('medium', 'wifi')">📶 Wi-Fi <span class="pill-count" id="count-medium-wifi">0</span></button>
@@ -1841,8 +1977,8 @@
             </div>
 
             <!-- Grupo Tipo IP -->
-            <div style="display:inline-flex; align-items:center; gap:5px;">
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;" data-i18n="filter_iptype">Tipo IP:</span>
+            <div class="filter-row-scroll">
+                <span class="filter-label" data-i18n="filter_iptype">Tipo IP:</span>
                 <div class="filter-group">
                     <button class="pill-btn active" data-group="type" data-val="all" data-i18n="filter_type_all" onclick="setFilter('type', 'all')">Todos <span class="pill-count" id="count-type-all">0</span></button>
                     <button class="pill-btn" data-group="type" data-val="static" data-i18n="filter_type_static" onclick="setFilter('type', 'static')">📌 Fijas <span class="pill-count" id="count-type-static">0</span></button>
@@ -1854,8 +1990,8 @@
             </div>
 
             <!-- Grupo Servicios Web -->
-            <div style="display:inline-flex; align-items:center; gap:5px;">
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;" data-i18n="filter_services">Servicios:</span>
+            <div class="filter-row-scroll">
+                <span class="filter-label" data-i18n="filter_services">Servicios:</span>
                 <div class="filter-group">
                     <button class="pill-btn active" data-group="services" data-val="all" data-i18n="filter_services_all" onclick="setFilter('services', 'all')">Todos <span class="pill-count" id="count-services-all">0</span></button>
                     <button class="pill-btn" data-group="services" data-val="has_services" data-i18n="filter_services_active" onclick="setFilter('services', 'has_services')">🌐 Con Servicios Activos <span class="pill-count" id="count-services-active">0</span></button>
@@ -1908,8 +2044,8 @@
                         <span id="services-summary-badge" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">0 servicios activos</span>
                     </div>
                 </div>
-                <div class="filter-pills" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                    <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;" data-i18n="svc_cat_label">Categoría:</span>
+                <div class="filter-pills filter-row-scroll" id="services-lan-filters">
+                    <span class="filter-label" data-i18n="svc_cat_label">Categoría:</span>
                     <div class="filter-group">
                         <button class="pill-btn active" data-svc-cat="all" onclick="setServiceCategoryFilter('all')"><span data-i18n="svc_cat_all">Todas</span> <span id="svc-count-all" class="pill-count">0</span></button>
                         <button class="pill-btn" data-svc-cat="favorites" onclick="setServiceCategoryFilter('favorites')"><span data-i18n="svc_cat_favs">⭐ Favoritos</span> <span id="svc-count-favorites" class="pill-count">0</span></button>
@@ -1940,8 +2076,8 @@
                         <span id="localhost-tab-summary-badge" style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">0 puertos en escucha</span>
                     </div>
                 </div>
-                <div class="filter-pills" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                    <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;" data-i18n="lh_filter_label">Filtro:</span>
+                <div class="filter-pills filter-row-scroll" id="services-localhost-filters">
+                    <span class="filter-label" data-i18n="lh_filter_label">Filtro:</span>
                     <div class="filter-group">
                         <button class="pill-btn active lh-tab-filter" data-filter="all" onclick="setLocalhostTabFilter('all', this)" data-i18n="lh_filter_all">Todos <span id="lh-tab-count-all" class="pill-count">0</span></button>
                         <button class="pill-btn lh-tab-filter" data-filter="web" onclick="setLocalhostTabFilter('web', this)" data-i18n="lh_filter_web">🌐 Web HTTP <span id="lh-tab-count-web" class="pill-count">0</span></button>
@@ -2197,7 +2333,7 @@
                     <strong style="font-size:0.95rem; color:#f8fafc;" data-i18n="wifi_captured_title">📡 Dispositivos Capturados en el Aire (airodump-ng)</strong>
                     <span id="wifi-scan-count" style="font-size:0.8rem; color:var(--muted);">0 detectados</span>
                 </div>
-                <div id="wifi-radar-filter-bar" style="display:none; align-items:center; gap:6px;">
+                <div id="wifi-radar-filter-bar" class="filter-row-scroll" style="display:none; align-items:center; gap:6px;">
                     <span style="font-size:0.75rem; color:var(--muted);" data-i18n="wifi_filter_lbl">Filtrar:</span>
                     <button id="rf-filter-my-net" class="btn btn-primary" style="padding:3px 9px; font-size:0.75rem; font-weight:700;" onclick="setWifiRadarFilter('my_network')" data-i18n="wifi_filter_my_net">🏠 Solo mi Red (<span id="rf-count-my-net">0</span>)</button>
                     <button id="rf-filter-all" class="btn btn-outline" style="padding:3px 9px; font-size:0.75rem;" onclick="setWifiRadarFilter('all')" data-i18n="wifi_filter_all">🌐 Todos en el aire (<span id="rf-count-all">0</span>)</button>
