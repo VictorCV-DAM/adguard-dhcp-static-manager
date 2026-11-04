@@ -2956,6 +2956,7 @@ def build_state(force_refresh=False):
         'devices': devices,
         'network_links': global_network_links,
         'custom_service_names': custom_names,
+        'favorite_services': [u.rstrip('/') for u in (cfg.get('favorite_services') or []) if isinstance(u, str)],
         'static_order_summary': static_order_summary,
         'ha_plugin_enabled': cfg.get('ha_plugin_enabled', False),
         'home_assistant_instances': cfg.get('home_assistant_instances', []),
@@ -3136,6 +3137,46 @@ def api_topology_positions():
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
     return jsonify({'status': 'success', 'positions': load_topo_positions()})
+
+
+@app.route('/api/services/favorite', methods=['POST'])
+def api_toggle_service_favorite():
+    try:
+        data = request.get_json(force=True) or {}
+        cfg = load_config()
+        favs = cfg.get('favorite_services') or []
+        if not isinstance(favs, list):
+            favs = []
+        norm_favs = [u.rstrip('/') for u in favs if isinstance(u, str) and u.strip()]
+
+        if 'favorites' in data and isinstance(data['favorites'], list):
+            # Sincronización en lote desde localStorage del cliente
+            for u in data['favorites']:
+                if isinstance(u, str) and u.strip():
+                    nu = u.strip().rstrip('/')
+                    if nu not in norm_favs:
+                        norm_favs.append(nu)
+            cfg['favorite_services'] = norm_favs
+            save_config(cfg)
+            return jsonify({'success': True, 'favorites': norm_favs})
+
+        url = (data.get('url') or '').strip()
+        if not url:
+            return jsonify({'success': False, 'error': 'URL de servicio no especificada'}), 400
+
+        norm_url = url.rstrip('/')
+        if norm_url in norm_favs:
+            norm_favs = [u for u in norm_favs if u != norm_url]
+            is_fav = False
+        else:
+            norm_favs.append(norm_url)
+            is_fav = True
+
+        cfg['favorite_services'] = norm_favs
+        save_config(cfg)
+        return jsonify({'success': True, 'is_favorite': is_fav, 'favorites': norm_favs})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/services/rename', methods=['POST'])

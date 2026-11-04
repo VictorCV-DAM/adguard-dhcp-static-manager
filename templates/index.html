@@ -4350,6 +4350,35 @@ async function loadState(isManual = false, showToast = isManual) {
         const lblExp = document.getElementById('lbl-expired');
         if (lblExp) lblExp.textContent = data.expired_count;
 
+        // Sincronizar servicios favoritos desde el servidor
+        if (Array.isArray(data.favorite_services)) {
+            if (data.favorite_services.length === 0) {
+                const localFavs = getFavoriteServices();
+                if (localFavs.length > 0) {
+                    fetch('/api/services/favorite', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ favorites: localFavs })
+                    }).then(r => r.json()).then(res => {
+                        if (res && res.favorites) {
+                            window.serverFavoriteServices = res.favorites.map(normalizeServiceUrl);
+                            try { localStorage.setItem('fav_services', JSON.stringify(window.serverFavoriteServices)); } catch (e) {}
+                            renderServicesCards();
+                            renderTable();
+                        }
+                    }).catch(() => {});
+                    window.serverFavoriteServices = localFavs;
+                } else {
+                    window.serverFavoriteServices = [];
+                }
+            } else {
+                window.serverFavoriteServices = data.favorite_services.map(normalizeServiceUrl);
+                try {
+                    localStorage.setItem('fav_services', JSON.stringify(window.serverFavoriteServices));
+                } catch (e) {}
+            }
+        }
+
         allDevices = data.devices || [];
         downServices = data.down_services || [];
         renderGlobalNetworkMenu(data.network_links || []);
@@ -4491,33 +4520,77 @@ function getServiceMeta(label, port, hostname) {
     return { name: label, icon: '🌐', tag: 'Servicio Web', bg: 'rgba(100, 116, 139, 0.2)', border: '#64748b', cat: 'infra', desc: `Servicio accesible en el puerto ${port || ''}` };
 }
 
+function escapeJsQuote(str) {
+    return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function normalizeServiceUrl(u) {
+    if (!u) return '';
+    return String(u).trim().replace(/\/+$/, '');
+}
+
+window.serverFavoriteServices = null;
+
 function getFavoriteServices() {
-    try {
-        return JSON.parse(localStorage.getItem('fav_services') || '[]');
-    } catch (e) {
-        return [];
+    let list = [];
+    if (Array.isArray(window.serverFavoriteServices)) {
+        list = window.serverFavoriteServices;
+    } else {
+        try {
+            list = JSON.parse(localStorage.getItem('fav_services') || '[]');
+        } catch (e) {
+            list = [];
+        }
     }
+    return list.map(normalizeServiceUrl).filter(Boolean);
 }
 
 function isServiceFavorite(url) {
     if (!url) return false;
-    return getFavoriteServices().includes(url);
+    const n = normalizeServiceUrl(url);
+    return getFavoriteServices().includes(n);
 }
 
-function toggleServiceFavorite(ev, url) {
+async function toggleServiceFavorite(ev, url) {
     if (ev) {
         ev.stopPropagation();
         ev.preventDefault();
     }
+    if (!url) return;
+    const n = normalizeServiceUrl(url);
     let favs = getFavoriteServices();
-    if (favs.includes(url)) {
-        favs = favs.filter(u => u !== url);
+    if (favs.includes(n)) {
+        favs = favs.filter(u => u !== n);
     } else {
-        favs.push(url);
+        favs.push(n);
     }
-    localStorage.setItem('fav_services', JSON.stringify(favs));
+    window.serverFavoriteServices = favs;
+    try {
+        localStorage.setItem('fav_services', JSON.stringify(favs));
+    } catch (e) {}
+
     renderServicesCards();
     renderTable();
+
+    // Sincronizar y persistir en el servidor (compartido entre PC, smartphone y recargas)
+    try {
+        const res = await fetch('/api/services/favorite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: n })
+        });
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.favorites)) {
+            window.serverFavoriteServices = data.favorites.map(normalizeServiceUrl);
+            try {
+                localStorage.setItem('fav_services', JSON.stringify(window.serverFavoriteServices));
+            } catch (e) {}
+            renderServicesCards();
+            renderTable();
+        }
+    } catch (e) {
+        console.warn('Error al guardar favorito en servidor:', e);
+    }
 }
 
 function escapeHtml(s) {
@@ -4647,8 +4720,8 @@ function renderServicesCards() {
     // Ordenar: caídos primero (alerta visual), luego favoritos, luego alfabéticamente
     items.sort((a, b) => {
         if (a.isDown !== b.isDown) return a.isDown ? -1 : 1;
-        const isFavA = favsList.includes(a.service.url) ? 1 : 0;
-        const isFavB = favsList.includes(b.service.url) ? 1 : 0;
+        const isFavA = isServiceFavorite(a.service.url) ? 1 : 0;
+        const isFavB = isServiceFavorite(b.service.url) ? 1 : 0;
         if (isFavA !== isFavB) return isFavB - isFavA;
         return a.meta.name.localeCompare(b.meta.name);
     });
@@ -4657,7 +4730,7 @@ function renderServicesCards() {
     const totalServices = items.length;
     const badgeLan = document.getElementById('badge-svc-lan-count');
     if (badgeLan) badgeLan.textContent = totalServices;
-    const cntFavs = items.filter(it => favsList.includes(it.service.url)).length;
+    const cntFavs = items.filter(it => isServiceFavorite(it.service.url)).length;
     const cntDown = items.filter(it => it.isDown).length;
     const cntDomotica = items.filter(it => it.meta.cat === 'domotica').length;
     const cntMultimedia = items.filter(it => it.meta.cat === 'multimedia').length;
@@ -4676,7 +4749,7 @@ function renderServicesCards() {
     // 2. Filtrar por categoría, caídos o favoritos
     let filtered = items;
     if (serviceCategoryFilter === 'favorites') {
-        filtered = filtered.filter(it => favsList.includes(it.service.url));
+        filtered = filtered.filter(it => isServiceFavorite(it.service.url));
     } else if (serviceCategoryFilter === 'down') {
         filtered = filtered.filter(it => it.isDown);
     } else if (serviceCategoryFilter !== 'all') {
@@ -4722,7 +4795,7 @@ function renderServicesCards() {
     container.innerHTML = filtered.map(it => {
         const { service, device, meta, isDown } = it;
         const cleanUrl = service.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const isFav = favsList.includes(service.url);
+        const isFav = isServiceFavorite(service.url);
         const topBorder = isDown ? '#ef4444' : (isFav ? '#f59e0b' : meta.border);
         const statusHtml = isDown
             ? `<div class="status-indicator-down" title="El servicio dejó de responder (última vez activo: ${service.last_seen_up || 'desconocido'})"><span class="status-dot-down"></span><span>CAÍDO</span></div>`
@@ -4746,7 +4819,7 @@ function renderServicesCards() {
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px;">
                                 ${statusHtml}
-                                <button class="btn-star ${isFav ? 'active' : ''}" onclick="toggleServiceFavorite(event, '${service.url}')" title="${isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}">
+                                <button class="btn-star ${isFav ? 'active' : ''}" onclick="toggleServiceFavorite(event, '${escapeJsQuote(service.url)}')" title="${isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}">
                                     ${isFav ? '⭐' : '☆'}
                                 </button>
                             </div>
@@ -5305,18 +5378,17 @@ function renderTable() {
 
         let webDropdownHtml = '';
         if (d.web_links && d.web_links.length > 0) {
-            const favsList = getFavoriteServices();
-            const hasFav = d.web_links.some(l => favsList.includes(l.url));
+            const hasFav = d.web_links.some(l => isServiceFavorite(l.url));
             const sortedLinks = [...d.web_links].sort((a, b) => {
-                const fa = favsList.includes(a.url) ? 1 : 0;
-                const fb = favsList.includes(b.url) ? 1 : 0;
+                const fa = isServiceFavorite(a.url) ? 1 : 0;
+                const fb = isServiceFavorite(b.url) ? 1 : 0;
                 return fb - fa;
             });
 
             if (d.web_links.length === 1) {
                 const l = d.web_links[0];
-                const isFav = favsList.includes(l.url);
-                webDropdownHtml = `<a href="${l.url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:${isFav ? '#f59e0b' : '#38bdf8'};color:${isFav ? '#f59e0b' : '#38bdf8'};text-decoration:none;font-weight:600;" title="${escapeHtml(l.label)}">${isFav ? '⭐ ' : '🌐 '}Web ↗</a><button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${l.url}')" title="Cambiar nombre: ${escapeHtml(l.label)}">✏️</button>`;
+                const isFav = isServiceFavorite(l.url);
+                webDropdownHtml = `<a href="${l.url}" target="_blank" rel="noopener" class="btn btn-outline" style="padding:4px 8px;font-size:0.76rem;border-color:${isFav ? '#f59e0b' : '#38bdf8'};color:${isFav ? '#f59e0b' : '#38bdf8'};text-decoration:none;font-weight:600;" title="${escapeHtml(l.label)}">${isFav ? '⭐ ' : '🌐 '}Web ↗</a><button class="btn-star-mini" onclick="toggleServiceFavorite(event, '${escapeJsQuote(l.url)}')" title="${isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}" style="background:none;border:none;cursor:pointer;padding:0 2px 0 4px;font-size:0.85rem;">${isFav ? '⭐' : '☆'}</button><button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${escapeJsQuote(l.url)}')" title="Cambiar nombre: ${escapeHtml(l.label)}">✏️</button>`;
             } else {
                 const ipSafe = (d.ip || '').replace(/[^a-zA-Z0-9]/g, '-');
                 webDropdownHtml = `
@@ -5326,18 +5398,19 @@ function renderTable() {
                         </button>
                         <div id="row-web-${ipSafe}" class="row-web-menu dropdown-menu-custom" style="display:none;">
                             ${sortedLinks.map(l => {
-                                const isFav = favsList.includes(l.url);
+                                const isFav = isServiceFavorite(l.url);
                                 return `
-                                <a href="${l.url}" target="_blank" rel="noopener" class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:0.78rem; color:${isFav ? '#fcd34d' : '#f8fafc'}; text-decoration:none; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06); font-weight:${isFav ? '700' : '500'};">
-                                    <span style="display:inline-flex; align-items:center; gap:6px;">
+                                <div class="dropdown-item-link" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:0.78rem; color:${isFav ? '#fcd34d' : '#f8fafc'}; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06); font-weight:${isFav ? '700' : '500'};">
+                                    <a href="${l.url}" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:6px; color:inherit; text-decoration:none; flex:1; min-width:0;">
                                         ${isFav ? '<span style="color:#f59e0b;">⭐</span>' : ''}
                                         <span>${escapeHtml(l.label)}</span>
+                                    </a>
+                                    <span style="display:inline-flex; align-items:center; gap:4px; margin-left:8px;">
+                                        <button class="btn-star-mini" onclick="toggleServiceFavorite(event, '${escapeJsQuote(l.url)}')" title="${isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}" style="background:none;border:none;cursor:pointer;padding:0 2px;font-size:0.85rem;">${isFav ? '⭐' : '☆'}</button>
+                                        <button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${escapeJsQuote(l.url)}')" title="Cambiar nombre del servicio">✏️</button>
+                                        <a href="${l.url}" target="_blank" rel="noopener" style="opacity:0.6; font-size:0.72rem; color:inherit; text-decoration:none;">↗</a>
                                     </span>
-                                    <span style="display:inline-flex; align-items:center; gap:2px; margin-left:8px;">
-                                        <button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${l.url}')" title="Cambiar nombre del servicio">✏️</button>
-                                        <span style="opacity:0.6; font-size:0.72rem;">↗</span>
-                                    </span>
-                                </a>
+                                </div>
                                 `;
                             }).join('')}
                         </div>
