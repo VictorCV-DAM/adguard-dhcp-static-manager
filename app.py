@@ -1190,8 +1190,12 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = "eWeLink Smart Home (:8325)"
         elif 'go2rtc' in t_low or 'go2rtc' in b_low or port == 1984:
             label = "go2rtc WebRTC (:1984)"
-        elif 'adguard' in t_low or 'adguard' in b_low or port == 8080:
+        elif 'adguard' in t_low or 'adguard' in b_low or (port == 8080 and ('pi-server' in h_lower or 'adguard' in h_lower)):
             label = f"AdGuard Home (:{port})"
+        elif port == 8080 and ('samsung' in h_lower or 'tv' in c_lower):
+            label = f"Samsung Smart View / Media (:{port})"
+        elif port == 8080:
+            label = f"Servicio Web (:{port})" if not title else f"{title} (:{port})" 
         elif port == 5001:
             label = "Panel DHCP (:5001)"
         elif port == 5000:

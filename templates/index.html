@@ -1993,6 +1993,9 @@
                     <button class="pill-btn" data-group="status" data-val="online" data-i18n="filter_status_online" onclick="setFilter('status', 'online')">🟢 Activos <span class="pill-count" id="count-status-online">0</span></button>
                     <button class="pill-btn" data-group="status" data-val="offline" data-i18n="filter_status_offline" onclick="setFilter('status', 'offline')">⚪ Inactivos <span class="pill-count" id="count-status-offline">0</span></button>
                 </div>
+                <button id="btn-sort-device-status" class="btn btn-outline" style="padding:4px 9px; font-size:0.75rem; border-radius:999px; margin-left:4px; color:#34d399; border-color:rgba(16,185,129,0.4); white-space:nowrap; flex-shrink:0;" onclick="toggleDeviceStatusSort()" title="Alternar orden: 🟢 Online primero ⇄ ⚪ Caídos/Inactivos primero">
+                    ⇅ 🟢 Online → ⚪ Inactivos
+                </button>
             </div>
 
             <!-- Grupo Medio -->
@@ -2085,6 +2088,9 @@
                         <button class="pill-btn" data-svc-cat="infra" onclick="setServiceCategoryFilter('infra')"><span data-i18n="svc_cat_infra">⚡ Servidores / Infra</span> <span id="svc-count-infra" class="pill-count">0</span></button>
                         <button class="pill-btn" data-svc-cat="hidden" onclick="setServiceCategoryFilter('hidden')"><span data-i18n="svc_cat_hidden">👁️ Ocultos / Descartados</span> <span id="svc-count-hidden" class="pill-count">0</span></button>
                     </div>
+                    <button id="btn-toggle-service-sort" class="btn btn-outline" style="padding:4px 11px; font-size:0.75rem; border-radius:999px; margin-left:6px; white-space:nowrap; flex-shrink:0; font-weight:600; color:#f87171; border-color:rgba(239,68,68,0.4);" onclick="toggleServicesSortOrder()" title="Alternar orden: Caídos primero vs Online primero">
+                        <span id="lbl-service-sort">⇅ 🔴 Caídos → 🟢 Online</span>
+                    </button>
                 </div>
             </div>
 
@@ -4662,6 +4668,68 @@ async function toggleServiceHidden(ev, url) {
 
 window.serverFavoriteServices = null;
 
+// --- Gestión de Ordenación (Caídos ⇄ Online y viceversa) ---
+let servicesSortOrder = localStorage.getItem('ag_services_sort_order') || 'down_first';
+
+function getServicesSortOrder() {
+    return servicesSortOrder;
+}
+
+function toggleServicesSortOrder() {
+    servicesSortOrder = (servicesSortOrder === 'down_first') ? 'online_first' : 'down_first';
+    try {
+        localStorage.setItem('ag_services_sort_order', servicesSortOrder);
+    } catch (e) {}
+    updateServicesSortBtn();
+    renderServicesCards();
+}
+
+function updateServicesSortBtn() {
+    const lbl = document.getElementById('lbl-service-sort');
+    const btn = document.getElementById('btn-toggle-service-sort');
+    if (!lbl || !btn) return;
+    const isEn = (window.currentLang === 'en');
+    if (servicesSortOrder === 'online_first') {
+        lbl.textContent = isEn ? '⇅ 🟢 Online → 🔴 Down' : '⇅ 🟢 Online → 🔴 Caídos';
+        btn.style.color = '#34d399';
+        btn.style.borderColor = 'rgba(16,185,129,0.45)';
+    } else {
+        lbl.textContent = isEn ? '⇅ 🔴 Down → 🟢 Online' : '⇅ 🔴 Caídos → 🟢 Online';
+        btn.style.color = '#f87171';
+        btn.style.borderColor = 'rgba(239,68,68,0.45)';
+    }
+}
+
+function toggleDeviceStatusSort() {
+    if (sortState.colId === 'status') {
+        sortState.asc = !sortState.asc;
+    } else {
+        sortState.colId = 'status';
+        sortState.asc = false; // false = Online (1) primero, true = Inactivos/Caídos (0) primero
+    }
+    updateDeviceStatusSortBtn();
+    renderTable();
+}
+
+function updateDeviceStatusSortBtn() {
+    const btn = document.getElementById('btn-sort-device-status');
+    if (!btn) return;
+    const isEn = (window.currentLang === 'en');
+    if (sortState.colId !== 'status') {
+        btn.textContent = isEn ? '⇅ Status: 🟢 Online → ⚪ Down' : '⇅ 🟢 Online → ⚪ Inactivos';
+        btn.style.color = '#94a3b8';
+        btn.style.borderColor = 'rgba(148,163,184,0.3)';
+    } else if (!sortState.asc) {
+        btn.textContent = isEn ? '⇅ Status: 🟢 Online → ⚪ Down' : '⇅ 🟢 Online → ⚪ Inactivos';
+        btn.style.color = '#34d399';
+        btn.style.borderColor = 'rgba(16,185,129,0.5)';
+    } else {
+        btn.textContent = isEn ? '⇅ Status: ⚪ Down → 🟢 Online' : '⇅ ⚪ Inactivos → 🟢 Online';
+        btn.style.color = '#f87171';
+        btn.style.borderColor = 'rgba(239,68,68,0.5)';
+    }
+}
+
 function getFavoriteServices() {
     let list = [];
     if (Array.isArray(window.serverFavoriteServices)) {
@@ -4848,9 +4916,16 @@ function renderServicesCards() {
         });
     });
 
-    // Ordenar: caídos primero (alerta visual), luego favoritos, luego alfabéticamente
+    // Ordenar: Caídos primero vs Online primero según selección del usuario
+    updateServicesSortBtn();
     items.sort((a, b) => {
-        if (a.isDown !== b.isDown) return a.isDown ? -1 : 1;
+        if (a.isDown !== b.isDown) {
+            if (servicesSortOrder === 'online_first') {
+                return a.isDown ? 1 : -1; // Online primero, caídos después
+            } else {
+                return a.isDown ? -1 : 1; // Caídos primero, online después
+            }
+        }
         const isFavA = isServiceFavorite(a.service.url) ? 1 : 0;
         const isFavB = isServiceFavorite(b.service.url) ? 1 : 0;
         if (isFavA !== isFavB) return isFavB - isFavA;
@@ -5158,8 +5233,14 @@ function getHunterSortMeta(d) {
     return { tier: 3, label: (d.hostname || d.ip || '').toLowerCase() };
 }
 
+function isOnlineDevice(d) {
+    if (!d) return false;
+    return (d.conn_medium !== 'offline') && (Boolean(d.arp_active) || Boolean(d.ip_active) || Boolean(d.ping_ok));
+}
+
 function getSortValue(d, colId) {
     switch (colId) {
+        case 'status': return isOnlineDevice(d) ? 1 : 0;
         case 'hostname': return (d.hostname || '').toLowerCase();
         case 'prediction': return `${d.dev_class || ''} ${d.dev_vendor || ''}`.toLowerCase();
         case 'hunter': {
