@@ -85,6 +85,7 @@ DEFAULT_CONFIG = {
     "adguard_user": "",
     "adguard_pass": "",
     "custom_service_names": {},
+    "favorite_services": [],
     "ha_plugin_enabled": False,
     "home_assistant_instances": [],
     "routers": [],
@@ -1253,6 +1254,8 @@ def save_config(new_cfg):
         cfg['adguard_pass'] = new_cfg['adguard_pass']
     if 'custom_service_names' in new_cfg and isinstance(new_cfg['custom_service_names'], dict):
         cfg['custom_service_names'] = new_cfg['custom_service_names']
+    if 'favorite_services' in new_cfg and isinstance(new_cfg['favorite_services'], list):
+        cfg['favorite_services'] = new_cfg['favorite_services']
     if 'alerts' in new_cfg and isinstance(new_cfg['alerts'], dict):
         cfg['alerts'] = new_cfg['alerts']
     if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
@@ -3157,7 +3160,7 @@ def api_toggle_service_favorite():
                     if nu not in norm_favs:
                         norm_favs.append(nu)
             cfg['favorite_services'] = norm_favs
-            save_config(cfg)
+            save_config_raw(cfg)
             return jsonify({'success': True, 'favorites': norm_favs})
 
         url = (data.get('url') or '').strip()
@@ -3173,7 +3176,7 @@ def api_toggle_service_favorite():
             is_fav = True
 
         cfg['favorite_services'] = norm_favs
-        save_config(cfg)
+        save_config_raw(cfg)
         return jsonify({'success': True, 'is_favorite': is_fav, 'favorites': norm_favs})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

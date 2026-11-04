@@ -4350,32 +4350,36 @@ async function loadState(isManual = false, showToast = isManual) {
         const lblExp = document.getElementById('lbl-expired');
         if (lblExp) lblExp.textContent = data.expired_count;
 
-        // Sincronizar servicios favoritos desde el servidor
+        // Sincronizar servicios favoritos desde el servidor bidireccionalmente
         if (Array.isArray(data.favorite_services)) {
-            if (data.favorite_services.length === 0) {
-                const localFavs = getFavoriteServices();
-                if (localFavs.length > 0) {
-                    fetch('/api/services/favorite', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ favorites: localFavs })
-                    }).then(r => r.json()).then(res => {
-                        if (res && res.favorites) {
-                            window.serverFavoriteServices = res.favorites.map(normalizeServiceUrl);
-                            try { localStorage.setItem('fav_services', JSON.stringify(window.serverFavoriteServices)); } catch (e) {}
-                            renderServicesCards();
-                            renderTable();
-                        }
-                    }).catch(() => {});
-                    window.serverFavoriteServices = localFavs;
-                } else {
-                    window.serverFavoriteServices = [];
-                }
+            const serverFavs = data.favorite_services.map(normalizeServiceUrl);
+            let localFavs = [];
+            try {
+                localFavs = (JSON.parse(localStorage.getItem('fav_services') || '[]') || []).map(normalizeServiceUrl).filter(Boolean);
+            } catch (e) {
+                localFavs = [];
+            }
+
+            const missingOnServer = localFavs.filter(u => !serverFavs.includes(u));
+            if (missingOnServer.length > 0) {
+                const merged = Array.from(new Set([...serverFavs, ...localFavs]));
+                window.serverFavoriteServices = merged;
+                try { localStorage.setItem('fav_services', JSON.stringify(merged)); } catch (e) {}
+                fetch('/api/services/favorite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ favorites: merged })
+                }).then(r => r.json()).then(res => {
+                    if (res && res.favorites) {
+                        window.serverFavoriteServices = res.favorites.map(normalizeServiceUrl);
+                        try { localStorage.setItem('fav_services', JSON.stringify(window.serverFavoriteServices)); } catch (e) {}
+                        renderServicesCards();
+                        renderTable();
+                    }
+                }).catch(() => {});
             } else {
-                window.serverFavoriteServices = data.favorite_services.map(normalizeServiceUrl);
-                try {
-                    localStorage.setItem('fav_services', JSON.stringify(window.serverFavoriteServices));
-                } catch (e) {}
+                window.serverFavoriteServices = serverFavs;
+                try { localStorage.setItem('fav_services', JSON.stringify(serverFavs)); } catch (e) {}
             }
         }
 
