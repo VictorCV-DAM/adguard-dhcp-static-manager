@@ -756,6 +756,35 @@
             color: #f59e0b;
             text-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
         }
+        .btn-hide-service {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #64748b;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+        .btn-hide-service:hover {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: #f87171;
+            color: #f87171;
+            transform: scale(1.1);
+        }
+        .btn-hide-service.active {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        .service-card.is-hidden {
+            opacity: 0.82;
+            border-style: dashed !important;
+        }
         .service-card.is-favorite {
             border-color: rgba(245, 158, 11, 0.65) !important;
             box-shadow: 0 6px 24px rgba(245, 158, 11, 0.12);
@@ -2054,6 +2083,7 @@
                         <button class="pill-btn" data-svc-cat="multimedia" onclick="setServiceCategoryFilter('multimedia')"><span data-i18n="svc_cat_multimedia">🎬 Multimedia</span> <span id="svc-count-multimedia" class="pill-count">0</span></button>
                         <button class="pill-btn" data-svc-cat="red" onclick="setServiceCategoryFilter('red')"><span data-i18n="svc_cat_red">🌐 Red & Routers</span> <span id="svc-count-red" class="pill-count">0</span></button>
                         <button class="pill-btn" data-svc-cat="infra" onclick="setServiceCategoryFilter('infra')"><span data-i18n="svc_cat_infra">⚡ Servidores / Infra</span> <span id="svc-count-infra" class="pill-count">0</span></button>
+                        <button class="pill-btn" data-svc-cat="hidden" onclick="setServiceCategoryFilter('hidden')"><span data-i18n="svc_cat_hidden">👁️ Ocultos / Descartados</span> <span id="svc-count-hidden" class="pill-count">0</span></button>
                     </div>
                 </div>
             </div>
@@ -4383,6 +4413,39 @@ async function loadState(isManual = false, showToast = isManual) {
             }
         }
 
+        // Sincronizar servicios ocultos / descartados desde el servidor
+        if (Array.isArray(data.hidden_services)) {
+            const serverHids = data.hidden_services.map(normalizeServiceUrl);
+            let localHids = [];
+            try {
+                localHids = (JSON.parse(localStorage.getItem('hidden_services') || '[]') || []).map(normalizeServiceUrl).filter(Boolean);
+            } catch (e) {
+                localHids = [];
+            }
+
+            const missingOnServerHids = localHids.filter(u => !serverHids.includes(u));
+            if (missingOnServerHids.length > 0) {
+                const mergedHids = Array.from(new Set([...serverHids, ...localHids]));
+                window.serverHiddenServices = mergedHids;
+                try { localStorage.setItem('hidden_services', JSON.stringify(mergedHids)); } catch (e) {}
+                fetch('/api/services/hide', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hidden: mergedHids })
+                }).then(r => r.json()).then(res => {
+                    if (res && res.hidden_services) {
+                        window.serverHiddenServices = res.hidden_services.map(normalizeServiceUrl);
+                        try { localStorage.setItem('hidden_services', JSON.stringify(window.serverHiddenServices)); } catch (e) {}
+                        renderServicesCards();
+                        renderTable();
+                    }
+                }).catch(() => {});
+            } else {
+                window.serverHiddenServices = serverHids;
+                try { localStorage.setItem('hidden_services', JSON.stringify(serverHids)); } catch (e) {}
+            }
+        }
+
         allDevices = data.devices || [];
         downServices = data.down_services || [];
         renderGlobalNetworkMenu(data.network_links || []);
@@ -4531,6 +4594,70 @@ function escapeJsQuote(str) {
 function normalizeServiceUrl(u) {
     if (!u) return '';
     return String(u).trim().replace(/\/+$/, '');
+}
+
+window.serverHiddenServices = null;
+
+function getHiddenServices() {
+    let list = [];
+    if (Array.isArray(window.serverHiddenServices)) {
+        list = window.serverHiddenServices;
+    } else {
+        try {
+            list = JSON.parse(localStorage.getItem('hidden_services') || '[]');
+        } catch (e) {
+            list = [];
+        }
+    }
+    return list.map(normalizeServiceUrl).filter(Boolean);
+}
+
+function isServiceHidden(url) {
+    if (!url) return false;
+    const n = normalizeServiceUrl(url);
+    return getHiddenServices().includes(n);
+}
+
+async function toggleServiceHidden(ev, url) {
+    if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+    }
+    if (!url) return;
+    const n = normalizeServiceUrl(url);
+    let hids = getHiddenServices();
+    if (hids.includes(n)) {
+        hids = hids.filter(u => u !== n);
+    } else {
+        hids.push(n);
+    }
+    window.serverHiddenServices = hids;
+    try {
+        localStorage.setItem('hidden_services', JSON.stringify(hids));
+    } catch (e) {}
+
+    renderServicesCards();
+    renderTable();
+
+    // Sincronizar y persistir en el servidor (compartido entre PC, smartphone y recargas)
+    try {
+        const res = await fetch('/api/services/hide', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: n })
+        });
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.hidden_services)) {
+            window.serverHiddenServices = data.hidden_services.map(normalizeServiceUrl);
+            try {
+                localStorage.setItem('hidden_services', JSON.stringify(window.serverHiddenServices));
+            } catch (e) {}
+            renderServicesCards();
+            renderTable();
+        }
+    } catch (e) {
+        console.warn('Error al guardar servicio oculto en servidor:', e);
+    }
 }
 
 window.serverFavoriteServices = null;
@@ -4730,16 +4857,21 @@ function renderServicesCards() {
         return a.meta.name.localeCompare(b.meta.name);
     });
 
-    // Contadores por categoría y favoritos
-    const totalServices = items.length;
+    // Separar servicios visibles de los ocultos / descartados
+    const hiddenItems = items.filter(it => isServiceHidden(it.service.url));
+    const visibleItems = items.filter(it => !isServiceHidden(it.service.url));
+
+    // Contadores por categoría (calculados sobre servicios visibles no descartados)
+    const totalServices = visibleItems.length;
     const badgeLan = document.getElementById('badge-svc-lan-count');
     if (badgeLan) badgeLan.textContent = totalServices;
-    const cntFavs = items.filter(it => isServiceFavorite(it.service.url)).length;
-    const cntDown = items.filter(it => it.isDown).length;
-    const cntDomotica = items.filter(it => it.meta.cat === 'domotica').length;
-    const cntMultimedia = items.filter(it => it.meta.cat === 'multimedia').length;
-    const cntRed = items.filter(it => it.meta.cat === 'red').length;
-    const cntInfra = items.filter(it => it.meta.cat === 'infra').length;
+    const cntFavs = visibleItems.filter(it => isServiceFavorite(it.service.url)).length;
+    const cntDown = visibleItems.filter(it => it.isDown).length;
+    const cntDomotica = visibleItems.filter(it => it.meta.cat === 'domotica').length;
+    const cntMultimedia = visibleItems.filter(it => it.meta.cat === 'multimedia').length;
+    const cntRed = visibleItems.filter(it => it.meta.cat === 'red').length;
+    const cntInfra = visibleItems.filter(it => it.meta.cat === 'infra').length;
+    const cntHidden = hiddenItems.length;
 
     const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setEl('svc-count-all', totalServices);
@@ -4749,15 +4881,23 @@ function renderServicesCards() {
     setEl('svc-count-multimedia', cntMultimedia);
     setEl('svc-count-red', cntRed);
     setEl('svc-count-infra', cntInfra);
+    setEl('svc-count-hidden', cntHidden);
 
-    // 2. Filtrar por categoría, caídos o favoritos
-    let filtered = items;
-    if (serviceCategoryFilter === 'favorites') {
-        filtered = filtered.filter(it => isServiceFavorite(it.service.url));
-    } else if (serviceCategoryFilter === 'down') {
-        filtered = filtered.filter(it => it.isDown);
-    } else if (serviceCategoryFilter !== 'all') {
-        filtered = filtered.filter(it => it.meta.cat === serviceCategoryFilter);
+    // 2. Filtrar por categoría: si es 'hidden', mostrar descartados; si no, excluir descartados
+    let filtered = [];
+    if (serviceCategoryFilter === 'hidden') {
+        filtered = hiddenItems;
+    } else {
+        let base = visibleItems;
+        if (serviceCategoryFilter === 'favorites') {
+            filtered = base.filter(it => isServiceFavorite(it.service.url));
+        } else if (serviceCategoryFilter === 'down') {
+            filtered = base.filter(it => it.isDown);
+        } else if (serviceCategoryFilter !== 'all') {
+            filtered = base.filter(it => it.meta.cat === serviceCategoryFilter);
+        } else {
+            filtered = base;
+        }
     }
 
     // 3. Filtrar por búsqueda de texto
@@ -4771,12 +4911,24 @@ function renderServicesCards() {
     // Actualizar resumen
     const summary = document.getElementById('services-summary-badge');
     if (summary) {
-        summary.textContent = `${filtered.length} de ${totalServices} servicios activos`;
+        if (serviceCategoryFilter === 'hidden') {
+            summary.textContent = `${filtered.length} de ${cntHidden} servicios ocultos / descartados`;
+        } else {
+            summary.textContent = `${filtered.length} de ${totalServices} servicios activos`;
+        }
     }
 
     // 4. Renderizar tarjetas
     if (filtered.length === 0) {
-        if (serviceCategoryFilter === 'favorites') {
+        if (serviceCategoryFilter === 'hidden') {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 70px 20px; color: var(--muted); background: var(--card); border-radius: 12px; border: 1px solid var(--border);">
+                    <div style="font-size: 2.4rem; margin-bottom: 12px;">👁️</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: #f8fafc;" data-i18n="empty_hidden_title">${window.t('empty_hidden_title', 'No hay servicios ocultos o descartados')}</div>
+                    <div style="font-size: 0.85rem; margin-top: 6px; color: #94a3b8;" data-i18n="empty_hidden_desc">${window.t('empty_hidden_desc', 'Pulsa el icono de descartar (🙈) en la cabecera de cualquier tarjeta de servicio para moverlo a esta sección y mantener limpias tus vistas principales.')}</div>
+                </div>
+            `;
+        } else if (serviceCategoryFilter === 'favorites') {
             container.innerHTML = `
                 <div style="grid-column: 1 / -1; text-align: center; padding: 70px 20px; color: var(--muted); background: var(--card); border-radius: 12px; border: 1px solid var(--border);">
                     <div style="font-size: 2.4rem; margin-bottom: 12px;">⭐</div>
@@ -4800,7 +4952,8 @@ function renderServicesCards() {
         const { service, device, meta, isDown } = it;
         const cleanUrl = service.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
         const isFav = isServiceFavorite(service.url);
-        const topBorder = isDown ? '#ef4444' : (isFav ? '#f59e0b' : meta.border);
+        const isHidden = isServiceHidden(service.url);
+        const topBorder = isHidden ? '#64748b' : (isDown ? '#ef4444' : (isFav ? '#f59e0b' : meta.border));
         const statusHtml = isDown
             ? `<div class="status-indicator-down" title="El servicio dejó de responder (última vez activo: ${service.last_seen_up || 'desconocido'})"><span class="status-dot-down"></span><span>CAÍDO</span></div>`
             : `<div class="status-indicator-live" title="Servicio verificado y respondiendo en red"><span class="status-dot-pulse"></span><span>ONLINE${service.latency_ms != null ? ' · ' + Math.round(service.latency_ms) + 'ms' : ''}</span></div>`;
@@ -4809,7 +4962,7 @@ function renderServicesCards() {
             : '';
 
         return `
-            <div class="service-card ${isFav ? 'is-favorite' : ''} ${isDown ? 'is-down' : ''}" style="border-top: 3px solid ${topBorder};">
+            <div class="service-card ${isFav ? 'is-favorite' : ''} ${isDown ? 'is-down' : ''} ${isHidden ? 'is-hidden' : ''}" style="border-top: 3px solid ${topBorder};">
                 <div class="service-card-header">
                     <div class="service-icon-box" style="background: ${meta.bg}; color: ${meta.border}; border: 1px solid ${meta.border};">
                         ${meta.icon}
@@ -4819,12 +4972,16 @@ function renderServicesCards() {
                             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                 <span class="service-tag">${meta.tag}</span>
                                 ${isFav ? '<span class="badge-fav">⭐ Favorito</span>' : ''}
+                                ${isHidden ? `<span class="badge" style="background:rgba(148,163,184,0.18); border:1px solid rgba(148,163,184,0.35); color:#94a3b8; font-size:0.7rem; padding:2px 7px; border-radius:999px;">${window.t('badge_hidden', '🙈 Oculto')}</span>` : ''}
                                 ${service.is_custom ? `<span class="badge-custom-name" title="Nombre original: ${escapeHtml(meta.originalName || service.default_label || '')}">✏️ Personalizado</span>` : ''}
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px;">
                                 ${statusHtml}
-                                <button class="btn-star ${isFav ? 'active' : ''}" onclick="toggleServiceFavorite(event, '${escapeJsQuote(service.url)}')" title="${isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}">
+                                <button class="btn-star ${isFav ? 'active' : ''}" onclick="toggleServiceFavorite(event, '${escapeJsQuote(service.url)}')" title="${isFav ? (window.currentLang === 'en' ? 'Remove from favorites' : 'Quitar de favoritos') : (window.currentLang === 'en' ? 'Add to favorites' : 'Añadir a favoritos')}">
                                     ${isFav ? '⭐' : '☆'}
+                                </button>
+                                <button class="btn-hide-service ${isHidden ? 'active' : ''}" onclick="toggleServiceHidden(event, '${escapeJsQuote(service.url)}')" title="${isHidden ? (window.currentLang === 'en' ? 'Restore / Show service' : 'Restaurar / Mostrar servicio') : (window.currentLang === 'en' ? 'Hide / Dismiss service' : 'Ocultar / Descartar servicio')}">
+                                    ${isHidden ? '👁️' : '🙈'}
                                 </button>
                             </div>
                         </div>
@@ -4864,6 +5021,7 @@ function renderServicesCards() {
                         <span>Abrir ${escapeHtml(meta.name)}</span>
                         <span style="font-size: 0.95rem;">↗</span>
                     </a>
+                    ${isHidden ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); display:inline-flex; align-items:center; gap:4px;" onclick="toggleServiceHidden(event, '${escapeJsQuote(service.url)}')"><span>👁️</span><span data-i18n="btn_restore">${window.t('btn_restore', 'Restaurar')}</span></button>` : ''}
                     ${isDown ? `<button class="btn btn-outline" style="padding:6px 10px; font-size:0.76rem; color:#f87171; border-color:rgba(239,68,68,0.4);" onclick="forgetDownService('${service.url}')" title="Olvidar este servicio si lo has desinstalado">${window.t('btn_forget', '🗑️ Olvidar')}</button>` : ''}
                 </div>
             </div>

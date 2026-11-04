@@ -86,6 +86,7 @@ DEFAULT_CONFIG = {
     "adguard_pass": "",
     "custom_service_names": {},
     "favorite_services": [],
+    "hidden_services": [],
     "ha_plugin_enabled": False,
     "home_assistant_instances": [],
     "routers": [],
@@ -1256,6 +1257,8 @@ def save_config(new_cfg):
         cfg['custom_service_names'] = new_cfg['custom_service_names']
     if 'favorite_services' in new_cfg and isinstance(new_cfg['favorite_services'], list):
         cfg['favorite_services'] = new_cfg['favorite_services']
+    if 'hidden_services' in new_cfg and isinstance(new_cfg['hidden_services'], list):
+        cfg['hidden_services'] = new_cfg['hidden_services']
     if 'alerts' in new_cfg and isinstance(new_cfg['alerts'], dict):
         cfg['alerts'] = new_cfg['alerts']
     if 'routers' in new_cfg and isinstance(new_cfg['routers'], list):
@@ -2960,6 +2963,7 @@ def build_state(force_refresh=False):
         'network_links': global_network_links,
         'custom_service_names': custom_names,
         'favorite_services': [u.rstrip('/') for u in (cfg.get('favorite_services') or []) if isinstance(u, str)],
+        'hidden_services': [u.rstrip('/') for u in (cfg.get('hidden_services') or []) if isinstance(u, str)],
         'static_order_summary': static_order_summary,
         'ha_plugin_enabled': cfg.get('ha_plugin_enabled', False),
         'home_assistant_instances': cfg.get('home_assistant_instances', []),
@@ -3140,6 +3144,46 @@ def api_topology_positions():
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
     return jsonify({'status': 'success', 'positions': load_topo_positions()})
+
+
+@app.route('/api/services/hide', methods=['POST'])
+def api_toggle_service_hide():
+    try:
+        data = request.get_json(force=True) or {}
+        cfg = load_config()
+        hids = cfg.get('hidden_services') or []
+        if not isinstance(hids, list):
+            hids = []
+        norm_hids = [u.rstrip('/') for u in hids if isinstance(u, str) and u.strip()]
+
+        if 'hidden' in data and isinstance(data['hidden'], list):
+            # Sincronización en lote
+            for u in data['hidden']:
+                if isinstance(u, str) and u.strip():
+                    nu = u.strip().rstrip('/')
+                    if nu not in norm_hids:
+                        norm_hids.append(nu)
+            cfg['hidden_services'] = norm_hids
+            save_config_raw(cfg)
+            return jsonify({'success': True, 'hidden_services': norm_hids})
+
+        url = (data.get('url') or '').strip()
+        if not url:
+            return jsonify({'success': False, 'error': 'URL de servicio no especificada'}), 400
+
+        norm_url = url.rstrip('/')
+        if norm_url in norm_hids:
+            norm_hids = [u for u in norm_hids if u != norm_url]
+            is_hidden = False
+        else:
+            norm_hids.append(norm_url)
+            is_hidden = True
+
+        cfg['hidden_services'] = norm_hids
+        save_config_raw(cfg)
+        return jsonify({'success': True, 'is_hidden': is_hidden, 'hidden_services': norm_hids})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/services/favorite', methods=['POST'])
