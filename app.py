@@ -47,8 +47,40 @@ def add_no_cache_headers(response):
 
 import tempfile
 
-LEASES_PATH = os.environ.get('DHCP_PANEL_LEASES_PATH') or os.path.join(_CURRENT_DIR, 'leases.json')
-YAML_PATH = os.environ.get('DHCP_PANEL_YAML_PATH') or os.path.join(_CURRENT_DIR, 'AdGuardHome.yaml')
+def get_adguard_leases_path():
+    env_path = os.environ.get('DHCP_PANEL_LEASES_PATH')
+    if env_path:
+        return env_path
+    candidates = [
+        '/home/yo/servicios/adguard-work/data/leases.json',
+        '/opt/adguardhome/work/data/leases.json',
+        '/opt/AdGuardHome/data/leases.json',
+        '/var/lib/adguardhome/data/leases.json',
+        os.path.join(_CURRENT_DIR, 'leases.json'),
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return candidates[0]
+
+def get_adguard_yaml_path():
+    env_path = os.environ.get('DHCP_PANEL_YAML_PATH')
+    if env_path:
+        return env_path
+    candidates = [
+        '/home/yo/servicios/adguard-conf/AdGuardHome.yaml',
+        '/opt/adguardhome/conf/AdGuardHome.yaml',
+        '/opt/AdGuardHome/AdGuardHome.yaml',
+        '/etc/adguardhome/AdGuardHome.yaml',
+        os.path.join(_CURRENT_DIR, 'AdGuardHome.yaml'),
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return candidates[0]
+
+LEASES_PATH = get_adguard_leases_path()
+YAML_PATH = get_adguard_yaml_path()
 CONFIG_PATH = os.environ.get('DHCP_PANEL_CONFIG_PATH') or os.path.join(_CURRENT_DIR, 'config.json')
 TOPO_POSITIONS_PATH = os.path.join(os.path.dirname(CONFIG_PATH), 'topology_positions.json')
 _TOPO_POS_LOCK = threading.Lock()
@@ -1345,26 +1377,14 @@ def read_leases():
     return data
 
 def _do_read_leases():
-    # 1. Archivo local de AdGuard Home si existe
-    if os.path.exists(LEASES_PATH):
-        try:
-            with open(LEASES_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    try:
-        res = run_sudo(['cat', LEASES_PATH])
-        if res.returncode == 0 and res.stdout.strip():
-            return json.loads(res.stdout)
-    except Exception:
-        pass
-
-    # 2. Conexión remota por API REST de AdGuard Home si está configurada
+    # 1. Conexión remota por API REST de AdGuard Home (prioritaria y autoritativa en tiempo real)
     try:
         cfg = load_config()
         url = (cfg.get('adguard_url') or '').strip().rstrip('/')
         user = (cfg.get('adguard_user') or '').strip()
         pwd = (cfg.get('adguard_pass') or '').strip()
+        if not url:
+            url = 'http://127.0.0.1:8080'
         if url:
             api_url = f"{url}/control/dhcp/status"
             req = urllib.request.Request(api_url, headers={'User-Agent': 'DHCP-Panel'})
@@ -1384,7 +1404,27 @@ def _do_read_leases():
                         sl_copy['static'] = True
                         sl_copy.setdefault('expires', '')
                         all_leases.append(sl_copy)
-                    return {"version": 1, "leases": all_leases}
+                    if all_leases or 'leases' in data or 'static_leases' in data:
+                        return {"version": 1, "leases": all_leases}
+    except Exception:
+        pass
+
+    # 2. Archivo local de AdGuard Home como respaldo si la API no responde o AdGuard está detenido
+    target_leases_path = get_adguard_leases_path()
+    if os.path.exists(target_leases_path):
+        try:
+            with open(target_leases_path, 'r', encoding='utf-8') as f:
+                content = json.load(f)
+                if content and isinstance(content, dict) and 'leases' in content:
+                    return content
+        except Exception:
+            pass
+    try:
+        res = run_sudo(['cat', target_leases_path])
+        if res.returncode == 0 and res.stdout.strip():
+            content = json.loads(res.stdout)
+            if content and isinstance(content, dict) and 'leases' in content:
+                return content
     except Exception:
         pass
 
@@ -1392,9 +1432,10 @@ def _do_read_leases():
 
 
 def write_leases(data):
+    target_leases_path = get_adguard_leases_path()
     payload = json.dumps(data, separators=(',', ':'))
     proc = subprocess.run(
-        ['sudo', 'tee', LEASES_PATH],
+        ['sudo', 'tee', target_leases_path],
         input=payload,
         capture_output=True,
         text=True,
@@ -1404,7 +1445,8 @@ def write_leases(data):
 
 
 def get_lease_duration():
-    res = run_sudo(['cat', YAML_PATH])
+    target_yaml = get_adguard_yaml_path()
+    res = run_sudo(['cat', target_yaml])
     if res.returncode != 0:
         return 43200
     m = re.search(r'dhcpv4:.*?lease_duration:\s*(\d+)', res.stdout, re.DOTALL)
@@ -3326,11 +3368,13 @@ def api_assign_static():
             'message': f"⚠️ Nombre duplicado: Ya existe otro dispositivo con el nombre '{hostname}' (MAC: {c_mac}, IP: {c_ip}). Asignar el mismo nombre exacto provoca colisiones en DNS y extravío de equipos. Elige un nombre distintivo (por ejemplo, '{hostname} 2')."
         }), 409
 
+    # Leer las concesiones antes de detener docker para asegurar datos frescos vía API o disco
+    data = read_leases()
+    old_leases = data.get('leases', [])
+
     run_sudo(['docker', 'stop', 'adguardhome'])
     removed = 0
     try:
-        data = read_leases()
-        old_leases = data.get('leases', [])
         new_leases = []
 
         for l in old_leases:
@@ -3501,10 +3545,11 @@ def api_delete_lease():
     mac = (req.get('mac') or '').strip().lower()
     ip = (req.get('ip') or '').strip()
 
+    data = read_leases()
+    old_leases = data.get('leases', [])
+
     run_sudo(['docker', 'stop', 'adguardhome'])
     try:
-        data = read_leases()
-        old_leases = data.get('leases', [])
         new_leases = [
             l for l in old_leases
             if not ((l.get('mac') or '').lower() == mac and (l.get('ip') or '') == ip)
@@ -3538,11 +3583,12 @@ def api_delete_lease():
 @app.route('/api/clean-junk', methods=['POST'])
 def api_clean_junk():
     now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    data = read_leases()
+    old_leases = data.get('leases', [])
+
     run_sudo(['docker', 'stop', 'adguardhome'])
     removed_count = 0
     try:
-        data = read_leases()
-        old_leases = data.get('leases', [])
         static_macs = {
             (l.get('mac') or '').lower()
             for l in old_leases
