@@ -659,16 +659,17 @@ def monitor_cycle():
 
     to_check = []
     for url, (d, l) in detected.items():
-        to_check.append((url, d.get('ip'), l.get('port') or (443 if url.startswith('https') else 80), l.get('label'), norm_mac(d.get('mac'))))
+        parsed = urllib.parse.urlsplit(url)
+        real_port = parsed.port or l.get('port') or (443 if url.startswith('https') else 80)
+        to_check.append((url, d.get('ip'), real_port, l.get('label'), norm_mac(d.get('mac'))))
     for url, r in known.items():
         if url not in detected:
-            to_check.append((url, r['ip'], r['port'], r['label'], r['mac']))
+            parsed = urllib.parse.urlsplit(url)
+            real_port = parsed.port or r.get('port') or (443 if url.startswith('https') else 80)
+            to_check.append((url, r['ip'], real_port, r['label'], r['mac']))
 
     def _chk(item):
         url, ip, port, label, mac = item
-        if url in detected:
-            ok, ms = tcp_latency(ip, port)
-            return item, True if not ok and ms is None and url in detected else ok, ms
         ok, ms = tcp_latency(ip, port)
         return item, ok, ms
 

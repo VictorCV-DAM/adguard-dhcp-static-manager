@@ -1247,54 +1247,12 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
         ])
         valid_title = clean_title if (clean_title and not is_error_title) else ""
 
-        # Detección y reconocimiento inteligente de aplicaciones SPA y servicios conocidos
+        # 1. Paneles del sistema e infraestructura
         if port == 5001 or 'panel dhcp' in t_low or ('dhcp' in t_low and 'panel' in t_low):
             label = "Panel DHCP (:5001)"
-        elif 'immich' in b_low or 'immich' in t_low or port == 2283:
-            label = f"Immich (:{port})"
-        elif port == 32400 or 'plex' in b_low or 'plex' in t_low:
+        elif port == 32400:
             url = f"http://{ip}:32400/web"
             label = "Plex Media Server (:32400)"
-        elif 'quota monitor' in t_low or 'quota monitor' in b_low or (port == 5050 and 'quota' in b_low):
-            label = "Antigravity Quota Monitor (:5050)"
-        elif port == 81 or 'nginx proxy manager' in t_low:
-            label = "Nginx Proxy Manager (:81)"
-        elif port == 8082 and ('nginx proxy manager' in b_low or 'congratulations' in b_low or 'default site' in t_low):
-            label = "NPM Test / Default Site (:8082)"
-        elif 'home assistant observer' in t_low or 'observer' in b_low or port == 4357:
-            label = "HA Observer (:4357)"
-        elif 'home assistant' in t_low or port == 8123:
-            label = "Home Assistant (:8123)"
-        elif 'broadlink' in t_low or 'broadlink' in b_low or port == 8099:
-            label = "Broadlink Manager v2 (:8099)"
-        elif 'ewelink' in t_low or 'ewelink' in b_low or port == 8325:
-            label = "eWeLink Smart Home (:8325)"
-        elif port == 8888 or 'qbittorrent' in t_low or 'qbittorrent' in b_low:
-            label = f"qBittorrent (:{port})"
-        elif port == 4711 or 'emule' in t_low or 'emule' in b_low:
-            label = f"eMule Web Interface (:{port})"
-        elif port in (47989, 47990) or 'sunshine' in t_low or 'sunshine' in b_low:
-            label = f"Sunshine Game Streaming (:{port})"
-        elif 'go2rtc' in t_low or 'go2rtc' in b_low or port == 1984:
-            label = "go2rtc WebRTC (:1984)"
-        elif (port in (8080, 3000) and ('adguard' in t_low or 'adguard' in b_low)) or (port == 8080 and ('pi-server' in h_lower or 'adguard' in h_lower)) or ('adguard' in t_low and port not in (5000, 5001)):
-            label = f"AdGuard Home (:{port})"
-        elif port == 8080 and ('samsung' in h_lower or 'tv' in c_lower):
-            label = f"Samsung Smart View / Media (:{port})"
-        elif 'proxmox' in b_low or 'proxmox' in t_low or port == 8006:
-            label = "Proxmox VE (:8006)"
-        elif 'portainer' in b_low or 'portainer' in t_low or port in (9000, 9443):
-            label = f"Portainer ({proto.upper()} :{port})"
-        elif 'jellyfin' in b_low or 'jellyfin' in t_low or port == 8096:
-            label = f"Jellyfin (:{port})"
-        elif 'vaultwarden' in b_low or 'bitwarden' in b_low:
-            label = f"Vaultwarden (:{port})"
-        elif 'syncthing' in b_low or port == 8384:
-            label = f"Syncthing (:{port})"
-        elif 'uptime kuma' in b_low or port == 3001:
-            label = f"Uptime Kuma (:{port})"
-        elif 'grafana' in b_low or (port == 3000 and 'grafana' in t_low):
-            label = "Grafana (:3000)"
         elif port in (8008, 8443) and any(k in h_lower for k in ['nest', 'google', 'cast', 'home']):
             label = f"Google Cast ({proto.upper()})"
         elif gateway_ip and ip == gateway_ip:
@@ -1308,12 +1266,54 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = f"Web {lbl} ({proto.upper()})"
         elif is_router_cfg:
             label = f"Web {router_name} ({proto.upper()})"
+        # 2. Si la aplicación web tiene un título HTML descriptivo y válido, USARLO con máxima prioridad
         elif valid_title:
             label = f"{valid_title} (:{port})" if port not in (80, 443) else valid_title
+        # 3. Fallbacks para servicios específicos sin título o con título genérico
+        elif port in (2283, 8082, 8086) and ('immich' in b_low or 'immich' in t_low or port == 2283):
+            label = f"Immich (:{port})"
+        elif port == 5050 and ('quota monitor' in t_low or 'quota' in b_low):
+            label = "Antigravity Quota Monitor (:5050)"
+        elif port == 81 or (port in (81, 8081) and 'nginx proxy manager' in t_low):
+            label = f"Nginx Proxy Manager (:{port})"
+        elif port == 8082 and ('nginx proxy manager' in b_low or 'congratulations' in b_low or 'default site' in t_low):
+            label = "NPM Test / Default Site (:8082)"
+        elif port == 4357 or 'home assistant observer' in t_low:
+            label = "HA Observer (:4357)"
+        elif port == 8123 or 'home assistant' in t_low:
+            label = "Home Assistant (:8123)"
+        elif port == 8099 and ('broadlink' in t_low or 'broadlink' in b_low):
+            label = "Broadlink Manager v2 (:8099)"
+        elif port == 8325 and ('ewelink' in t_low or 'ewelink' in b_low):
+            label = "eWeLink Smart Home (:8325)"
+        elif port in (8080, 8888, 8085) and ('qbittorrent' in t_low or 'qbittorrent' in b_low):
+            label = f"qBittorrent (:{port})"
+        elif port in (4711, 4712) and ('emule' in t_low or 'emule' in b_low):
+            label = f"eMule Web Interface (:{port})"
+        elif port in (47989, 47990):
+            label = f"Sunshine Game Streaming (:{port})"
+        elif port == 1984 or (port in (1984, 8554) and 'go2rtc' in b_low):
+            label = "go2rtc WebRTC (:1984)"
+        elif port == 8080 and ('pi-server' in h_lower or 'adguard' in h_lower or 'adguard' in t_low):
+            label = f"AdGuard Home (:{port})"
+        elif port == 8080 and ('samsung' in h_lower or 'tv' in c_lower):
+            label = f"Samsung Smart View / Media (:{port})"
+        elif port == 8006 and ('proxmox' in b_low or 'proxmox' in t_low):
+            label = "Proxmox VE (:8006)"
+        elif port in (9000, 9443) and ('portainer' in b_low or 'portainer' in t_low):
+            label = f"Portainer ({proto.upper()} :{port})"
+        elif port in (8096, 8920) and ('jellyfin' in b_low or 'jellyfin' in t_low):
+            label = f"Jellyfin (:{port})"
+        elif port in (80, 443, 8080) and ('vaultwarden' in t_low or 'bitwarden' in t_low):
+            label = f"Vaultwarden (:{port})"
+        elif port == 8384 and ('syncthing' in b_low or 'syncthing' in t_low):
+            label = f"Syncthing (:{port})"
+        elif port == 3001 and ('uptime kuma' in b_low or 'uptime kuma' in t_low):
+            label = f"Uptime Kuma (:{port})"
+        elif port == 3000 and ('grafana' in b_low or 'grafana' in t_low):
+            label = "Grafana (:3000)"
         elif is_router:
             label = f"Panel Router ({proto.upper()})"
-        elif port == 5001 and ('pi-server' in h_lower or 'dhcp' in h_lower or (local_ip and ip == local_ip)):
-            label = "Panel DHCP (:5001)"
         elif port == 5000 and ('wifi' in h_lower or 'panel' in h_lower or (local_ip and ip == local_ip)):
             label = "Panel Wi-Fi (:5000)"
         elif any(k in h_lower or k in c_lower for k in ['cam', 'camera', 'camara']):
