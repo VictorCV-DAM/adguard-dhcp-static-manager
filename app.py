@@ -717,17 +717,17 @@ SSL_UNVERIFIED_CTX.verify_mode = ssl.CERT_NONE
 _SERVICE_SCAN_CACHE = {}  # {ip: (timestamp, [verified_service_dicts])}
 
 CANDIDATE_WEB_PORTS = [
-    80, 81, 443, 1984, 2283, 2342, 3000, 3001, 32400, 4040, 4200, 4357, 4533, 5000, 5001, 5050, 5055,
+    80, 81, 443, 1984, 2283, 2342, 3000, 3001, 32400, 4040, 4200, 4357, 4533, 4711, 5000, 5001, 5050, 5055,
     5173, 5678, 6052, 6789, 7000, 7001, 7878, 8000, 8006, 8080, 8081, 8082, 8085, 8086,
     8087, 8088, 8090, 8096, 8099, 8123, 8325, 8384, 8443, 8581, 8686, 8880, 8888, 8889,
-    8989, 9000, 9090, 9091, 9443, 9584, 10000, 19999
+    8989, 9000, 9090, 9091, 9443, 9584, 10000, 19999, 47989, 47990
 ]
 
 def probe_http_service(ip, port):
     """Verifica si un puerto en un host es un servicio web HTTP/HTTPS real y accesible."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.08)
+        s.settimeout(0.35)
         r = s.connect_ex((ip, port))
         s.close()
         if r != 0:
@@ -736,12 +736,12 @@ def probe_http_service(ip, port):
         return None
 
     # Probar HTTP o HTTPS real
-    protos = ['https', 'http'] if port in (443, 8006, 8443, 9443) else ['http', 'https']
+    protos = ['https', 'http'] if port in (443, 8006, 8443, 9443, 47990) else ['http', 'https']
     for proto in protos:
         url = f"{proto}://{ip}:{port}/" if port not in (80, 443) else f"{proto}://{ip}/"
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-            with urllib.request.urlopen(req, timeout=0.45, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
+            with urllib.request.urlopen(req, timeout=0.8, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
                 code = resp.getcode()
                 content = resp.read(4096).decode('utf-8', errors='ignore')
                 title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
@@ -749,8 +749,8 @@ def probe_http_service(ip, port):
                 server = resp.headers.get('Server', '')
                 return {'port': port, 'proto': proto, 'url': url, 'code': code, 'title': title, 'server': server, 'body': content}
         except urllib.error.HTTPError as e:
-            # Solo permitir códigos de autenticación o redirección web real (descartar 404 para evitar APIs sin frontend)
-            if e.code in (401, 403, 301, 302, 307, 308):
+            # Permitir códigos HTTP web estándar (incluyendo 400 y 405 para apps que esperan endpoints concretos)
+            if e.code in (400, 401, 403, 405, 301, 302, 307, 308):
                 content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ""
                 title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
                 title = title_m.group(1).strip() if title_m else ""
@@ -1220,6 +1220,12 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = "Broadlink Manager v2 (:8099)"
         elif 'ewelink' in t_low or 'ewelink' in b_low or port == 8325:
             label = "eWeLink Smart Home (:8325)"
+        elif port == 8888 or 'qbittorrent' in t_low or 'qbittorrent' in b_low:
+            label = f"qBittorrent (:{port})"
+        elif port == 4711 or 'emule' in t_low or 'emule' in b_low:
+            label = f"eMule Web Interface (:{port})"
+        elif port in (47989, 47990) or 'sunshine' in t_low or 'sunshine' in b_low:
+            label = f"Sunshine Game Streaming (:{port})"
         elif 'go2rtc' in t_low or 'go2rtc' in b_low or port == 1984:
             label = "go2rtc WebRTC (:1984)"
         elif 'adguard' in t_low or 'adguard' in b_low or (port == 8080 and ('pi-server' in h_lower or 'adguard' in h_lower)):
@@ -2415,10 +2421,13 @@ def _background_scan_device_services(ips):
                     v_services = f.result()
                     _SERVICE_SCAN_CACHE[a_ip] = (now, v_services)
                 except Exception:
-                    _SERVICE_SCAN_CACHE[a_ip] = (now, [])
+                    pass
     finally:
         with _DEVICE_SCAN_LOCK:
             _DEVICE_SCAN_RUNNING = False
+        global _API_STATE_CACHE
+        with _API_STATE_LOCK:
+            _API_STATE_CACHE = [0, None, None]
 
 def build_state(force_refresh=False):
     """Construye el estado completo de la red (dispositivos, servicios, enlaces)."""
@@ -2815,10 +2824,8 @@ def build_state(force_refresh=False):
 
     now = time.time()
     force_refresh = bool(force_refresh)
-    if force_refresh:
-        _SERVICE_SCAN_CACHE.clear()
-
-    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (force_refresh or a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 300)]
+    # Preservar caché previa durante el refresco para evitar que la UI devuelva 0 servicios mientras dura el escaneo
+    ips_to_scan = [a_ip for a_ip in active_ips if a_ip and (force_refresh or a_ip not in _SERVICE_SCAN_CACHE or (now - _SERVICE_SCAN_CACHE[a_ip][0]) >= 180)]
     if ips_to_scan:
         with _DEVICE_SCAN_LOCK:
             global _DEVICE_SCAN_RUNNING

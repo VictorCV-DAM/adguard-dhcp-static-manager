@@ -712,6 +712,8 @@ def monitor_cycle():
         db_exec('DELETE FROM service_checks WHERE ts < ?', (ts - 7 * 86400,))
         db_exec('DELETE FROM device_events WHERE ts < ?', (ts - 60 * 86400,))
         db_exec('DELETE FROM events_log WHERE ts < ?', (ts - 30 * 86400,))
+        db_exec('DELETE FROM services WHERE up=0 AND last_seen_up IS NOT NULL AND last_seen_up < ?', (ts - 7 * 86400,))
+        db_exec('DELETE FROM services WHERE up=0 AND last_seen_up IS NULL AND first_seen < ?', (ts - 7 * 86400,))
         kv_set('last_prune', ts)
 
 
