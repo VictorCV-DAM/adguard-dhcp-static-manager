@@ -27,6 +27,8 @@ import base64
 import platform
 import csv
 import io
+import gzip
+import html
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -718,7 +720,7 @@ _SERVICE_SCAN_CACHE = {}  # {ip: (timestamp, [verified_service_dicts])}
 
 CANDIDATE_WEB_PORTS = [
     80, 81, 443, 1984, 2283, 2342, 3000, 3001, 32400, 4040, 4200, 4357, 4533, 4711, 5000, 5001, 5050, 5055,
-    5173, 5678, 6052, 6789, 7000, 7001, 7878, 8000, 8006, 8080, 8081, 8082, 8085, 8086,
+    5173, 5678, 6052, 6789, 7000, 7001, 7878, 8000, 8006, 8008, 8080, 8081, 8082, 8085, 8086,
     8087, 8088, 8090, 8096, 8099, 8123, 8325, 8384, 8443, 8581, 8686, 8880, 8888, 8889,
     8989, 9000, 9090, 9091, 9443, 9584, 10000, 19999, 47989, 47990
 ]
@@ -727,7 +729,7 @@ def probe_http_service(ip, port):
     """Verifica si un puerto en un host es un servicio web HTTP/HTTPS real y accesible."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.35)
+        s.settimeout(1.2)
         r = s.connect_ex((ip, port))
         s.close()
         if r != 0:
@@ -740,20 +742,39 @@ def probe_http_service(ip, port):
     for proto in protos:
         url = f"{proto}://{ip}:{port}/" if port not in (80, 443) else f"{proto}://{ip}/"
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-            with urllib.request.urlopen(req, timeout=0.8, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                'Accept-Encoding': 'gzip, deflate'
+            })
+            with urllib.request.urlopen(req, timeout=1.5, context=SSL_UNVERIFIED_CTX if proto == 'https' else None) as resp:
                 code = resp.getcode()
-                content = resp.read(4096).decode('utf-8', errors='ignore')
-                title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                title = title_m.group(1).strip() if title_m else ""
+                raw = resp.read(8192)
+                is_gzip = resp.headers.get('Content-Encoding') == 'gzip' or raw.startswith(b'\x1f\x8b')
+                if is_gzip:
+                    try:
+                        raw = gzip.decompress(raw)
+                    except Exception:
+                        pass
+                content = raw.decode('utf-8', errors='ignore')
+                title_m = re.search(r'<title[^>]*>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                title = html.unescape(title_m.group(1)).strip() if title_m else ""
+                title = re.sub(r'\s+', ' ', title).strip()
                 server = resp.headers.get('Server', '')
                 return {'port': port, 'proto': proto, 'url': url, 'code': code, 'title': title, 'server': server, 'body': content}
         except urllib.error.HTTPError as e:
-            # Permitir códigos HTTP web estándar (incluyendo 400 y 405 para apps que esperan endpoints concretos)
-            if e.code in (400, 401, 403, 405, 301, 302, 307, 308):
-                content = e.read(2048).decode('utf-8', errors='ignore') if e.fp else ""
-                title_m = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-                title = title_m.group(1).strip() if title_m else ""
+            # Permitir códigos HTTP web estándar (incluyendo 400 y 405, y 404 para Google Cast API)
+            if e.code in (400, 401, 403, 405, 301, 302, 307, 308) or (e.code == 404 and port in (8008, 8443)):
+                raw = e.read(4096) if e.fp else b''
+                is_gzip = e.headers.get('Content-Encoding') == 'gzip' or raw.startswith(b'\x1f\x8b')
+                if is_gzip:
+                    try:
+                        raw = gzip.decompress(raw)
+                    except Exception:
+                        pass
+                content = raw.decode('utf-8', errors='ignore')
+                title_m = re.search(r'<title[^>]*>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                title = html.unescape(title_m.group(1)).strip() if title_m else ""
+                title = re.sub(r'\s+', ' ', title).strip()
                 return {'port': port, 'proto': proto, 'url': url, 'code': e.code, 'title': title, 'server': e.headers.get('Server', ''), 'body': content}
         except Exception:
             continue
@@ -1167,7 +1188,7 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             router_name = r.get('name') or 'Router'
             break
 
-    _, gateway_ip, _ = get_network_info()
+    local_ip, gateway_ip, _ = get_network_info()
     is_router = ((gateway_ip and ip == gateway_ip) or is_router_cfg or 'router' in c_lower or 'mercusys-halo' in h_lower or ip in halo_node_info or dev_cat == 'infra')
 
     cached = _SERVICE_SCAN_CACHE.get(ip)
@@ -1192,16 +1213,44 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             links.append(item)
 
     for item in verified_services:
-        port = item['port']
-        proto = item['proto']
-        url = item['url']
-        title = item.get('title', '').strip()
+        if not item or not isinstance(item, dict):
+            continue
+        port = item.get('port')
+        if port is None:
+            continue
+        proto = item.get('proto', 'http')
+        url = item.get('url', f"{proto}://{ip}:{port}/")
+        raw_title = item.get('title', '').strip()
         body = item.get('body', '')
-        t_low = title.lower()
+        t_low = raw_title.lower()
         b_low = body.lower()
 
+        # Limpiar y normalizar el título extraído
+        clean_title = ""
+        if raw_title:
+            clean_title = re.sub(r'\s+', ' ', raw_title).strip()
+            # Si el título tiene separadores de subtítulo o eslogan y es largo, extraer el nombre principal
+            if len(clean_title) > 30:
+                for sep in [' - ', ' | ', ' — ', ' – ', ' · ']:
+                    if sep in clean_title:
+                        parts = [p.strip() for p in clean_title.split(sep) if p.strip()]
+                        if parts and len(parts[0]) >= 3:
+                            clean_title = parts[0]
+                            break
+            if len(clean_title) > 50:
+                clean_title = clean_title[:47].strip() + '...'
+
+        is_error_title = any(k in t_low for k in [
+            'http 40', '404', '500 internal', '502 bad', '503 service',
+            'error', 'default site', 'unauthorized', 'access denied',
+            'forbidden', 'welcome to nginx', 'apache2 ubuntu default'
+        ])
+        valid_title = clean_title if (clean_title and not is_error_title) else ""
+
         # Detección y reconocimiento inteligente de aplicaciones SPA y servicios conocidos
-        if 'immich' in b_low or 'immich' in t_low or port == 2283:
+        if port == 5001 or 'panel dhcp' in t_low or ('dhcp' in t_low and 'panel' in t_low):
+            label = "Panel DHCP (:5001)"
+        elif 'immich' in b_low or 'immich' in t_low or port == 2283:
             label = f"Immich (:{port})"
         elif port == 32400 or 'plex' in b_low or 'plex' in t_low:
             url = f"http://{ip}:32400/web"
@@ -1228,27 +1277,10 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = f"Sunshine Game Streaming (:{port})"
         elif 'go2rtc' in t_low or 'go2rtc' in b_low or port == 1984:
             label = "go2rtc WebRTC (:1984)"
-        elif 'adguard' in t_low or 'adguard' in b_low or (port == 8080 and ('pi-server' in h_lower or 'adguard' in h_lower)):
+        elif (port in (8080, 3000) and ('adguard' in t_low or 'adguard' in b_low)) or (port == 8080 and ('pi-server' in h_lower or 'adguard' in h_lower)) or ('adguard' in t_low and port not in (5000, 5001)):
             label = f"AdGuard Home (:{port})"
         elif port == 8080 and ('samsung' in h_lower or 'tv' in c_lower):
             label = f"Samsung Smart View / Media (:{port})"
-        elif port == 8080:
-            label = f"Servicio Web (:{port})" if not title else f"{title} (:{port})" 
-        elif port == 5001:
-            label = "Panel DHCP (:5001)"
-        elif port == 5000:
-            label = "Panel Wi-Fi (:5000)"
-        elif gateway_ip and ip == gateway_ip:
-            label = f"Router Principal ({proto.upper()})"
-        elif 'em4590' in h_lower:
-            label = f"Web Repetidor EM4590 ({proto.upper()})"
-        elif 'wr841n' in h_lower:
-            label = f"Web TP-Link WR841N ({proto.upper()})"
-        elif ip in halo_node_info or 'mercusys-halo' in h_lower:
-            lbl = halo_node_info.get(ip, {}).get('label', f'Nodo Halo ({ip})')
-            label = f"Web {lbl} ({proto.upper()})"
-        elif is_router_cfg:
-            label = f"Web {router_name} ({proto.upper()})"
         elif 'proxmox' in b_low or 'proxmox' in t_low or port == 8006:
             label = "Proxmox VE (:8006)"
         elif 'portainer' in b_low or 'portainer' in t_low or port in (9000, 9443):
@@ -1263,10 +1295,33 @@ def get_device_web_links(ip, hostname="", dev_class="", dev_cat="", routers=None
             label = f"Uptime Kuma (:{port})"
         elif 'grafana' in b_low or (port == 3000 and 'grafana' in t_low):
             label = "Grafana (:3000)"
-        elif title and len(title) < 40 and not any(k in t_low for k in ['http 40', '404', 'error', 'default site', 'unauthorized']):
-            label = f"{title} (:{port})"
+        elif port in (8008, 8443) and any(k in h_lower for k in ['nest', 'google', 'cast', 'home']):
+            label = f"Google Cast ({proto.upper()})"
+        elif gateway_ip and ip == gateway_ip:
+            label = f"Router Principal ({proto.upper()})"
+        elif 'em4590' in h_lower:
+            label = f"Web Repetidor EM4590 ({proto.upper()})"
+        elif 'wr841n' in h_lower:
+            label = f"Web TP-Link WR841N ({proto.upper()})"
+        elif ip in halo_node_info or 'mercusys-halo' in h_lower:
+            lbl = halo_node_info.get(ip, {}).get('label', f'Nodo Halo ({ip})')
+            label = f"Web {lbl} ({proto.upper()})"
+        elif is_router_cfg:
+            label = f"Web {router_name} ({proto.upper()})"
+        elif valid_title:
+            label = f"{valid_title} (:{port})" if port not in (80, 443) else valid_title
         elif is_router:
             label = f"Panel Router ({proto.upper()})"
+        elif port == 5001 and ('pi-server' in h_lower or 'dhcp' in h_lower or (local_ip and ip == local_ip)):
+            label = "Panel DHCP (:5001)"
+        elif port == 5000 and ('wifi' in h_lower or 'panel' in h_lower or (local_ip and ip == local_ip)):
+            label = "Panel Wi-Fi (:5000)"
+        elif any(k in h_lower or k in c_lower for k in ['cam', 'camera', 'camara']):
+            label = f"Cámara IP ({proto.upper()})"
+        elif any(k in h_lower or k in c_lower for k in ['enchufe', 'plug', 'switch', 'relay', 'socket']):
+            label = f"Enchufe Smart ({proto.upper()})" if port in (80, 443) else f"Enchufe Smart (:{port})"
+        elif any(k in h_lower or k in c_lower for k in ['bombilla', 'bulb', 'light', 'luz', 'led']):
+            label = f"Iluminación Smart ({proto.upper()})"
         else:
             label = f"Web ({proto.upper()})" if port in (80, 443) else f"Servicio Web (:{port})"
 
