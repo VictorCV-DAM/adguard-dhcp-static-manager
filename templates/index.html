@@ -4801,9 +4801,29 @@ function escapeHtml(s) {
 let renameServiceUrl = null;
 
 function findServiceByUrl(url) {
+    if (!url) return null;
+    const normUrl = url.replace(/\/+$/, '');
     for (const d of allDevices) {
         for (const l of (d.web_links || [])) {
-            if (l.url === url) return { service: l, device: d };
+            if (l.url === url || (l.url && l.url.replace(/\/+$/, '') === normUrl)) {
+                return { service: l, device: d, isDown: Boolean(l.status === 'down') };
+            }
+        }
+    }
+    for (const ds of (downServices || [])) {
+        if (ds.url === url || (ds.url && ds.url.replace(/\/+$/, '') === normUrl)) {
+            const dev = allDevices.find(d => d.mac && ds.mac && d.mac.toLowerCase() === ds.mac.toLowerCase()) ||
+                        allDevices.find(d => d.ip && ds.ip && d.ip === ds.ip) ||
+                        { hostname: ds.hostname || ds.ip, ip: ds.ip, mac: ds.mac, dev_icon: ds.dev_icon || '💻', conn_medium: 'offline' };
+            const s = {
+                url: ds.url,
+                label: ds.custom_name || ds.label,
+                default_label: ds.label,
+                is_custom: Boolean(ds.custom_name),
+                port: ds.port,
+                status: 'down'
+            };
+            return { service: s, device: dev, isDown: true, downServiceRef: ds };
         }
     }
     return null;
@@ -4817,12 +4837,12 @@ function openRenameServiceModal(ev, url) {
     const { service, device } = found;
     const meta = getServiceMeta(service.default_label || service.label, service.port, device.hostname);
     renameServiceUrl = url;
-    document.getElementById('rename-modal-host').textContent = `${device.hostname || '-'} (${device.ip})`;
+    document.getElementById('rename-modal-host').textContent = `${device.hostname || '-'} (${device.ip || '-'})`;
     document.getElementById('rename-modal-url').textContent = url;
     document.getElementById('rename-modal-default').textContent = meta.name || service.default_label || service.label;
     const input = document.getElementById('rename-modal-input');
-    input.value = service.is_custom ? service.label : '';
-    input.placeholder = meta.name || 'Nombre del servicio';
+    input.value = service.is_custom ? (service.label || '') : '';
+    input.placeholder = meta.name || service.default_label || 'Nombre del servicio';
     document.getElementById('btn-reset-service-name').style.display = service.is_custom ? 'inline-flex' : 'none';
     document.getElementById('service-rename-overlay').style.display = 'flex';
     setTimeout(() => { input.focus(); input.select(); }, 50);
@@ -4849,6 +4869,9 @@ async function saveServiceName(url, name) {
             if (!s.default_label) s.default_label = s.label;
             if (name) { s.label = name; s.is_custom = true; }
             else { s.label = s.default_label; s.is_custom = false; }
+            if (found.downServiceRef) {
+                found.downServiceRef.custom_name = name || null;
+            }
         }
         closeRenameServiceModal();
         renderServicesCards();
@@ -5062,7 +5085,7 @@ function renderServicesCards() {
                         </div>
                         <div class="service-title-wrap">
                             <h4 class="service-title" title="${escapeHtml(meta.name)}">${escapeHtml(meta.name)}</h4>
-                            <button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${service.url}')" title="Cambiar nombre del servicio">✏️</button>
+                            <button class="btn-inline-rename" onclick="openRenameServiceModal(event, '${escapeJsQuote(service.url)}')" title="Cambiar nombre del servicio">✏️</button>
                         </div>
                     </div>
                 </div>
@@ -5097,7 +5120,7 @@ function renderServicesCards() {
                         <span style="font-size: 0.95rem;">↗</span>
                     </a>
                     ${isHidden ? `<button class="btn btn-outline" style="padding:6px 12px; font-size:0.76rem; color:#38bdf8; border-color:rgba(56,189,248,0.4); display:inline-flex; align-items:center; gap:4px;" onclick="toggleServiceHidden(event, '${escapeJsQuote(service.url)}')"><span>👁️</span><span data-i18n="btn_restore">${window.t('btn_restore', 'Restaurar')}</span></button>` : ''}
-                    ${isDown ? `<button class="btn btn-outline" style="padding:6px 10px; font-size:0.76rem; color:#f87171; border-color:rgba(239,68,68,0.4);" onclick="forgetDownService('${service.url}')" title="Olvidar este servicio si lo has desinstalado">${window.t('btn_forget', '🗑️ Olvidar')}</button>` : ''}
+                    ${isDown ? `<button class="btn btn-outline" style="padding:6px 10px; font-size:0.76rem; color:#f87171; border-color:rgba(239,68,68,0.4);" onclick="forgetDownService('${escapeJsQuote(service.url)}')" title="Olvidar este servicio si lo has desinstalado">${window.t('btn_forget', '🗑️ Olvidar')}</button>` : ''}
                 </div>
             </div>
         `;

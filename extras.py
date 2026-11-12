@@ -901,7 +901,7 @@ def enrich_state(state):
             'dev_icon': dev.get('dev_icon') or '💻', 'last_seen_up': iso(sr.get('last_seen_up')),
             'uptime_24h': round(u['avg_up'] * 100, 1) if u and u['n'] else None,
             'history': (hist.get(url) or [])[-40:], 'status': 'down',
-            'custom_name': (state.get('custom_service_names') or {}).get(url),
+            'custom_name': (state.get('custom_service_names') or {}).get(url) or (state.get('custom_service_names') or {}).get(url.rstrip('/')) or (state.get('custom_service_names') or {}).get(url.rstrip('/') + '/'),
         })
     state['down_services'] = down
     state['monitor'] = {'last_run': iso(_MONITOR_STATE['last_run']), 'interval': MONITOR_INTERVAL,

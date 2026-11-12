@@ -3356,6 +3356,9 @@ def api_rename_service():
             cfg['custom_service_names'].pop(norm_url + '/', None)
 
         save_config(cfg)
+        global _API_STATE_CACHE
+        with _API_STATE_LOCK:
+            _API_STATE_CACHE = [0, None, None]
 
         return jsonify({'success': True, 'custom_service_names': cfg['custom_service_names']})
     except Exception as e:
